@@ -219,7 +219,7 @@ impl SettingsPane {
                             cx.stop_propagation();
                             cx.notify();
                         })))
-                    .aria_label(language.pick("终端字体", "Terminal font")),
+                    .aria_label(language.text(crate::i18n::Message::SettingsFontEnglish)),
             )
             // 弹层仍须取输入框的真实窗口坐标，才能正确处理滚动、缩放与 DPI。
             .child(
@@ -246,7 +246,7 @@ impl SettingsPane {
             return control.into_any_element();
         }
         self.row(
-            language.pick("终端字体", "Terminal font"),
+            language.text(crate::i18n::Message::SettingsFontEnglish),
             help("font_family", language),
             control,
             cx,

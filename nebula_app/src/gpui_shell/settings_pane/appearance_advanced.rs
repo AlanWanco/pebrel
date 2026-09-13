@@ -61,6 +61,17 @@ impl SettingsPane {
             ));
         let interface = self
             .group(language.pick("界面", "Interface"), cx)
+            .child(
+                self.row(
+                    language.text(crate::i18n::Message::SettingsFontUiFamily),
+                    language.text(crate::i18n::Message::SettingsFontUiFamilyDescription),
+                    Input::new(&self.ui_font_family_input)
+                        .w(px(SETTINGS_SELECT_WIDTH))
+                        .aria_label(language.text(crate::i18n::Message::SettingsFontUiFamily)),
+                    cx,
+                ),
+            )
+            .child(self.font_size_row(true, cx))
             .child(self.switch_row(
                 "tab_close_visible",
                 language.pick("显示标签关闭按钮", "Show tab close buttons"),
@@ -96,12 +107,22 @@ impl SettingsPane {
         let terminal = self
             .group(language.pick("终端外观", "Terminal appearance"), cx)
             .child(self.row(
-                language.pick("终端字体", "Terminal font"),
+                language.text(crate::i18n::Message::SettingsFontEnglish),
                 help("font_family", language),
                 font_picker,
                 cx,
             ))
-            .child(self.terminal_font_size_row(cx))
+            .child(
+                self.row(
+                    language.text(crate::i18n::Message::SettingsFontChinese),
+                    language.text(crate::i18n::Message::SettingsFontChineseDescription),
+                    Input::new(&self.font_family_cjk_input)
+                        .w(px(SETTINGS_SELECT_WIDTH))
+                        .aria_label(language.text(crate::i18n::Message::SettingsFontChinese)),
+                    cx,
+                ),
+            )
+            .child(self.font_size_row(false, cx))
             .child(self.select_row(
                 "cell_width_mode",
                 language.pick("字体间距", "Character spacing"),

@@ -258,9 +258,9 @@ impl NebulaWorkspace {
         let bar_bg =
             if focused { theme.sidebar_accent.opacity(0.55) } else { theme.muted.opacity(0.28) };
         let settings = cx.try_global::<crate::gpui_shell::config::Settings>();
-        let chrome_family = theme.mono_font_family.clone();
+        let chrome_family = theme.font_family.clone();
         let symbol_family: SharedString = crate::font_install::REQUIRED_FONT_FAMILY.into();
-        let label_px = settings.map(|settings| settings.base_font_size_px).unwrap_or(15.0);
+        let label_px = settings.map(|settings| settings.ui_font_size_px).unwrap_or(15.0);
         let title_px = label_px * 0.78;
         let PaneTitle { logo, glyph, text } = self.pane_title(view, cx, dark);
         let group: SharedString = format!("pane-header-{pane_id}").into();

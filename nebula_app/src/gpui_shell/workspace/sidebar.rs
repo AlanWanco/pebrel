@@ -240,13 +240,10 @@ impl NebulaWorkspace {
         let tab_reveal = settings
             .map(|settings| settings.tab_reveal)
             .unwrap_or(nebula_settings::TabRevealName::Slide);
-        let chrome_family = theme.mono_font_family.clone();
+        let chrome_family = theme.font_family.clone();
         let symbol_family: SharedString = crate::font_install::REQUIRED_FONT_FAMILY.into();
-        // 旧壳合同（display/mod.rs `ui_font_px`）：chrome 锚定**配置字号**
-        // （nebula.toml `font.size` 默认 11.25pt = 15px）。终端的持久化缩放
-        // （`font_size=` 键）只影响终端网格，侧栏不得跟着变粗/变大；
-        // 固定 14px 的旧毛病（比旧壳小一号）也不能回潮。
-        let label_px = settings.map(|settings| settings.base_font_size_px).unwrap_or(15.0);
+        // 界面字号独立于终端缩放。
+        let label_px = settings.map(|settings| settings.ui_font_size_px).unwrap_or(15.0);
         let cell_w = self.sidebar_cell_width(window, &chrome_family, label_px);
 
         // 受约束拖拽的渲染参数：激活后被拖行骑指针位移，落点槽位由位移换算。
@@ -1044,9 +1041,9 @@ impl NebulaWorkspace {
         let (ink, dim, badge_fill) = (theme.foreground, theme.muted_foreground, theme.muted);
         let dark = theme.is_dark();
         let settings = cx.try_global::<crate::gpui_shell::config::Settings>();
-        let chrome_family = theme.mono_font_family.clone();
+        let chrome_family = theme.font_family.clone();
         let symbol_family: SharedString = crate::font_install::REQUIRED_FONT_FAMILY.into();
-        let label_px = settings.map(|settings| settings.base_font_size_px).unwrap_or(15.0);
+        let label_px = settings.map(|settings| settings.ui_font_size_px).unwrap_or(15.0);
         let TabPresentation { title, logo_image, program_glyph, pane_count, .. } =
             self.tab_presentation(self.active, cx, dark);
         slot.child(
