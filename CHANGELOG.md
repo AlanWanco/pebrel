@@ -8,6 +8,12 @@ Every release entry is provided in English and Simplified Chinese.
 
 ### English
 
+#### Added
+
+- Added a confirmation dialog to Settings → Restore defaults, with an explicit cancel action before any preferences are reset. Contributed by [@WilliamWang1721](https://github.com/WilliamWang1721) in [#115](https://github.com/Kuddev/pebrel/pull/115).
+- Added Windows login-startup and silent-start switches in Settings → Advanced → Session lifecycle. Silent startup requires the system tray; opening a directory explicitly still shows a window. Contributed by [@WilliamWang1721](https://github.com/WilliamWang1721) in [#117](https://github.com/Kuddev/pebrel/pull/117).
+- Added separate interface font and size controls, plus an optional CJK terminal font fallback list, in Settings → Appearance. Interface size can be adjusted from 10 to 24 px independently of terminal text. Contributed by [@WilliamWang1721](https://github.com/WilliamWang1721) in [#127](https://github.com/Kuddev/pebrel/pull/127).
+
 #### Fixed
 
 - Fixed Windows terminal focus consuming `Alt+F4` and `Alt+Space`. `Alt+F4` now uses the normal window-close flow, and `Alt+Space`, followed by `N`, uses the system menu to minimize the window.
@@ -20,6 +26,12 @@ Every release entry is provided in English and Simplified Chinese.
 - Localized existing Git controls, status messages, history timestamps and file-operation notices. Switching the interface language preserves the commit draft and its text selection. Contributed by [@gao-jian-bin](https://github.com/gao-jian-bin) in [#118](https://github.com/Kuddev/pebrel/pull/118).
 
 ### 中文
+
+#### 新增
+
+- 为“设置 → 恢复默认设置”加入确认弹窗，可在重置任何偏好前明确取消操作。由 [@WilliamWang1721](https://github.com/WilliamWang1721) 在 [#115](https://github.com/Kuddev/pebrel/pull/115) 中贡献。
+- 在 Windows 的“设置 → 高级 → 会话生命周期”中新增“登录时自启动”和“静默启动”开关。静默启动需要启用系统托盘；显式打开目录时仍显示窗口。由 [@WilliamWang1721](https://github.com/WilliamWang1721) 在 [#117](https://github.com/Kuddev/pebrel/pull/117) 中贡献。
+- 在“设置 → 外观”中新增独立的界面字体、界面字号，以及可选的中文终端字体回退列表。界面字号可在 10–24 px 间调整，不影响终端文字字号。由 [@WilliamWang1721](https://github.com/WilliamWang1721) 在 [#127](https://github.com/Kuddev/pebrel/pull/127) 中贡献。
 
 #### 修复
 
