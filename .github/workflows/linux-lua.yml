@@ -72,6 +72,13 @@ jobs:
         if: ${{ !cancelled() }}
         run: >-
           cargo test --locked -p nebula-settings reset::tests::
+      - name: Test silent startup requirements
+        run: >-
+          cargo test --locked -p nebula --bin pebrel --features gpui-test-support platform::startup::tests::
+      - name: Test startup parsing and reset coverage
+        if: ${{ !cancelled() }}
+        run: >-
+          cargo test --locked -p nebula-settings
       - name: Test all Python helpers
         if: ${{ !cancelled() }}
         run: python -m unittest discover -s scripts/tests -v
