@@ -91,7 +91,8 @@ impl SettingsPane {
     pub(super) fn font_size_row(&self, ui: bool, cx: &Context<Self>) -> gpui::AnyElement {
         let language = crate::gpui_shell::config::ui_language(cx);
         let size = if ui { self.font_size_px(cx) } else { self.terminal_font_size_px(cx) };
-        let (key, min, max) = if ui { ("ui_font_size", 10.0, 24.0) } else { ("font_size", 4.0, 96.0) };
+        let (key, min, max) =
+            if ui { ("ui_font_size", 10.0, 24.0) } else { ("font_size", 4.0, 96.0) };
         let stepper = h_flex()
             .w(px(142.0))
             .h(px(36.0))
@@ -122,10 +123,14 @@ impl SettingsPane {
                     })),
             );
         self.row(
-            if ui { language.text(crate::i18n::Message::SettingsFontUiSize) } else {
+            if ui {
+                language.text(crate::i18n::Message::SettingsFontUiSize)
+            } else {
                 language.pick("终端字号（Ctrl+滚轮缩放）", "Terminal font size (Ctrl+wheel)")
             },
-            if ui { language.text(crate::i18n::Message::SettingsFontUiSizeDescription) } else {
+            if ui {
+                language.text(crate::i18n::Message::SettingsFontUiSizeDescription)
+            } else {
                 language.pick("只调整终端文字大小。", "Changes only the terminal text size.")
             },
             stepper,

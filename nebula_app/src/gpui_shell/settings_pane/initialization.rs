@@ -447,10 +447,9 @@ impl SettingsPane {
             InputState::new(window, cx)
                 .default_value(runtime.ui_font_family.clone().unwrap_or_default())
         });
-        for (key, input) in [
-            ("font_family_cjk", &font_family_cjk_input),
-            ("ui_font_family", &ui_font_family_input),
-        ] {
+        for (key, input) in
+            [("font_family_cjk", &font_family_cjk_input), ("ui_font_family", &ui_font_family_input)]
+        {
             subscriptions.push(cx.subscribe_in(
                 input,
                 window,
