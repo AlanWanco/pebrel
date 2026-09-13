@@ -547,6 +547,7 @@ fn soften(c: crate::display::color::Rgb, keep: f32) -> crate::display::color::Rg
 }
 
 fn apply_skin_tokens(chrome: NebulaTheme, cx: &mut App) {
+    let runtime = nebula_settings::RuntimeSettings::load();
     let sk = chrome.skin();
     let transparent = hsla(0.0, 0.0, 0.0, 0.0);
     let theme = Theme::global_mut(cx);
@@ -666,8 +667,8 @@ fn apply_skin_tokens(chrome: NebulaTheme, cx: &mut App) {
 
     // 字号与圆角：控件 pill 档 = 旧壳 UI_CORNER_RADIUS_LOGICAL(8)；浮层
     // 12，低于终端卡的 14——三档呼应旧壳的圆角层级。
-    theme.font_size = px(14.0);
-    theme.mono_font_size = px(13.0);
+    theme.font_size = px(runtime.ui_font_size_px.unwrap_or(14.0));
+    theme.mono_font_size = theme.font_size * (13.0 / 14.0);
 
     // 整壳的兜底字体（fork `root.rs` 用 `theme.font_family` 给根容器）。上游
     // 默认 `.SystemUIFont` 在 Windows 上没落到 UI 字体，中文最终回落进终端等
@@ -685,6 +686,13 @@ fn apply_skin_tokens(chrome: NebulaTheme, cx: &mut App) {
         // 随终端主字体变化，进而破坏 chrome 的既定间距。
         theme.mono_font_family = crate::font_install::REQUIRED_FONT_FAMILY.into();
     }
+    theme.font_family = runtime
+        .ui_font_family
+        .unwrap_or_else(|| {
+            if cfg!(target_os = "windows") { "Microsoft YaHei UI" } else { ".SystemUIFont" }
+                .to_owned()
+        })
+        .into();
     theme.radius = px(crate::display::UI_CORNER_RADIUS_LOGICAL);
     theme.radius_lg = px(12.0);
 

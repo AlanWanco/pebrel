@@ -51,6 +51,7 @@ pub struct Settings {
     /// 配置文件的基准字号，不含设置页/Ctrl+滚轮持久化的终端缩放。
     /// 启动窗口按它定形，和旧壳的 `window_size` 契约一致。
     pub base_font_size_px: f32,
+    pub ui_font_size_px: f32,
     /// 字体 cell 的物理像素偏移；旧壳 Windows 默认 y=4，必须在设备像素
     /// 域参与取整，才能在 125%/150% DPI 下保持同一行数。
     pub font_offset_x: f32,
@@ -166,6 +167,7 @@ impl Settings {
             font_bold_italic_family: secondary(&raw.font.bold_italic),
             font_size_px,
             base_font_size_px,
+            ui_font_size_px: runtime.ui_font_size_px.unwrap_or(base_font_size_px),
             font_offset_x: f32::from(offset.x),
             font_offset_y: f32::from(offset.y),
             palette,

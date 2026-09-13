@@ -141,9 +141,9 @@ impl NebulaWorkspace {
         let tab_reveal = settings
             .map(|settings| settings.tab_reveal)
             .unwrap_or(nebula_settings::TabRevealName::Slide);
-        let chrome_family = theme.mono_font_family.clone();
+        let chrome_family = theme.font_family.clone();
         let symbol_family: SharedString = crate::font_install::REQUIRED_FONT_FAMILY.into();
-        let label_px = settings.map(|settings| settings.base_font_size_px).unwrap_or(15.0);
+        let label_px = settings.map(|settings| settings.ui_font_size_px).unwrap_or(15.0);
         let tab_capacity_w =
             (f32::from(window.viewport_size().width) - TOP_TAB_RESERVED_W).max(TOP_TAB_MIN_W);
         let tab_w = tab_width(tab_capacity_w, self.top_tab_count());

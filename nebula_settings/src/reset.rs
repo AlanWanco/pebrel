@@ -11,6 +11,8 @@ const RESET_KEYS: &[&str] = &[
     "follow_system_theme",
     "font_family",
     "font_family_cjk",
+    "ui_font_family",
+    "ui_font_size",
     "font_size",
     "cursor_shape",
     "cursor_blink",

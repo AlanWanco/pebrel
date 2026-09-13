@@ -77,6 +77,10 @@
       "background_cover_description": "The image will extend beneath the title bar, window buttons, tabs, and SSH sidebar. Low-contrast images may make controls harder to see; the interface retains a minimum-opacity safeguard."
     },
     "font": {
+      "ui_family": "Interface font",
+      "ui_family_description": "Enter an installed font family; leave empty for the default. Applies on Enter or leaving the field.",
+      "ui_size": "Interface font size",
+      "ui_size_description": "Changes interface text and component sizing independently of terminal text.",
       "english": "English terminal font",
       "chinese": "Chinese terminal font",
       "chinese_description": "Used for Chinese and other full-width characters. Enter a font family or comma-separated families; leave empty to use the English font settings. Applies on Enter or leaving the field.",

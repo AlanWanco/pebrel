@@ -176,6 +176,7 @@ pub struct SettingsPane {
     font_imported: Vec<String>,
     font_family_input: Entity<InputState>,
     font_family_cjk_input: Entity<InputState>,
+    ui_font_family_input: Entity<InputState>,
     /// 字体输入框上一帧的窗口坐标。字体目录是宽弹层，不能把整条设置行当
     /// 锚点；否则输入框在右侧、菜单却会从正文左缘展开。
     font_picker_trigger_bounds: Option<gpui::Bounds<gpui::Pixels>>,
@@ -377,24 +378,14 @@ impl SettingsPane {
         self.sync_background_color_picker(window, cx);
     }
 
-    /// Workspace tab 与设置正文共用的主文字字号事实源；导航使用组件小字号。
-    ///
-    /// 旧壳合同（display/mod.rs `ui_font_px`）：chrome 排版锚定**配置字号**
-    /// （nebula.toml `font.size`，默认 11.25pt = 15px），终端的持久化缩放
-    /// （设置 spinner / Ctrl+滚轮写入的 `font_size=`）只影响终端网格，
-    /// 不得放大侧栏与设置文字。
+    /// 界面独立字号；未设置时保留原配置字号，终端缩放不影响这里。
     fn font_size_px(&self, cx: &App) -> f32 {
-        cx.global::<crate::gpui_shell::config::Settings>().base_font_size_px
+        cx.global::<crate::gpui_shell::config::Settings>().ui_font_size_px
     }
 
     /// 终端字号（预览与「终端字号」步进行显示的值）。
     fn terminal_font_size_px(&self, cx: &App) -> f32 {
         cx.global::<crate::gpui_shell::config::Settings>().font_size_px
-    }
-
-    fn set_font_size(&mut self, size: f32, cx: &mut Context<Self>) {
-        let size = size.clamp(4.0, 96.0);
-        self.persist(&[("font_size", format!("{size:.2}"))], cx);
     }
 
     /// 拖拽期间只做"改 alpha + 重绘"这两件必须的事，落盘与整套热应用

@@ -293,9 +293,9 @@ pub(super) fn overlay(
     // chrome 文本锚定配置字号（旧壳 ui_font 合同），不跟终端缩放。
     let ui_px = cx
         .try_global::<crate::gpui_shell::config::Settings>()
-        .map(|settings| settings.base_font_size_px)
+        .map(|settings| settings.ui_font_size_px)
         .unwrap_or(15.0);
-    let chrome_family = theme.mono_font_family.clone();
+    let chrome_family = theme.font_family.clone();
     let log_family: SharedString = crate::font_install::REQUIRED_FONT_FAMILY.into();
     let ink_strong = theme.sidebar_accent_foreground;
     let ink = theme.foreground;
