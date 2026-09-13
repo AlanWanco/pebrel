@@ -4,6 +4,20 @@ Every release entry is provided in English and Simplified Chinese.
 
 每个版本条目均同时提供英文和简体中文说明。
 
+## Unreleased / 未发布
+
+### English
+
+#### Fixed
+
+- Fixed Windows terminal focus consuming `Alt+F4` and `Alt+Space`. `Alt+F4` now uses the normal window-close flow, and `Alt+Space`, followed by `N`, uses the system menu to minimize the window.
+
+### 中文
+
+#### 修复
+
+- 修复 Windows 终端获得焦点时吞掉 `Alt+F4` 和 `Alt+Space` 的问题。`Alt+F4` 现在进入正常窗口关闭流程，`Alt+Space` 后按 `N` 可通过系统菜单最小化窗口。
+
 ## 1.7.0 - 2026-09-12
 
 ### English
