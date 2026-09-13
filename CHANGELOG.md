@@ -4,6 +4,34 @@ Every release entry is provided in English and Simplified Chinese.
 
 每个版本条目均同时提供英文和简体中文说明。
 
+## Unreleased / 未发布
+
+### English
+
+#### Fixed
+
+- Fixed Windows terminal focus consuming `Alt+F4` and `Alt+Space`. `Alt+F4` now uses the normal window-close flow, and `Alt+Space`, followed by `N`, uses the system menu to minimize the window.
+- Aligned macOS title-bar controls and tab spacing with the native window-button geometry. Contributed by [@WilliamWang1721](https://github.com/WilliamWang1721) in [#114](https://github.com/Kuddev/pebrel/pull/114).
+- Fixed ignored terminal selection foreground colors and preserved custom selection colors in themes that do not define their own. Contributed by [@Aschenbath](https://github.com/Aschenbath) in [#125](https://github.com/Kuddev/pebrel/pull/125).
+- Kept selected text readable in the answer reader and other selectable text views by limiting the highlight opacity, while retaining solid list-selection backgrounds. Contributed by [@Aschenbath](https://github.com/Aschenbath) in [#126](https://github.com/Kuddev/pebrel/pull/126).
+
+#### Improved
+
+- Localized existing Git controls, status messages, history timestamps and file-operation notices. Switching the interface language preserves the commit draft and its text selection. Contributed by [@gao-jian-bin](https://github.com/gao-jian-bin) in [#118](https://github.com/Kuddev/pebrel/pull/118).
+
+### 中文
+
+#### 修复
+
+- 修复 Windows 终端获得焦点时吞掉 `Alt+F4` 和 `Alt+Space` 的问题。`Alt+F4` 现在进入正常窗口关闭流程，`Alt+Space` 后按 `N` 可通过系统菜单最小化窗口。
+- 让 macOS 标题栏控件与标签间距跟随系统窗口按钮的实际几何位置。由 [@WilliamWang1721](https://github.com/WilliamWang1721) 在 [#114](https://github.com/Kuddev/pebrel/pull/114) 中贡献。
+- 修复终端忽略选中文字前景色的问题；主题未定义自己的选区颜色时，保留用户的自定义选区颜色。由 [@Aschenbath](https://github.com/Aschenbath) 在 [#125](https://github.com/Kuddev/pebrel/pull/125) 中贡献。
+- 限制回答阅读器等文本视图的选区高亮不透明度，让选中文字保持可读，同时保留列表选中项的实色背景。由 [@Aschenbath](https://github.com/Aschenbath) 在 [#126](https://github.com/Kuddev/pebrel/pull/126) 中贡献。
+
+#### 改进
+
+- 为现有 Git 控件、状态提示、历史时间和文件操作提示补充国际化；切换界面语言时保留提交草稿及其文字选区。由 [@gao-jian-bin](https://github.com/gao-jian-bin) 在 [#118](https://github.com/Kuddev/pebrel/pull/118) 中贡献。
+
 ## 1.7.0 - 2026-09-12
 
 ### English
