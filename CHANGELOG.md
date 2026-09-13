@@ -8,15 +8,41 @@ Every release entry is provided in English and Simplified Chinese.
 
 ### English
 
+#### Added
+
+- Added “Focus follows mouse” in Settings → Interaction, off by default, and “Dim inactive panes” in Settings → Appearance, on by default. Both preferences take effect immediately.
+- Added right-click actions to the Shell launcher for choosing the default Shell and, on Windows, opening the selected Shell inside a new administrator Pebrel window.
+- Added Connect, Edit, and Delete to SSH launcher context menus. Delete uses the existing confirmation and undo flow.
+- Added Trae CLI recognition and its tab icon, plus a dedicated Oh My Pi icon.
+
 #### Fixed
 
 - Fixed Windows terminal focus consuming `Alt+F4` and `Alt+Space`. `Alt+F4` now uses the normal window-close flow, and `Alt+Space`, followed by `N`, uses the system menu to minimize the window.
+- Fixed the top Settings tab disappearing when switching to another tab. It now remains available until explicitly closed, including when tabs overflow or the tab layout changes.
+- Fixed `Alt+1–9` and `Ctrl+1–9` tab shortcuts losing priority to terminal input. They now work while a terminal or CLI has focus and respect custom shortcut changes without restarting.
+
+#### Improved
+
+- Replaced the low-resolution Claude Code icon with artwork exported from SVG at 1024 pixels, and prepared Agent icons at their display size for smoother tab edges.
 
 ### 中文
+
+#### 新增
+
+- 在“设置 → 交互”中加入“焦点跟随鼠标”，默认关闭；在“设置 → 外观”中加入“调暗非活动窗格”，默认开启。两项设置均即时生效。
+- Shell 启动菜单新增右键操作，可设为默认 Shell；Windows 下还可在新的管理员 Pebrel 窗口内打开所选 Shell。
+- SSH 启动菜单新增“连接、编辑、删除”右键操作；删除沿用已有的确认与撤销流程。
+- 新增 Trae CLI 识别与标签图标，并为 Oh My Pi 加入独立图标。
 
 #### 修复
 
 - 修复 Windows 终端获得焦点时吞掉 `Alt+F4` 和 `Alt+Space` 的问题。`Alt+F4` 现在进入正常窗口关闭流程，`Alt+Space` 后按 `N` 可通过系统菜单最小化窗口。
+- 修复顶部设置标签在切换到其他标签后消失的问题。现在只有主动关闭才会移除，标签溢出或切换标签布局时也会保留。
+- 修复 `Alt+1–9` 和 `Ctrl+1–9` 标签快捷键优先级低于终端输入的问题。终端或 CLI 获得焦点时仍可切换标签，自定义快捷键的修改也无需重启即可生效。
+
+#### 改进
+
+- 将 Claude Code 的低分辨率图标替换为从 SVG 导出的 1024 像素图像，并按显示尺寸处理 Agent 图标，使标签图标边缘更平滑。
 
 ## 1.7.0 - 2026-09-12
 

@@ -109,7 +109,16 @@
       "dedicated": "独立窗口",
       "existing": "唤起已有窗口"
     },
-    "search_empty": "没有匹配的设置"
+    "search_empty": "没有匹配的设置",
+    "mouse": {
+      "focus_follows_mouse": "焦点跟随鼠标",
+      "focus_follows_mouse_description": "鼠标移入终端窗格时自动聚焦，默认关闭。"
+    },
+    "panes": {
+      "dim_inactive": "调暗非活动窗格",
+      "dim_inactive_description": "降低其他分屏窗格的亮度，突出当前活动窗格。"
+    },
+    "save_failed": "无法保存设置：{error}"
   },
   "provider": {
     "test": {
@@ -462,5 +471,17 @@
     "exported": "主机信息已导出，不含凭据",
     "imported": "已新增 {added} 台主机，跳过 {skipped} 台已有主机",
     "imported_partial": "已新增 {added} 台主机，但显示状态未能更新。请重试导入：{error}"
+  },
+  "launcher": {
+    "open_admin": "以管理员身份打开",
+    "set_default": "设为默认 Shell",
+    "current_default": "当前默认 Shell",
+    "connect": "连接",
+    "edit": "编辑",
+    "delete": "删除",
+    "default_saved": "已将 {shell} 设为默认 Shell。",
+    "admin_started": "已请求在新的管理员 Pebrel 窗口中打开 {shell}。",
+    "admin_cancelled": "已取消管理员启动。",
+    "admin_failed": "无法打开管理员终端：{error}"
   }
 }

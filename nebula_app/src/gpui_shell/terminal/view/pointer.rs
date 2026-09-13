@@ -1,4 +1,8 @@
 use super::*;
+use gpui_component::WindowExt as _;
+
+#[cfg(all(test, feature = "gpui-test-support"))]
+mod tests;
 
 impl TerminalView {
     pub(in crate::gpui_shell::terminal) fn scrollbar_thumb(
@@ -453,7 +457,7 @@ impl TerminalView {
     pub(super) fn on_mouse_move(
         &mut self,
         event: &MouseMoveEvent,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if self.move_completion_popup_scrollbar(event, cx) {
@@ -501,6 +505,19 @@ impl TerminalView {
             // 事件往往还在网格中间，靠 move 判定就永远起不来。
             cx.notify();
             return;
+        }
+        // The element's hitbox already excludes occluding menus. Do not move
+        // focus during a drag or let pointer movement dismiss modal input.
+        if event.pressed_button.is_none()
+            && !cx.has_active_drag()
+            && window.is_window_active()
+            && !self.focus_handle.is_focused(window)
+            && cx.try_global::<Settings>().is_some_and(|settings| settings.focus_follows_mouse)
+            && !window.has_active_dialog(cx)
+            && !window.has_active_sheet(cx)
+        {
+            window.focus(&self.focus_handle, cx);
+            cx.emit(TerminalViewEvent::FocusRequested);
         }
         if self.mouse_mode_active(&event.modifiers) {
             self.clear_link_hover(cx);

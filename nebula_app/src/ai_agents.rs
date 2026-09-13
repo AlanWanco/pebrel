@@ -47,10 +47,11 @@ pub enum AgentKind {
     Kilo,
     Qoder,
     Maki,
+    Trae,
 }
 
 impl AgentKind {
-    pub const ALL: [Self; 25] = [
+    pub const ALL: [Self; 26] = [
         Self::Claude,
         Self::Codex,
         Self::Gemini,
@@ -76,6 +77,7 @@ impl AgentKind {
         Self::Kilo,
         Self::Qoder,
         Self::Maki,
+        Self::Trae,
     ];
 
     pub fn slug(self) -> &'static str {
@@ -105,6 +107,7 @@ impl AgentKind {
             Self::Kilo => "kilo",
             Self::Qoder => "qodercli",
             Self::Maki => "maki",
+            Self::Trae => "trae-cli",
         }
     }
 
@@ -135,6 +138,7 @@ impl AgentKind {
             Self::Kilo => "Kilo Code",
             Self::Qoder => "Qoder",
             Self::Maki => "Maki",
+            Self::Trae => "Trae CLI",
         }
     }
 
@@ -171,6 +175,8 @@ impl AgentKind {
             Self::Kilo => &["kilo", "kilo-code"],
             Self::Qoder => &["qodercli", "qoderclicn", "qoder", "qodercn"],
             Self::Maki => &["maki"],
+            // ByteDance's trae-agent declares this console entry point.
+            Self::Trae => &["trae-cli"],
         }
     }
 
@@ -250,7 +256,8 @@ impl AgentKind {
             | Self::Kiro
             | Self::Kilo
             | Self::Qoder
-            | Self::Maki => return None,
+            | Self::Maki
+            | Self::Trae => return None,
             Self::Kimi => format!("kimi --session {session_id}"),
         })
     }
@@ -814,6 +821,18 @@ mod tests {
         assert_eq!(AgentKind::parse("cursor-agent"), Some(AgentKind::Cursor));
         assert_eq!(AgentKind::parse("grok-cli.cmd"), Some(AgentKind::Grok));
         assert_eq!(AgentKind::parse("cargo"), None);
+    }
+
+    #[test]
+    fn trae_cli_identity_does_not_guess_session_commands() {
+        for command in ["trae-cli", r"C:\tools\TRAE-CLI.EXE", "/usr/bin/trae-cli"] {
+            assert_eq!(AgentKind::parse(command), Some(AgentKind::Trae));
+        }
+        assert_eq!(AgentKind::parse_command("uv run trae-cli --help"), Some(AgentKind::Trae));
+        assert_eq!(AgentKind::parse("trae-cli-helper"), None);
+        assert_eq!(AgentKind::Trae.start_command(), None);
+        assert_eq!(AgentKind::Trae.resume_command("session-1"), None);
+        assert_eq!(AgentKind::Trae.fork_command("session-1"), None);
     }
 
     #[test]

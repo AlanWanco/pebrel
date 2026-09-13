@@ -109,7 +109,16 @@
       "dedicated": "Dedicated window",
       "existing": "Show existing window"
     },
-    "search_empty": "No matching settings"
+    "search_empty": "No matching settings",
+    "mouse": {
+      "focus_follows_mouse": "Focus follows mouse",
+      "focus_follows_mouse_description": "Focus a terminal pane when the pointer moves over it. Off by default."
+    },
+    "panes": {
+      "dim_inactive": "Dim inactive panes",
+      "dim_inactive_description": "Darken other split panes to make the active pane easier to identify."
+    },
+    "save_failed": "Could not save settings: {error}"
   },
   "provider": {
     "test": {
@@ -462,5 +471,17 @@
     "exported": "Host metadata exported without credentials",
     "imported": "Added {added} hosts; skipped {skipped} existing hosts",
     "imported_partial": "Added {added} hosts, but could not update their visibility. Retry the import: {error}"
+  },
+  "launcher": {
+    "open_admin": "Open as administrator",
+    "set_default": "Set as default Shell",
+    "current_default": "Current default Shell",
+    "connect": "Connect",
+    "edit": "Edit",
+    "delete": "Delete",
+    "default_saved": "{shell} is now the default Shell.",
+    "admin_started": "Requested {shell} in a new administrator Pebrel window.",
+    "admin_cancelled": "Administrator launch cancelled.",
+    "admin_failed": "Could not open an administrator terminal: {error}"
   }
 }
