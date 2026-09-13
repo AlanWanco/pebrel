@@ -14,7 +14,7 @@ fn native_window(window: &Window) -> Option<Retained<NSWindow>> {
     view.window()
 }
 
-pub(in super::super) fn configure(window: &Window) {
+pub(super) fn configure(window: &Window) {
     let Some(native) = native_window(window) else { return };
     let toolbar = NSToolbar::initWithIdentifier(
         NSToolbar::alloc(native.mtm()),

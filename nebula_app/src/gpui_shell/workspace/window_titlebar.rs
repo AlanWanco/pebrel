@@ -1,8 +1,5 @@
 use super::*;
 
-#[cfg(target_os = "macos")]
-pub(super) mod macos;
-
 /// Prepaint records the actual pane column before any titlebar paint runs. Keep
 /// this cell for the workspace lifetime, so resizing and panel animations do not
 /// allocate a new shared slot or duplicate the body's layout calculations.
@@ -90,6 +87,7 @@ impl NebulaWorkspace {
         cx: &mut Context<Self>,
     ) -> gpui::Div {
         let top_tabs = self.tabs_position == nebula_settings::TabsPositionName::Top;
+        let native_layout = crate::platform::window_chrome::layout(window);
         let bar = TitleBar::new()
             // Leave 8px above and below the existing 32px controls.
             .h(px(48.0))
@@ -97,7 +95,7 @@ impl NebulaWorkspace {
             .when(settings_active, |bar| {
                 bar.border_b_1().border_color(crate::gpui_shell::theme::settings_hairline(cx))
             })
-            .when(top_tabs && !cfg!(target_os = "macos"), |bar| {
+            .when(top_tabs && native_layout.is_none(), |bar| {
                 bar.pl(px(top_tabs::TOP_TAB_LEFT_INSET))
             })
             .when(top_tabs, |bar| {
@@ -120,10 +118,10 @@ impl NebulaWorkspace {
 
         // AppKit owns both the control group and its geometry. Read the live
         // frames so system layout, resize and full-screen transitions agree.
-        #[cfg(target_os = "macos")]
-        let bar = {
-            let (height, inset) = macos::layout(window);
+        let bar = if let Some((height, inset)) = native_layout {
             bar.h(px(height)).pl(px(inset))
+        } else {
+            bar
         };
 
         div()

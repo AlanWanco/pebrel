@@ -64,7 +64,7 @@ jobs:
       - name: Test native titlebar alignment
         if: runner.os == 'macOS'
         run: >-
-          cargo test --locked -p nebula --bin pebrel --features gpui-test-support gpui_shell::workspace::window_titlebar::macos::tests::
+          cargo test --locked -p nebula --bin pebrel --features gpui-test-support platform::window_chrome::macos::tests::
       - name: Test all Python helpers
         if: ${{ !cancelled() }}
         run: python -m unittest discover -s scripts/tests -v

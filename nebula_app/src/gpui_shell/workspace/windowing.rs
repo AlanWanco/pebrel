@@ -310,25 +310,15 @@ fn workspace_window_options(cx: &mut App, focus: bool, role: WindowRole) -> Wind
                     )
                 },
             );
-            WindowOptions {
+            crate::platform::window_chrome::configure_options(WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
                 window_min_size: Some(size(px(760.0), px(540.0)).min(&bounds.size)),
-                titlebar: Some(gpui::TitlebarOptions {
-                    // A manual traffic-light position makes GPUI rewrite AppKit's
-                    // titlebar container, breaking the system toolbar layout.
-                    traffic_light_position: if cfg!(target_os = "macos") {
-                        None
-                    } else {
-                        TitleBar::title_bar_options().traffic_light_position
-                    },
-                    ..TitleBar::title_bar_options()
-                }),
-                app_owns_titlebar_drag: cfg!(target_os = "macos"),
+                titlebar: Some(TitleBar::title_bar_options()),
                 app_id: Some("pebrel".to_owned()),
                 window_background: crate::gpui_shell::wallpaper::initial_background_appearance(),
                 focus,
                 ..Default::default()
-            }
+            })
         },
         #[cfg(windows)]
         WindowRole::QuickTerminal => {
@@ -392,8 +382,7 @@ fn open_workspace_window(
     let hwnd_out = hwnd_slot.clone();
     let handle = cx.open_window(options, move |window, cx| {
         window.set_window_title(crate::brand::NAME);
-        #[cfg(target_os = "macos")]
-        super::window_titlebar::macos::configure(window);
+        crate::platform::window_chrome::configure(window);
         *hwnd_out.borrow_mut() = native_hwnd(window).unwrap_or_default();
         #[cfg(windows)]
         crate::gpui_shell::set_native_window_icon(window);
