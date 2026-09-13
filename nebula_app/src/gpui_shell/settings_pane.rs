@@ -175,6 +175,7 @@ pub struct SettingsPane {
     /// GPUI text system 已注册的导入族名（启动扫描 + 本次导入累计）。
     font_imported: Vec<String>,
     font_family_input: Entity<InputState>,
+    font_family_cjk_input: Entity<InputState>,
     /// 字体输入框上一帧的窗口坐标。字体目录是宽弹层，不能把整条设置行当
     /// 锚点；否则输入框在右侧、菜单却会从正文左缘展开。
     font_picker_trigger_bounds: Option<gpui::Bounds<gpui::Pixels>>,

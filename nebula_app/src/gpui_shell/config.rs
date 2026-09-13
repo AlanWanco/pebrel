@@ -42,6 +42,7 @@ pub struct Settings {
     /// 已解析的界面语言。GPUI 组件只读这个内存全局，渲染路径不得重复读盘。
     pub ui_language: UiLanguage,
     pub font_family: String,
+    pub font_cjk: Option<[gpui::Font; 4]>,
     pub font_bold_family: String,
     pub font_italic_family: String,
     pub font_bold_italic_family: String,
@@ -193,6 +194,20 @@ impl Settings {
             cjk_bold_regular: runtime.cjk_bold_regular,
             shell_id: runtime.shell.clone(),
             font_family: normal_family,
+            font_cjk: runtime.font_family_cjk.as_deref().map(|family| {
+                use gpui::{FontStyle, FontWeight};
+                [
+                    (FontWeight::NORMAL, FontStyle::Normal),
+                    (FontWeight::BOLD, FontStyle::Normal),
+                    (FontWeight::NORMAL, FontStyle::Italic),
+                    (FontWeight::BOLD, FontStyle::Italic),
+                ]
+                .map(|(weight, style)| gpui::Font {
+                    weight,
+                    style,
+                    ..crate::font_install::gpui_font_with_fallbacks(family)
+                })
+            }),
             load_notice,
             // 这里是唯一能正确合并「主题自带几何」与「用户显式覆盖」的地方：
             // `theme` 已是 follow_system 折算后的**生效**主题，runtime 是同一次

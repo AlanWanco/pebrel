@@ -439,6 +439,28 @@ impl SettingsPane {
             },
         ));
 
+        let font_family_cjk_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .default_value(runtime.font_family_cjk.clone().unwrap_or_default())
+        });
+        subscriptions.push(cx.subscribe_in(
+            &font_family_cjk_input,
+            window,
+            |this: &mut Self, _, event: &InputEvent, window, cx| {
+                if matches!(event, InputEvent::PressEnter { .. } | InputEvent::Blur) {
+                    let value = crate::font_install::normalize_font_family_chain(
+                        &this.font_family_cjk_input.read(cx).value(),
+                    );
+                    this.font_family_cjk_input.update(cx, |input, cx| {
+                        input.set_value(value.clone(), window, cx);
+                    });
+                    if this.runtime.font_family_cjk.as_deref().unwrap_or_default() != value {
+                        this.persist(&[("font_family_cjk", value)], cx);
+                    }
+                }
+            },
+        ));
+
         let bg_picker_hsv = {
             let term = crate::gpui_shell::theme::chrome_theme_resolved(cx).palette().term_bg;
             let rgb = runtime.background.unwrap_or([term.r, term.g, term.b]);
@@ -548,6 +570,7 @@ impl SettingsPane {
             font_system: None,
             font_imported: Vec::new(),
             font_family_input,
+            font_family_cjk_input,
             font_picker_trigger_bounds: None,
             backup_selection: crate::encrypted_backup::BackupSelection::default(),
             backup_pass_input: cx.new(|cx| {

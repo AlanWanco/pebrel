@@ -77,6 +77,9 @@
       "background_cover_description": "The image will extend beneath the title bar, window buttons, tabs, and SSH sidebar. Low-contrast images may make controls harder to see; the interface retains a minimum-opacity safeguard."
     },
     "font": {
+      "english": "English terminal font",
+      "chinese": "Chinese terminal font",
+      "chinese_description": "Used for Chinese and other full-width characters. Enter a font family or comma-separated families; leave empty to use the English font settings. Applies on Enter or leaving the field.",
       "fallback_description": "The first family is preferred; missing glyphs fall back through the remaining families, with bundled Maple as the final safe fallback.",
       "group_description": "The first family is primary; the rest are used in fallback order.",
       "loading": "Enumerating system fonts...",

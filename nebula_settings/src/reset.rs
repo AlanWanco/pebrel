@@ -10,6 +10,7 @@ const RESET_KEYS: &[&str] = &[
     "app_icon",
     "follow_system_theme",
     "font_family",
+    "font_family_cjk",
     "font_size",
     "cursor_shape",
     "cursor_blink",
