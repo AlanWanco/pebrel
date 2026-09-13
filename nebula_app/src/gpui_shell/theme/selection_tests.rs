@@ -107,7 +107,11 @@ fn reader_drag_selection_keeps_text_and_copy_after_theme_switch(cx: &mut TestApp
             assert!(cx.theme().selection.a <= 0.3, "{name:?}");
         });
         assert_eq!(cx.debug_bounds("reader-selection-fixture").unwrap(), bounds);
-        let copy = if cfg!(target_os = "macos") { "cmd-c" } else { "ctrl-c" };
+        let copy = if crate::platform::Platform::current() == crate::platform::Platform::MacOS {
+            "cmd-c"
+        } else {
+            "ctrl-c"
+        };
         cx.simulate_keystrokes(copy);
         let copied = cx.read_from_clipboard().and_then(|item| item.text()).unwrap();
         assert_eq!(copied.trim(), SELECTED_TEXT, "{name:?}");
@@ -117,10 +121,14 @@ fn reader_drag_selection_keeps_text_and_copy_after_theme_switch(cx: &mut TestApp
 /// Native visual check for the same TextView used by the answer reader. Input
 /// events are dispatched to this test window, never to another desktop window.
 /// The probe does not touch the OS clipboard or start a terminal/AI session.
-#[cfg(target_os = "windows")]
 #[test]
 #[ignore = "requires a Windows desktop and PEBREL_SELECTION_QA_DIR for screenshots"]
 fn native_reader_selection_preview() {
+    assert_eq!(
+        crate::platform::Platform::current(),
+        crate::platform::Platform::Windows,
+        "this native desktop probe requires Windows",
+    );
     use gpui::{
         Bounds, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PlatformInput, WindowBounds,
         WindowOptions, size,
