@@ -1,7 +1,11 @@
 use super::*;
 
 impl SettingsPane {
-    pub(super) fn confirm_reset_all_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn confirm_reset_all_settings(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         use crate::i18n::Message;
 
         let language = crate::gpui_shell::config::ui_language(cx);
