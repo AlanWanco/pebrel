@@ -65,6 +65,13 @@ jobs:
         if: runner.os == 'macOS'
         run: >-
           cargo test --locked -p nebula --bin pebrel --features gpui-test-support platform::window_chrome::macos::tests::
+      - name: Test confirmation mouse dispatch and layout
+        run: >-
+          cargo test --locked -p nebula --bin pebrel --features gpui-test-support gpui_shell::prelude::tests::confirm_dialog
+      - name: Test reset backups and user data
+        if: ${{ !cancelled() }}
+        run: >-
+          cargo test --locked -p nebula-settings reset::tests::
       - name: Test all Python helpers
         if: ${{ !cancelled() }}
         run: python -m unittest discover -s scripts/tests -v
