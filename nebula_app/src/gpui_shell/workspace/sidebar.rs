@@ -239,14 +239,14 @@ impl NebulaWorkspace {
         let active_fg = theme.sidebar_accent_foreground;
         let hover_bg = theme.list_hover;
         let dark = theme.is_dark();
-        // 标题/标签走稳定的 UI 字体；程序图标是 Nerd Font 字位，固定走随
-        // 安装包提供的 Maple。用户设置的终端字体不得改变 chrome 几何。
+        // 路径标签沿用稳定的等宽字体；程序图标是 Nerd Font 字位，固定走随
+        // 安装包提供的 Maple。字号由独立的界面字号设置控制。
         let settings = cx.try_global::<crate::gpui_shell::config::Settings>();
         let tab_close_visible = settings.map(|settings| settings.tab_close_visible).unwrap_or(true);
         let tab_reveal = settings
             .map(|settings| settings.tab_reveal)
             .unwrap_or(nebula_settings::TabRevealName::Slide);
-        let chrome_family = theme.font_family.clone();
+        let chrome_family = theme.mono_font_family.clone();
         let symbol_family: SharedString = crate::font_install::REQUIRED_FONT_FAMILY.into();
         // 界面字号独立于终端缩放。
         let label_px = settings.map(|settings| settings.ui_font_size_px).unwrap_or(15.0);
@@ -1036,7 +1036,7 @@ impl NebulaWorkspace {
         let (ink, dim, badge_fill) = (theme.foreground, theme.muted_foreground, theme.muted);
         let dark = theme.is_dark();
         let settings = cx.try_global::<crate::gpui_shell::config::Settings>();
-        let chrome_family = theme.font_family.clone();
+        let chrome_family = theme.mono_font_family.clone();
         let symbol_family: SharedString = crate::font_install::REQUIRED_FONT_FAMILY.into();
         let label_px = settings.map(|settings| settings.ui_font_size_px).unwrap_or(15.0);
         let TabPresentation { title, logo_image, program_glyph, pane_count, .. } =
