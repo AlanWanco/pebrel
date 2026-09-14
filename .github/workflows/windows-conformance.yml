@@ -19,6 +19,7 @@ jobs:
     env:
       PYTHONUTF8: "1"
       NEBULA_RESIZE_TRACE: "1"
+      NEBULA_BOOT_TRACE: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
