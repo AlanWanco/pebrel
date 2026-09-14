@@ -986,6 +986,10 @@ impl NebulaWorkspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
+        // Private administrator windows have no public resident discovery path.
+        if crate::platform::elevation::requires_isolation() {
+            return false;
+        }
         let runtime = nebula_settings::RuntimeSettings::load();
         // 平台藏不了窗口就没有「驻留」可言：不拦关闭，否则 Unix 上会变成
         // 既不关也不藏（设置页那一行也按同一能力位隐藏）。

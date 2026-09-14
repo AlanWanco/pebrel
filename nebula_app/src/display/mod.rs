@@ -2412,12 +2412,11 @@ impl Display {
         let grok_uses_light_mark =
             u32::from(ink.r) * 299 + u32::from(ink.g) * 587 + u32::from(ink.b) * 114 >= 128_000;
         let key = match logo {
-            AiLogo::Claude | AiLogo::Antigravity => (logo, [0, 0, 0], target_size),
             AiLogo::Grok if grok_uses_light_mark => (logo, [255, 255, 255], target_size),
-            AiLogo::Grok => (logo, [0, 0, 0], target_size),
             AiLogo::OpenAi | AiLogo::OpenCode | AiLogo::Pi => {
                 (logo, [ink.r, ink.g, ink.b], target_size)
             },
+            _ => (logo, [0, 0, 0], target_size),
         };
         if let Some(cached) = self.nebula_ai_logo_cache.get(&key) {
             return Some(cached.clone());
@@ -2432,11 +2431,7 @@ impl Display {
             },
         };
         logo.tint_pixels(&mut rgba, [ink.r, ink.g, ink.b]);
-        let (rgba, width, height) = if matches!(logo, AiLogo::Grok | AiLogo::Antigravity) {
-            prepare_ai_logo_texture(&rgba, width, height, target_size)
-        } else {
-            (rgba, width, height)
-        };
+        let (rgba, width, height) = prepare_ai_logo_texture(&rgba, width, height, target_size);
         let id = AI_LOGO_ID_BASE + self.nebula_ai_logo_cache.len() as u64;
         let entry = (id, std::sync::Arc::new(rgba), (width, height));
         self.nebula_ai_logo_cache.insert(key, entry.clone());

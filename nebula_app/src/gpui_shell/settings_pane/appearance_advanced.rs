@@ -62,6 +62,13 @@ impl SettingsPane {
         let interface = self
             .group(language.pick("界面", "Interface"), cx)
             .child(self.switch_row(
+                "dim_inactive_panes",
+                language.text(crate::i18n::Message::SettingsPanesDimInactive),
+                language.text(crate::i18n::Message::SettingsPanesDimInactiveDescription),
+                self.runtime.dim_inactive_panes,
+                cx,
+            ))
+            .child(self.switch_row(
                 "tab_close_visible",
                 language.pick("显示标签关闭按钮", "Show tab close buttons"),
                 help("tab_close_visible", language),

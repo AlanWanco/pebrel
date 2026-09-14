@@ -306,3 +306,117 @@ unrelated feature's growth. Remote approval/enforcement is not implied by this l
   Native compilation and UI results must be reported separately.
 - **Revisit condition:** Add separate system-notification or per-agent controls
   only when requested, rather than expanding the meaning of this persisted key.
+
+## ADR-0010 — Administrator shells hosted by the GPUI product
+
+- **Status:** Requested by the maintainer and implemented, 2026-09-13. Native
+  Windows behavior tests passed; interactive UAC acceptance remains manual.
+- **Context:** Elevating a shell executable directly opens an external console.
+  Elevating Pebrel without preserving the explicit startup command can instead
+  reach the ordinary resident process and lose both privilege and Shell selection.
+- **Decision:** The launcher requests Windows UAC for the current Pebrel executable
+  on a worker. It passes the selected Shell's argument vector and working directory
+  through the existing CLI, using Windows argument quoting without a command shell.
+  GPUI startup consumes that command as its first terminal. An already elevated
+  process creates the terminal in its current workspace.
+- **Ownership:** A process-token check separates elevated instances from ordinary
+  resident forwarding. Elevated instances use the existing loopback API transport
+  with a private endpoint supplied only in local PTY child environments, including
+  WSL passthrough. They do not publish a privileged bearer token in `runtime.port`,
+  acquire its ownership lock, restore/write the shared session, or hide on close.
+  Ordinary discovery files and settings formats remain compatible. Token-query
+  failure uses the isolated policy; launch failure remains visible to the user.
+- **Lifetime and cost:** UAC runs off the UI thread, one request per workspace at
+  a time. Completion updates only a still-live workspace and does not dismiss a
+  subsequently opened picker. Token status is cached; endpoint injection runs only
+  during PTY creation. No application dependency or additional server is added.
+- **Validation:** Tests cover native argument parsing, explicit-command startup,
+  ordinary-session exclusion, private discovery/authentication, right-click versus
+  launch, keyboard dismissal, and SSH target stability. Automated coverage does not
+  imply a completed UAC desktop acceptance test.
+- **Revisit condition:** Supporting an elevated pane inside an existing ordinary
+  process requires a separately reviewed broker and authenticated PTY transport.
+  A future privileged-residency feature must have explicit recovery/discovery.
+
+The two pane preferences in the same request reuse `nebula_settings`: mouse focus
+has an optional GUI override of the compatible TOML setting (default off), while
+inactive-pane dimming defaults on to preserve the existing appearance. Both are
+cached by the GPUI settings adapter; pointer movement and rendering do not read
+settings files.
+
+## ADR-0012 — Bounded background images and explicit atlas retirement
+
+- **Status:** Requested by the maintainer, 2026-09-14; implementation and validation in progress.
+- **Evidence:** With blur disabled, twenty window size changes retained an additional
+  84 MiB (card) / 190 MiB (window-cover) of dedicated GPU memory on the local Windows
+  QA binary. The pinned GPUI atlas does not retire image IDs when Rust Arcs drop.
+- **Decision:** Keep one bounded CPU RenderImage shared by the background layers and
+  windows. Use the existing renderer authority for fit/alignment and GPUI image
+  bounds for GPU sampling; resizing no longer produces new images. Opacity is a
+  layer property. Explicitly retire replaced image IDs across window atlases and
+  invalidate replayed scenes. Platform atlas copies remain per window.
+- **Loading and ownership:** The App visual-effects state owns one active background
+  executor job and one latest desired source. Generation checks cancel superseded
+  work before expensive stages and prevent stale publication; dropping the owner
+  invalidates outstanding work. Metadata and decoding run off the UI thread. There
+  is no new service, thread pool, dependency, persisted format or AI lifecycle change.
+- **Memory policy:** Retained BGRA is limited to 8 MiB and an edge of 2048 pixels;
+  encoded input is streamed with a 64 MiB file limit, and decoder/output admission
+  is limited to 128 MiB. Integer thumbnailing precedes RGBA conversion and avoids
+  a full-image floating-point resize buffer. These are owned-resource limits, not
+  a whole-process or undocumented decoder-scratch guarantee. Existing native-fit
+  geometry remains independent of reduced texture resolution.
+- **Tradeoff:** High-resolution wallpaper detail is reduced and inputs over the
+  admission limits receive a visible error. The window can appear with its normal
+  base color while the background loads. These favor the user's explicit memory
+  and responsiveness priorities.
+- **Validation:** Targeted decode/lifetime/geometry tests, Windows GPUI build,
+  repeated-size memory probes and real card/crop/opacity visual checks are required.
+  Results are recorded separately and are not implied by this decision.
+- **Revisit condition:** Replace manual atlas retirement if upstream introduces
+  equivalent ownership-aware image resources. Adopt target-size native decoding
+  only with verified peak accounting and compatibility evidence.
+
+## ADR-0013 — Bounded, on-demand filename search
+
+- **Date:** 2026-09-14
+- **Context:** Opening Files previously crawled up to 500,000 paths even with an
+  empty query. The index retained its full array and several strings per path.
+  Users requested approximately 10–15 MiB of sustained browsing/search overhead,
+  unchanged matching options and reuse during repeated panel use.
+- **Decision:** Keep filename matching in the shared side-panel model. Empty
+  queries only enumerate the visible tree. Nonempty queries reuse one bounded
+  cache and stream uncached paths through the same matcher/ranker. Cache capacity
+  never determines search coverage. Plain, case-sensitive, whole-word and regex
+  matching retain their existing semantics and best-first ordering.
+- **Ownership and budgets:** Each existing worker owns one root cache (6 MiB);
+  all caches share an 8 MiB allocation quota. Published rows carry a lease into
+  their consuming view (512 KiB per snapshot, 2 MiB shared). One process-wide
+  execution lock bounds simultaneous traversal/ranking buffers; UI threads never
+  acquire it. Ranking retains at most 1,000 candidates and 1 MiB. Query regex and
+  path parsing have independent bounds. These are allocation budgets, not a
+  promise that OS working set or total application memory equals those values.
+- **Lifecycle:** A latest-request mailbox replaces the unbounded command queue.
+  Revisions cancel obsolete traversal and reject stale publication. Clearing or
+  closing Files releases result rows, while a bounded warm cache survives reopening.
+  Root changes replace that cache. Local nonrecursive watches are installed before
+  enumeration, capped at 128 directories / 64 KiB of path storage. Caches with
+  incomplete watch coverage (including WSL) expire after two seconds. WSL search
+  executes `find` directly with `wsl.exe --exec`, streams NUL records through a
+  four-record channel and terminates its owned command on cancellation/timeout.
+  Direct execution preserves paths and `find` arguments containing shell syntax.
+  It never terminates terminal sessions.
+- **Tradeoff:** Unchanged directories that fit in the watched cache avoid repeat
+  walks. Larger trees reuse a prefix for early results but require streaming for
+  full coverage. Search reports partial results at its existing 500,000-entry
+  ceiling, depth 64, inaccessible paths or result limits. Explicit refresh remains
+  available. No new dependency, persisted index or daemon is introduced.
+- **Validation:** Matching, watch changes, cancellation, panel reopening, root
+  replacement, bounded ranking and allocation ownership have focused regressions.
+  An opt-in Windows stress test drives the production panel through multiple
+  directories, clear/query/reopen cycles and records actual Vec/String capacities,
+  the Windows array heap block and process private commit after allocator warmup.
+  Runtime evidence must accompany any claim about the sustained memory target.
+- **Replacement condition:** Revisit the budgets or an OS-backed index only with
+  measured query latency, completeness and sustained allocation evidence. Do not
+  restore eager full-tree indexing to improve a synthetic latency number.

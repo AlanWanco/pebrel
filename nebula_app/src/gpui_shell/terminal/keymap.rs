@@ -209,8 +209,24 @@ fn kitty_sequence(ks: &Keystroke, mode: &TermMode) -> Option<Vec<u8>> {
     Some(build_sequence(&input, modifiers, *mode))
 }
 
-/// 返回 `None` 表示这次按键不由编码器处理（交给 IME/文本输入路径）。
+/// These Windows chords must reach DefWindowProc so the existing close guard
+/// and native system menu run. Other modifiers retain their terminal meaning.
+pub(super) fn is_native_window_shortcut(ks: &Keystroke) -> bool {
+    let mods = &ks.modifiers;
+    cfg!(windows)
+        && mods.alt
+        && !mods.control
+        && !mods.shift
+        && !mods.platform
+        && !mods.function
+        && matches!(ks.key.as_str(), "f4" | "space")
+}
+
+/// 返回 `None` 表示这次按键交给系统窗口处理或 IME/文本输入路径。
 pub fn encode(ks: &Keystroke, mode: &TermMode) -> Option<Vec<u8>> {
+    if is_native_window_shortcut(ks) {
+        return None;
+    }
     let mods = &ks.modifiers;
 
     #[cfg(windows)]
@@ -329,6 +345,132 @@ mod tests {
 
     fn keystroke(key: &str) -> Keystroke {
         Keystroke { modifiers: gpui::Modifiers::default(), key: key.to_owned(), key_char: None }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_window_shortcuts_never_enter_a_terminal_protocol() {
+        for mode in [
+            TermMode::empty(),
+            TermMode::WIN32_INPUT_MODE,
+            TermMode::DISAMBIGUATE_ESC_CODES,
+            TermMode::REPORT_ALL_KEYS_AS_ESC,
+            TermMode::WIN32_INPUT_MODE | TermMode::DISAMBIGUATE_ESC_CODES,
+        ] {
+            for screen in [TermMode::empty(), TermMode::ALT_SCREEN] {
+                for combo in ["alt-f4", "alt-space"] {
+                    let mut key = Keystroke::parse(combo).unwrap();
+                    for text in [None, Some(" ".to_owned())] {
+                        key.key_char = text;
+                        assert_eq!(encode(&key, &(mode | screen)), None, "{combo}: {mode:?}");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn neighboring_alt_and_function_keys_keep_their_terminal_encoding() {
+        for (combo, expected) in [
+            ("f4", b"\x1bOS".as_slice()),
+            ("alt-f3", b"\x1b[1;3R".as_slice()),
+            ("alt-n", b"\x1bn".as_slice()),
+            ("ctrl-alt-f4", b"\x1b[1;7S".as_slice()),
+            ("ctrl-alt-space", b"\x1b\0".as_slice()),
+        ] {
+            assert_eq!(
+                encode(&Keystroke::parse(combo).unwrap(), &TermMode::empty()).as_deref(),
+                Some(expected),
+                "{combo}",
+            );
+        }
+        #[cfg(not(windows))]
+        {
+            let mut space = Keystroke::parse("alt-space").unwrap();
+            space.key_char = Some(" ".to_owned());
+            assert_eq!(encode(&space, &TermMode::empty()), Some(b"\x1b ".to_vec()));
+            assert_eq!(
+                encode(&Keystroke::parse("alt-f4").unwrap(), &TermMode::empty()),
+                Some(b"\x1b[1;3S".to_vec()),
+            );
+        }
+    }
+
+    #[cfg(all(windows, feature = "gpui-test-support"))]
+    #[gpui::test]
+    fn native_window_shortcuts_propagate_through_root_and_terminal(cx: &mut gpui::TestAppContext) {
+        use gpui::{
+            AppContext as _, Context, FocusHandle, InteractiveElement as _, IntoElement,
+            KeyDownEvent, ParentElement as _, Render, Styled as _, Window, div,
+        };
+        use gpui_component::Root;
+
+        struct InputProbe {
+            focus: FocusHandle,
+            mode: TermMode,
+            received: usize,
+            encoded: Vec<u8>,
+        }
+
+        impl Render for InputProbe {
+            fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+                div()
+                    .size_full()
+                    .key_context(crate::gpui_shell::terminal::KEY_CONTEXT)
+                    .track_focus(&self.focus)
+                    .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                        this.received += 1;
+                        if let Some(bytes) = encode(&event.keystroke, &this.mode) {
+                            this.encoded.extend(bytes);
+                            cx.stop_propagation();
+                        }
+                    }))
+            }
+        }
+
+        cx.update(|cx| {
+            gpui_component::init(cx);
+            crate::gpui_shell::workspace::init(cx);
+        });
+        let mut probe_out = None;
+        let (_, cx) = cx.add_window_view(|window, cx| {
+            let probe = cx.new(|cx| InputProbe {
+                focus: cx.focus_handle(),
+                mode: TermMode::empty(),
+                received: 0,
+                encoded: Vec::new(),
+            });
+            let focus = probe.read(cx).focus.clone();
+            focus.focus(window, cx);
+            probe_out = Some(probe.clone());
+            Root::new(probe, window, cx)
+        });
+        let probe = probe_out.unwrap();
+        cx.run_until_parked();
+        for mode in [
+            TermMode::empty(),
+            TermMode::WIN32_INPUT_MODE,
+            TermMode::DISAMBIGUATE_ESC_CODES,
+            TermMode::REPORT_ALL_KEYS_AS_ESC | TermMode::ALT_SCREEN,
+        ] {
+            probe.update(cx, |probe, _| probe.mode = mode);
+            for combo in ["alt-f4", "alt-space"] {
+                cx.update(|window, cx| {
+                    let before = probe.read(cx).received;
+                    let result = window.dispatch_event(
+                        gpui::PlatformInput::KeyDown(KeyDownEvent {
+                            keystroke: Keystroke::parse(combo).unwrap(),
+                            is_held: false,
+                            prefer_character_input: false,
+                        }),
+                        cx,
+                    );
+                    assert!(result.propagate, "Windows must receive {combo} in {mode:?}");
+                    assert!(probe.read(cx).encoded.is_empty());
+                    assert_eq!(probe.read(cx).received, before + 1);
+                });
+            }
+        }
     }
 
     /// 传统 VT 路径（子进程没要过 DECSET 9001）：Esc 就是裸 `\x1b`。
@@ -663,13 +805,20 @@ mod tests {
     }
 
     #[test]
-    fn kitty_modified_space_and_ascii_punctuation_use_csi_u() {
+    fn kitty_modified_space_and_ascii_punctuation_respect_native_shortcuts() {
         for (name, codepoint) in [("space", 32), ("[", 91), ("/", 47)] {
             let mut key = keystroke(name);
             key.modifiers.alt = true;
+            let expected = if cfg!(windows) && name == "space" {
+                None
+            } else {
+                Some(format!("\x1b[{codepoint};3u").into_bytes())
+            };
+            assert_eq!(encode(&key, &pi_keyboard_mode()), expected);
+            key.modifiers.control = true;
             assert_eq!(
                 encode(&key, &pi_keyboard_mode()),
-                Some(format!("\x1b[{codepoint};3u").into_bytes())
+                Some(format!("\x1b[{codepoint};7u").into_bytes())
             );
         }
     }

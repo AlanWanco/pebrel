@@ -1756,10 +1756,10 @@ impl TerminalView {
         if self.exited.is_some() || self.answer_reader.is_some() {
             return;
         }
-        // 旧壳 `keyboard.rs`：IME 组合中不编码、不拦截。GPUI Windows 在
-        // `stop_propagation` 后会跳过 `TranslateMessage`，组合中若把按键
-        // 吃掉，候选窗和退格都会坏。
-        if self.marked_text.is_some() {
+        // IME 组合和 Windows 原生窗口快捷键不编码、不拦截。GPUI Windows
+        // 在 `stop_propagation` 后会跳过 `TranslateMessage` 和 `DispatchMessage`，
+        // 必须保留输入法组合、窗口关闭和系统菜单的默认处理。
+        if self.marked_text.is_some() || keymap::is_native_window_shortcut(&event.keystroke) {
             return;
         }
         let ks = &event.keystroke;
