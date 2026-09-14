@@ -167,8 +167,12 @@ impl NebulaWorkspace {
         let items_running = std::cell::Cell::new(false);
         let items = (0..self.top_tab_count())
             .map(|ix| {
-                let settings_navigation = self.settings_open && ix == self.tabs.len();
-                let active = settings_navigation || (!self.settings_open && ix == self.active);
+                let settings_navigation = self.settings_tab_open && ix == self.tabs.len();
+                let active = if settings_navigation {
+                    self.settings_open
+                } else {
+                    !self.settings_open && ix == self.active
+                };
                 let TabPresentation {
                     title,
                     is_settings,
@@ -254,6 +258,7 @@ impl NebulaWorkspace {
 
                 let row = h_flex()
                     .id(("top-tab", ix))
+                    .debug_selector(|| format!("top-tab-{ix}"))
                     .group(hover_group.clone())
                     .relative()
                     .w(px(tab_w))

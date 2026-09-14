@@ -75,7 +75,10 @@ pub(crate) enum GpuiShellEvent {
 ///
 /// GPUI 拥有自己的消息循环：主窗形态从主线程调用（winit 不启动）；
 /// spike 形态从专用线程调用。一个进程内只允许调用一次。
-pub fn run_shell(initial_cwd: Option<std::path::PathBuf>) {
+pub fn run_shell(
+    initial_cwd: Option<std::path::PathBuf>,
+    initial_command: Option<crate::config::ui_config::Program>,
+) {
     let (shell_tx, shell_rx) = std::sync::mpsc::channel();
     crate::notify::init_gpui_activation(shell_tx.clone());
     crate::ssh_prompt::install({
@@ -111,7 +114,10 @@ pub fn run_shell(initial_cwd: Option<std::path::PathBuf>) {
         },
         runtime_hub.clone(),
     );
-    if runtime_server.is_none() {
+    if runtime_server.is_none()
+        && initial_command.is_none()
+        && !crate::platform::elevation::requires_isolation()
+    {
         // 与另一份进程同时启动时，对方可能已经拿到 owner lock、但尚未来得及
         // 发布 endpoint。短暂等待并交接，避免继续打开一个无控制面的空窗口。
         for _ in 0..40 {
@@ -151,7 +157,7 @@ pub fn run_shell(initial_cwd: Option<std::path::PathBuf>) {
             {
                 cx.activate(true);
             }
-            open_main_window(cx, ai_events, shell_rx, runtime_hub, initial_cwd);
+            open_main_window(cx, ai_events, shell_rx, runtime_hub, initial_cwd, initial_command);
         });
     crate::tray::shutdown();
 }
@@ -224,9 +230,16 @@ fn open_main_window(
     shell_events: std::sync::mpsc::Receiver<GpuiShellEvent>,
     runtime_hub: crate::runtime_api::RuntimeHub,
     initial_cwd: Option<std::path::PathBuf>,
+    initial_command: Option<crate::config::ui_config::Program>,
 ) {
     workspace::windowing::initialize(cx, runtime_hub);
-    workspace::windowing::open_initial_window(cx, ai_events, shell_events, initial_cwd);
+    workspace::windowing::open_initial_window(
+        cx,
+        ai_events,
+        shell_events,
+        initial_cwd,
+        initial_command,
+    );
 }
 
 /// 按 `tray` 设置挂上或摘掉系统托盘图标（旧壳 `tray::set_enabled`）。

@@ -306,3 +306,40 @@ unrelated feature's growth. Remote approval/enforcement is not implied by this l
   Native compilation and UI results must be reported separately.
 - **Revisit condition:** Add separate system-notification or per-agent controls
   only when requested, rather than expanding the meaning of this persisted key.
+
+## ADR-0010 — Administrator shells hosted by the GPUI product
+
+- **Status:** Requested by the maintainer and implemented, 2026-09-13. Native
+  Windows behavior tests passed; interactive UAC acceptance remains manual.
+- **Context:** Elevating a shell executable directly opens an external console.
+  Elevating Pebrel without preserving the explicit startup command can instead
+  reach the ordinary resident process and lose both privilege and Shell selection.
+- **Decision:** The launcher requests Windows UAC for the current Pebrel executable
+  on a worker. It passes the selected Shell's argument vector and working directory
+  through the existing CLI, using Windows argument quoting without a command shell.
+  GPUI startup consumes that command as its first terminal. An already elevated
+  process creates the terminal in its current workspace.
+- **Ownership:** A process-token check separates elevated instances from ordinary
+  resident forwarding. Elevated instances use the existing loopback API transport
+  with a private endpoint supplied only in local PTY child environments, including
+  WSL passthrough. They do not publish a privileged bearer token in `runtime.port`,
+  acquire its ownership lock, restore/write the shared session, or hide on close.
+  Ordinary discovery files and settings formats remain compatible. Token-query
+  failure uses the isolated policy; launch failure remains visible to the user.
+- **Lifetime and cost:** UAC runs off the UI thread, one request per workspace at
+  a time. Completion updates only a still-live workspace and does not dismiss a
+  subsequently opened picker. Token status is cached; endpoint injection runs only
+  during PTY creation. No application dependency or additional server is added.
+- **Validation:** Tests cover native argument parsing, explicit-command startup,
+  ordinary-session exclusion, private discovery/authentication, right-click versus
+  launch, keyboard dismissal, and SSH target stability. Automated coverage does not
+  imply a completed UAC desktop acceptance test.
+- **Revisit condition:** Supporting an elevated pane inside an existing ordinary
+  process requires a separately reviewed broker and authenticated PTY transport.
+  A future privileged-residency feature must have explicit recovery/discovery.
+
+The two pane preferences in the same request reuse `nebula_settings`: mouse focus
+has an optional GUI override of the compatible TOML setting (default off), while
+inactive-pane dimming defaults on to preserve the existing appearance. Both are
+cached by the GPUI settings adapter; pointer movement and rendering do not read
+settings files.

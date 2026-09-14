@@ -53,6 +53,7 @@ mod theme_picker;
 
 mod initialization;
 mod keymap;
+mod launcher_actions;
 mod localization;
 mod navigation;
 mod shell_picker;
@@ -70,7 +71,7 @@ use status::{
 
 /// 宿主（workspace）监听：设置已写盘 / 终端目录已变 / 请求打开 SSH 会话。
 pub enum SettingsPaneEvent {
-    /// Return to the workspace. Settings is a window-level page, not a tab.
+    /// Explicitly close Settings and return to the workspace.
     Close,
     Changed,
     /// 导入 Profile 已落盘；Tab 的 Shell 面板若正打开，需要重建候选快照。
@@ -330,7 +331,7 @@ impl SettingsPane {
             cx.notify();
             return;
         }
-        if key == "ai_toasts" {
+        if matches!(key, "ai_toasts" | "focus_follows_mouse" | "dim_inactive_panes") {
             if let Err(error) = self.try_persist(&[(key, (value as u8).to_string())], cx) {
                 let language = crate::gpui_shell::config::ui_language(cx);
                 super::toast::toast(
@@ -338,7 +339,11 @@ impl SettingsPane {
                     cx,
                     super::toast::ToastKind::Warning,
                     language.format(
-                        crate::i18n::Message::SettingsNotificationsSaveFailed,
+                        if key == "ai_toasts" {
+                            crate::i18n::Message::SettingsNotificationsSaveFailed
+                        } else {
+                            crate::i18n::Message::SettingsSaveFailed
+                        },
                         &[("error", &error.to_string())],
                     ),
                 );
@@ -679,6 +684,8 @@ impl SettingsPane {
         match key {
             "follow_system_theme" => flag!(follow_system_theme),
             "copy_on_select" => flag!(copy_on_select),
+            "focus_follows_mouse" => Some((cur.focus_follows_mouse.is_some(), String::new())),
+            "dim_inactive_panes" => flag!(dim_inactive_panes),
             "multiline_paste_confirm" => flag!(multiline_paste_confirm),
             "tab_close_visible" => flag!(tab_close_visible),
             "terminal_proxy" => flag!(terminal_proxy),
@@ -1070,6 +1077,18 @@ impl SettingsPane {
             .gap(px(GROUP_GAP))
             .child(
                 self.group(language.pick("鼠标与选区", "Mouse and selection"), cx)
+                    .child(
+                        self.switch_row(
+                            "focus_follows_mouse",
+                            language.text(crate::i18n::Message::SettingsMouseFocusFollowsMouse),
+                            language.text(
+                                crate::i18n::Message::SettingsMouseFocusFollowsMouseDescription,
+                            ),
+                            cx.try_global::<crate::gpui_shell::config::Settings>()
+                                .is_some_and(|settings| settings.focus_follows_mouse),
+                            cx,
+                        ),
+                    )
                     .child(self.switch_row(
                         "copy_on_select",
                         language.pick("选中即复制", "Copy on select"),

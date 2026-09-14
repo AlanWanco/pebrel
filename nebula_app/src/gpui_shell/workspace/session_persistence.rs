@@ -8,11 +8,22 @@ pub(super) enum SaveReason {
     Quit,
 }
 
-#[derive(Default)]
 pub(super) struct SessionPersistence {
     latest: Option<Session>,
     saved: Option<Session>,
     quitting: bool,
+    isolated: bool,
+}
+
+impl Default for SessionPersistence {
+    fn default() -> Self {
+        Self {
+            latest: None,
+            saved: None,
+            quitting: false,
+            isolated: crate::platform::elevation::requires_isolation(),
+        }
+    }
 }
 
 impl SessionPersistence {
@@ -26,6 +37,11 @@ impl SessionPersistence {
         reason: SaveReason,
         write: impl FnOnce(&Session) -> std::io::Result<()>,
     ) {
+        // An administrator window must not overwrite the ordinary workspace or
+        // cause its privileged shell command to be restored in a later session.
+        if self.isolated {
+            return;
+        }
         let retry_checkpoint = reason == SaveReason::Checkpoint
             && current.as_ref().is_none_or(|session| session.tabs.is_empty());
         let candidate = if self.quitting {
@@ -85,6 +101,22 @@ pub(super) fn combine_sessions(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn isolated_windows_never_write_shared_session_storage() {
+        let mut state = SessionPersistence { isolated: true, ..SessionPersistence::default() };
+        for reason in [
+            SaveReason::Checkpoint,
+            SaveReason::TabsClosed,
+            SaveReason::WindowClose,
+            SaveReason::Quit,
+        ] {
+            state.save_with(Some(sample_session()), reason, |_| {
+                panic!("privileged session reached shared storage")
+            });
+        }
+        assert!(state.latest.is_none());
+    }
     use crate::session::{AgentSession, LayoutSession, TabSession};
 
     fn sample_session() -> Session {

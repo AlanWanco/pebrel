@@ -239,7 +239,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         if try_hand_over_to_resident(&options) {
             return Ok(());
         }
-        gpui_shell::run_shell(initial_cwd);
+        gpui_shell::run_shell(initial_cwd, options.window_options.terminal_options.command());
         return Ok(());
     }
 
@@ -519,6 +519,9 @@ fn wants_gpui_shell(options: &Options) -> bool {
 /// 驻留进程，再 `tab.new`。GPUI 与 winit 共用，避免第二份进程无声退出。
 #[cfg(windows)]
 fn try_hand_over_to_resident(options: &Options) -> bool {
+    if platform::elevation::requires_isolation() {
+        return false;
+    }
     let has_command = options.window_options.terminal_options.command().is_some();
     let launch_dir = options
         .window_options

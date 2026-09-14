@@ -125,7 +125,16 @@
       "silent_start": "静默启动",
       "silent_start_help": "启动后在后台运行，不显示窗口。开启时会同时启用系统托盘，点击托盘图标可重新打开窗口。托盘启用时生效，显式打开目录时除外。",
       "save_failed": "无法更改启动设置：{error}"
-    }
+    },
+    "mouse": {
+      "focus_follows_mouse": "焦点跟随鼠标",
+      "focus_follows_mouse_description": "鼠标移入终端窗格时自动聚焦，默认关闭。"
+    },
+    "panes": {
+      "dim_inactive": "调暗非活动窗格",
+      "dim_inactive_description": "降低其他分屏窗格的亮度，突出当前活动窗格。"
+    },
+    "save_failed": "无法保存设置：{error}"
   },
   "provider": {
     "test": {
@@ -525,5 +534,17 @@
     "following_directory": "所选目录不可用，已跟随当前目录",
     "command_failed": "{program} 失败",
     "task_start_failed": "无法启动版本控制任务: {error}"
+  },
+  "launcher": {
+    "open_admin": "以管理员身份打开",
+    "set_default": "设为默认 Shell",
+    "current_default": "当前默认 Shell",
+    "connect": "连接",
+    "edit": "编辑",
+    "delete": "删除",
+    "default_saved": "已将 {shell} 设为默认 Shell。",
+    "admin_started": "已请求在新的管理员 Pebrel 窗口中打开 {shell}。",
+    "admin_cancelled": "已取消管理员启动。",
+    "admin_failed": "无法打开管理员终端：{error}"
   }
 }

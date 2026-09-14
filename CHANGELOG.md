@@ -13,6 +13,10 @@ Every release entry is provided in English and Simplified Chinese.
 - Added a confirmation dialog to Settings → Restore defaults, with an explicit cancel action before any preferences are reset. Contributed by [@WilliamWang1721](https://github.com/WilliamWang1721) in [#115](https://github.com/Kuddev/pebrel/pull/115).
 - Added Windows login-startup and silent-start switches in Settings → Advanced → Session lifecycle. Silent startup requires the system tray; opening a directory explicitly still shows a window. Contributed by [@WilliamWang1721](https://github.com/WilliamWang1721) in [#117](https://github.com/Kuddev/pebrel/pull/117).
 - Added separate interface font and size controls, plus an optional CJK terminal font fallback list, in Settings → Appearance. Interface size can be adjusted from 10 to 24 px independently of terminal text. Contributed by [@WilliamWang1721](https://github.com/WilliamWang1721) in [#127](https://github.com/Kuddev/pebrel/pull/127).
+- Added “Focus follows mouse” in Settings → Interaction, off by default, and “Dim inactive panes” in Settings → Appearance, on by default. Both preferences take effect immediately.
+- Added right-click actions to the Shell launcher for choosing the default Shell and, on Windows, opening the selected Shell inside a new administrator Pebrel window.
+- Added Connect, Edit, and Delete to SSH launcher context menus. Delete uses the existing confirmation and undo flow.
+- Added Trae CLI recognition and its tab icon, plus a dedicated Oh My Pi icon.
 
 #### Fixed
 
@@ -20,10 +24,14 @@ Every release entry is provided in English and Simplified Chinese.
 - Aligned macOS title-bar controls and tab spacing with the native window-button geometry. Contributed by [@WilliamWang1721](https://github.com/WilliamWang1721) in [#114](https://github.com/Kuddev/pebrel/pull/114).
 - Fixed ignored terminal selection foreground colors and preserved custom selection colors in themes that do not define their own. Contributed by [@Aschenbath](https://github.com/Aschenbath) in [#125](https://github.com/Kuddev/pebrel/pull/125).
 - Kept selected text readable in the answer reader and other selectable text views by limiting the highlight opacity, while retaining solid list-selection backgrounds. Contributed by [@Aschenbath](https://github.com/Aschenbath) in [#126](https://github.com/Kuddev/pebrel/pull/126).
+- Fixed the top Settings tab disappearing when switching to another tab. It now remains available until explicitly closed, including when tabs overflow or the tab layout changes.
+- Fixed `Alt+1–9` and `Ctrl+1–9` tab shortcuts losing priority to terminal input. They now work while a terminal or CLI has focus and respect custom shortcut changes without restarting.
 
 #### Improved
 
+
 - Localized existing Git controls, status messages, history timestamps and file-operation notices. Switching the interface language preserves the commit draft and its text selection. Contributed by [@gao-jian-bin](https://github.com/gao-jian-bin) in [#118](https://github.com/Kuddev/pebrel/pull/118).
+- Replaced the low-resolution Claude Code icon with artwork exported from SVG at 1024 pixels, and prepared Agent icons at their display size for smoother tab edges.
 
 ### 中文
 
@@ -32,6 +40,10 @@ Every release entry is provided in English and Simplified Chinese.
 - 为“设置 → 恢复默认设置”加入确认弹窗，可在重置任何偏好前明确取消操作。由 [@WilliamWang1721](https://github.com/WilliamWang1721) 在 [#115](https://github.com/Kuddev/pebrel/pull/115) 中贡献。
 - 在 Windows 的“设置 → 高级 → 会话生命周期”中新增“登录时自启动”和“静默启动”开关。静默启动需要启用系统托盘；显式打开目录时仍显示窗口。由 [@WilliamWang1721](https://github.com/WilliamWang1721) 在 [#117](https://github.com/Kuddev/pebrel/pull/117) 中贡献。
 - 在“设置 → 外观”中新增独立的界面字体、界面字号，以及可选的中文终端字体回退列表。界面字号可在 10–24 px 间调整，不影响终端文字字号。由 [@WilliamWang1721](https://github.com/WilliamWang1721) 在 [#127](https://github.com/Kuddev/pebrel/pull/127) 中贡献。
+- 在“设置 → 交互”中加入“焦点跟随鼠标”，默认关闭；在“设置 → 外观”中加入“调暗非活动窗格”，默认开启。两项设置均即时生效。
+- Shell 启动菜单新增右键操作，可设为默认 Shell；Windows 下还可在新的管理员 Pebrel 窗口内打开所选 Shell。
+- SSH 启动菜单新增“连接、编辑、删除”右键操作；删除沿用已有的确认与撤销流程。
+- 新增 Trae CLI 识别与标签图标，并为 Oh My Pi 加入独立图标。
 
 #### 修复
 
@@ -39,10 +51,14 @@ Every release entry is provided in English and Simplified Chinese.
 - 让 macOS 标题栏控件与标签间距跟随系统窗口按钮的实际几何位置。由 [@WilliamWang1721](https://github.com/WilliamWang1721) 在 [#114](https://github.com/Kuddev/pebrel/pull/114) 中贡献。
 - 修复终端忽略选中文字前景色的问题；主题未定义自己的选区颜色时，保留用户的自定义选区颜色。由 [@Aschenbath](https://github.com/Aschenbath) 在 [#125](https://github.com/Kuddev/pebrel/pull/125) 中贡献。
 - 限制回答阅读器等文本视图的选区高亮不透明度，让选中文字保持可读，同时保留列表选中项的实色背景。由 [@Aschenbath](https://github.com/Aschenbath) 在 [#126](https://github.com/Kuddev/pebrel/pull/126) 中贡献。
+- 修复顶部设置标签在切换到其他标签后消失的问题。现在只有主动关闭才会移除，标签溢出或切换标签布局时也会保留。
+- 修复 `Alt+1–9` 和 `Ctrl+1–9` 标签快捷键优先级低于终端输入的问题。终端或 CLI 获得焦点时仍可切换标签，自定义快捷键的修改也无需重启即可生效。
 
 #### 改进
 
+
 - 为现有 Git 控件、状态提示、历史时间和文件操作提示补充国际化；切换界面语言时保留提交草稿及其文字选区。由 [@gao-jian-bin](https://github.com/gao-jian-bin) 在 [#118](https://github.com/Kuddev/pebrel/pull/118) 中贡献。
+- 将 Claude Code 的低分辨率图标替换为从 SVG 导出的 1024 像素图像，并按显示尺寸处理 Agent 图标，使标签图标边缘更平滑。
 
 ## 1.7.0 - 2026-09-12
 

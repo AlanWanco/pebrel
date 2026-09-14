@@ -950,6 +950,10 @@ pub struct RuntimeSettings {
     pub cursor_shape: Option<CursorShapeName>,
     pub cursor_blink: Option<bool>,
     pub copy_on_select: bool,
+    /// GUI override for mouse.focus_follows_mouse in TOML; absent there too means false.
+    pub focus_follows_mouse: Option<bool>,
+    /// Preserve the existing dimming of inactive split panes unless explicitly disabled.
+    pub dim_inactive_panes: bool,
     /// 裸 shell 风险粘贴确认：开 = 换行、提权命令或控制字符先确认；关 = 直接粘贴。
     pub multiline_paste_confirm: bool,
     /// 标签页关闭按钮（叉号）是否渲染：关 = 不渲染，仍可用中键关闭。
@@ -1093,6 +1097,8 @@ impl RuntimeSettings {
             cursor_shape: raw.value("cursor_shape").and_then(CursorShapeName::from_settings),
             cursor_blink: raw.bool_on("cursor_blink"),
             copy_on_select: raw.bool_on("copy_on_select").unwrap_or(false),
+            focus_follows_mouse: raw.bool_on("focus_follows_mouse"),
+            dim_inactive_panes: raw.bool_on("dim_inactive_panes").unwrap_or(true),
             multiline_paste_confirm: raw.bool_on("multiline_paste_confirm").unwrap_or(true),
             tab_close_visible: raw.bool_on("tab_close_visible").unwrap_or(true),
             terminal_proxy: raw.bool_on("terminal_proxy").unwrap_or(false),
@@ -1219,6 +1225,33 @@ pub fn format_hex_rgb(rgb: Rgb8) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn pane_preferences_round_trip_and_allow_a_missing_mouse_override() {
+        let defaults = RuntimeSettings::from_raw(&RawSettings::default());
+        assert_eq!(defaults.focus_follows_mouse, None);
+        assert!(defaults.dim_inactive_panes);
+        let mut text = "theme=Nord\nfuture_option=keep\n".to_owned();
+        for (focus, dim) in [(true, false), (false, true)] {
+            text = apply_updates(
+                &text,
+                &[
+                    ("focus_follows_mouse", (focus as u8).to_string()),
+                    ("dim_inactive_panes", (dim as u8).to_string()),
+                ],
+            );
+            let settings = RuntimeSettings::from_raw(&RawSettings::from_text(&text));
+            assert_eq!(settings.focus_follows_mouse, Some(focus));
+            assert_eq!(settings.dim_inactive_panes, dim);
+            assert_eq!(settings.theme, ThemeName::Nord);
+            assert!(text.contains("future_option=keep"));
+        }
+        text = apply_updates(&text, &[("focus_follows_mouse", String::new())]);
+        assert_eq!(
+            RuntimeSettings::from_raw(&RawSettings::from_text(&text)).focus_follows_mouse,
+            None
+        );
+    }
+
     #[test]
     fn empty_quick_terminal_hotkey_is_distinct_from_an_unset_preference() {
         let unset = RuntimeSettings::from_raw(&RawSettings::from_text("theme=Nord\n"));

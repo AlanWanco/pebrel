@@ -125,7 +125,16 @@
       "silent_start": "Start silently",
       "silent_start_help": "Start in the background without showing a window. Enables the system tray; click its icon to reopen. Applies while the tray is enabled, except when opening a directory explicitly.",
       "save_failed": "Could not change startup settings: {error}"
-    }
+    },
+    "mouse": {
+      "focus_follows_mouse": "Focus follows mouse",
+      "focus_follows_mouse_description": "Focus a terminal pane when the pointer moves over it. Off by default."
+    },
+    "panes": {
+      "dim_inactive": "Dim inactive panes",
+      "dim_inactive_description": "Darken other split panes to make the active pane easier to identify."
+    },
+    "save_failed": "Could not save settings: {error}"
   },
   "provider": {
     "test": {
@@ -525,5 +534,17 @@
     "following_directory": "The selected directory is unavailable; following the current directory",
     "command_failed": "{program} failed",
     "task_start_failed": "Could not start the version control task: {error}"
+  },
+  "launcher": {
+    "open_admin": "Open as administrator",
+    "set_default": "Set as default Shell",
+    "current_default": "Current default Shell",
+    "connect": "Connect",
+    "edit": "Edit",
+    "delete": "Delete",
+    "default_saved": "{shell} is now the default Shell.",
+    "admin_started": "Requested {shell} in a new administrator Pebrel window.",
+    "admin_cancelled": "Administrator launch cancelled.",
+    "admin_failed": "Could not open an administrator terminal: {error}"
   }
 }

@@ -61,6 +61,9 @@ pub struct Settings {
     pub cursor_blink: Option<bool>,
     /// 选区完成即复制（旧壳 `copy_on_select` 设置）。
     pub copy_on_select: bool,
+    /// Pointer handlers and split rendering only read these cached preferences.
+    pub focus_follows_mouse: bool,
+    pub dim_inactive_panes: bool,
     /// Cached in-app toast preference, independent of native system notifications.
     pub ai_toasts: bool,
     /// 标签关闭按钮与标签插入动画都在渲染热路径读取，必须随全局设置驻留内存。
@@ -179,6 +182,10 @@ impl Settings {
             }),
             cursor_blink: runtime.cursor_blink,
             copy_on_select: runtime.copy_on_select,
+            focus_follows_mouse: runtime
+                .focus_follows_mouse
+                .unwrap_or(raw.mouse.focus_follows_mouse),
+            dim_inactive_panes: runtime.dim_inactive_panes,
             ai_toasts: runtime.ai_toasts,
             tab_close_visible: runtime.tab_close_visible,
             tab_reveal: runtime.tab_reveal,
@@ -448,6 +455,13 @@ fn merge_values(base: toml::Value, other: toml::Value) -> toml::Value {
 struct RawConfig {
     font: RawFont,
     colors: RawColors,
+    mouse: RawMouse,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct RawMouse {
+    focus_follows_mouse: bool,
 }
 
 #[derive(Deserialize, Default)]

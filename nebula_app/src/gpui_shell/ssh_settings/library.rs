@@ -53,6 +53,18 @@ impl HostLibraryState {
 }
 
 impl SettingsPane {
+    pub(in crate::gpui_shell) fn prepare_launcher_ssh_host(
+        &mut self,
+        host: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.ssh_library.scope = HostScope::All;
+        self.ssh_library.group_filter = None;
+        self.ssh_library.search.update(cx, |input, cx| input.set_value(host, window, cx));
+        self.ssh_library.reset_scroll();
+    }
+
     fn filtered_library_hosts(&self, cx: &gpui::App) -> Vec<String> {
         let query = self.ssh_library.search.read(cx).value();
         let hosts = if self.ssh_library.scope == HostScope::Recent {
