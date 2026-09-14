@@ -919,6 +919,20 @@ mod tests {
     }
 
     #[test]
+    fn review_regression_restored_codex_identity_requires_live_prompt_and_footer() {
+        let live = "› Ask Codex to do anything\n\n  gpt-6-astra max · /mnt/d/temp_build/project · Saved conversation";
+        assert_eq!(identify(live), Some(AgentKind::Codex));
+        for text in [
+            "› generic shell prompt",
+            "The CLI says Ask Codex to do anything.",
+            "› Ask Codex to do anything\nuser@host:~$ ",
+            "› Ask Codex to do anything\ngpt-6-astra max · /project\nuser@host:~$ ",
+        ] {
+            assert_eq!(identify(text), None, "{text}");
+        }
+    }
+
+    #[test]
     fn branded_screen_chrome_identifies_codex_without_a_visible_host_process() {
         let screen = "OpenAI Codex (v0.42.0)\n\n› Ask Codex to do anything";
         assert_eq!(identify(screen), Some(AgentKind::Codex));

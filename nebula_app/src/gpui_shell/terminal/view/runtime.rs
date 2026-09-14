@@ -114,6 +114,7 @@ impl TerminalView {
         self.ssh_connect_last_step = std::time::Instant::now();
         if matches!(stage, crate::ssh_session::SshStage::Failed(_)) {
             self.pending_runtime_submit = None;
+            self.pending_shell_command = None;
             self.command_running = false;
             self.command_started = None;
             self.confirmation.invalidate();
@@ -130,8 +131,8 @@ impl TerminalView {
     pub(super) fn clear_foreground_agent_state(&mut self) -> bool {
         self.confirmation.observe_waiting(false);
         self.answers.close();
-        let title_changed =
-            self.running_program.take().is_some() || self.ai_session.take().is_some();
+        let program_changed = self.running_program.take().is_some();
+        let title_changed = self.ai_session.take().is_some() || program_changed;
         self.invalidate_ai_session_probe();
         self.primary_agent_pid = None;
         self.ai_session_from_probe = false;
@@ -691,16 +692,6 @@ impl TerminalView {
         crate::ai_agents::AgentKind::parse(&identity.source)?.fork_command(&identity.session_id)
     }
 
-    /// 冷恢复把快照里的 hook 身份种回 pane，右键分叉不必再等下一条事件。
-    pub fn seed_ai_session(&mut self, source: String, session_id: String, cx: &mut Context<Self>) {
-        if session_id.is_empty() {
-            return;
-        }
-        self.ai_session = Some(crate::display::AiSessionIdentity { source, session_id });
-        cx.emit(TerminalViewEvent::TitleChanged);
-        cx.notify();
-    }
-
     pub(crate) fn prepare_ai_session_save(&mut self, cx: &mut Context<Self>) {
         if self.ai_session_from_probe {
             self.ai_session = None;
@@ -758,12 +749,15 @@ impl TerminalView {
                 ) {
                     return;
                 }
-                if let Some(session_id) = session_id {
+                if let Some(session) = session_id {
                     log::debug!("agent session identity from active rollout: pane={pane_id}");
                     view.ai_session = Some(crate::display::AiSessionIdentity {
                         source: "codex".to_owned(),
-                        session_id,
+                        session_id: session.session_id,
                     });
+                    if let Some(cwd) = session.cwd {
+                        view.process_event(nebula_terminal::event::Event::CwdReport(cwd), cx);
+                    }
                     view.ai_session_from_probe = true;
                     cx.emit(TerminalViewEvent::TitleChanged);
                     cx.notify();
@@ -771,17 +765,6 @@ impl TerminalView {
             });
         })
         .detach();
-    }
-
-    /// Queue a full shell command. Like cold resume, input may arrive before
-    /// the first prompt; ConPTY preserves ordering until the shell reads it.
-    pub fn run_command(&mut self, command: String, cx: &mut Context<Self>) {
-        if command.is_empty() || self.exited.is_some() {
-            return;
-        }
-        let mut bytes = command.into_bytes();
-        bytes.push(b'\r');
-        self.write_input(bytes, cx);
     }
 
     /// 事件声明的 pane 与写管道进程的祖先链是否互相矛盾。
@@ -1008,6 +991,7 @@ impl TerminalView {
         self.flush_pending_runtime_submit(cx);
         // 进程树对账必须排在下面那道早退之前：身份认不出来就早退，等于让
         // 这个 pane 永远退出屏幕检测。
+        self.flush_pending_shell_command(cx);
         self.reconcile_shell_activity(cx);
         self.probe_missing_codex_session(cx);
         let Some(session) = &self.session else { return };

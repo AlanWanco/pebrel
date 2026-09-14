@@ -187,6 +187,14 @@ impl NebulaWorkspace {
                 let hover_group: SharedString = format!("top-tab-hover-{ix}").into();
                 let cross_window_drag = self.cross_window_drag_payload(ix, cx);
                 let status_color = if active { active_fg } else { muted };
+                let status_width = Self::shell_status_width(
+                    window,
+                    shell_tag.as_ref(),
+                    &chrome_family,
+                    label_px * 0.8,
+                    TOP_TAB_STATUS_W,
+                    tab_w * 0.4,
+                );
                 let resting_status: Option<gpui::AnyElement> = match activity {
                     SidebarActivity::Running => {
                         items_running.set(true);
@@ -231,6 +239,9 @@ impl NebulaWorkspace {
                     ),
                     SidebarActivity::Idle => shell_tag.map(|tag| {
                         div()
+                            .w_full()
+                            .min_w_0()
+                            .truncate()
                             .font_family(chrome_family.clone())
                             .text_size(px(label_px * 0.8))
                             .font_weight(FontWeight::NORMAL)
@@ -453,8 +464,9 @@ impl NebulaWorkspace {
                     .child(
                         div()
                             .relative()
-                            .w(px(TOP_TAB_STATUS_W))
+                            .w(px(status_width))
                             .h_full()
+                            .overflow_hidden()
                             .flex_shrink_0()
                             .when_some(resting_status, |slot, status| {
                                 slot.child(

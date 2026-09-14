@@ -5,7 +5,7 @@ use gpui::{Context, Window};
 use super::NebulaWorkspace;
 use crate::session::LaunchSession;
 
-fn inherit_guest_directory(launch: &mut LaunchSession, cwd: &str) -> bool {
+pub(super) fn inherit_guest_directory(launch: &mut LaunchSession, cwd: &str) -> bool {
     let (program, args) = match launch {
         LaunchSession::Shell { program, args, .. } => (program, args),
         LaunchSession::Profile { command, args, .. } => (command, args),

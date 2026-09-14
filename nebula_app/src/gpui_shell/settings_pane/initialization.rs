@@ -440,39 +440,38 @@ impl SettingsPane {
         ));
 
         let font_family_cjk_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .default_value(runtime.font_family_cjk.clone().unwrap_or_default())
+            InputState::new(window, cx).default_value(
+                runtime
+                    .font_family_cjk
+                    .clone()
+                    .unwrap_or_else(|| crate::font_install::REQUIRED_FONT_FAMILY.to_owned()),
+            )
         });
-        let ui_font_family_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .default_value(runtime.ui_font_family.clone().unwrap_or_default())
-        });
-        for (key, input) in
-            [("font_family_cjk", &font_family_cjk_input), ("ui_font_family", &ui_font_family_input)]
-        {
-            subscriptions.push(cx.subscribe_in(
-                input,
-                window,
-                move |this: &mut Self, input, event: &InputEvent, window, cx| {
-                    if matches!(event, InputEvent::PressEnter { .. } | InputEvent::Blur) {
-                        let raw = input.read(cx).value();
-                        let (value, current) = if key == "ui_font_family" {
-                            (raw.trim().to_owned(), &this.runtime.ui_font_family)
-                        } else {
-                            (
-                                crate::font_install::normalize_font_family_chain(&raw),
-                                &this.runtime.font_family_cjk,
-                            )
-                        };
-                        let changed = current.as_deref().unwrap_or_default() != value;
-                        input.update(cx, |input, cx| input.set_value(value.clone(), window, cx));
-                        if changed {
-                            this.persist(&[(key, value)], cx);
-                        }
+        subscriptions.push(cx.subscribe_in(
+            &font_family_cjk_input,
+            window,
+            |this: &mut Self, input, event: &InputEvent, window, cx| {
+                if matches!(event, InputEvent::PressEnter { .. } | InputEvent::Blur) {
+                    let raw = input.read(cx).value();
+                    let normalized = crate::font_install::normalize_font_family_chain(&raw);
+                    let value = if normalized.is_empty() {
+                        crate::font_install::REQUIRED_FONT_FAMILY.to_owned()
+                    } else {
+                        normalized
+                    };
+                    let current = this
+                        .runtime
+                        .font_family_cjk
+                        .as_deref()
+                        .unwrap_or(crate::font_install::REQUIRED_FONT_FAMILY);
+                    let changed = current != value;
+                    input.update(cx, |input, cx| input.set_value(value.clone(), window, cx));
+                    if changed {
+                        this.persist(&[("font_family_cjk", value)], cx);
                     }
-                },
-            ));
-        }
+                }
+            },
+        ));
 
         let bg_picker_hsv = {
             let term = crate::gpui_shell::theme::chrome_theme_resolved(cx).palette().term_bg;
@@ -585,7 +584,6 @@ impl SettingsPane {
             font_imported: Vec::new(),
             font_family_input,
             font_family_cjk_input,
-            ui_font_family_input,
             font_picker_trigger_bounds: None,
             backup_selection: crate::encrypted_backup::BackupSelection::default(),
             backup_pass_input: cx.new(|cx| {

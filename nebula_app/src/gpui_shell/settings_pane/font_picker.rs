@@ -198,14 +198,14 @@ impl SettingsPane {
             .relative()
             .w(px(SETTINGS_SELECT_WIDTH))
             .min_w_0()
-            .h(px(32.0))
-            .when(self.active_section == 1, |control| control.w_full().h(px(36.0)))
+            .h(px(36.0))
+            .debug_selector(|| "font-family-input".to_owned())
             .flex_shrink_0()
             .overflow_hidden()
             .child(
                 Input::new(&self.font_family_input)
                     .w_full()
-                    .when(self.active_section == 1, |input| input.h(px(36.0)))
+                    .h(px(36.0))
                     .cleanable(false)
                     .suffix(Button::new("font-picker-chevron")
                             .debug_selector(|| "font-picker-chevron".to_owned()).ghost().xsmall()
@@ -558,7 +558,7 @@ impl SettingsPane {
         let panel =
             self.font_picker_open.then(|| self.font_picker_panel(panel_width, list_height, cx));
 
-        div().relative().w_full().flex_shrink_0().child(row).when_some(
+        div().relative().w(px(SETTINGS_SELECT_WIDTH)).flex_shrink_0().child(row).when_some(
             panel.zip(trigger_bounds),
             |anchor, (panel, trigger_bounds)| {
                 anchor.child(
@@ -584,7 +584,9 @@ mod interaction_tests {
     use gpui_component::Root;
 
     #[gpui::test]
-    fn dropdown_arrow_toggles_and_search_filters_without_navigation_click(cx: &mut TestAppContext) {
+    fn review_regression_font_fields_align_and_dropdown_toggles_with_search(
+        cx: &mut TestAppContext,
+    ) {
         cx.update(|cx| {
             gpui_component::init(cx);
             cx.set_global(crate::gpui_shell::config::Settings::load(
@@ -592,7 +594,7 @@ mod interaction_tests {
             ));
         });
         let mut pane = None;
-        let (_, mut cx) = cx.add_window_view(|window, cx| {
+        let (_, cx) = cx.add_window_view(|window, cx| {
             let view = cx.new(|cx| SettingsPane::new(window, cx));
             pane = Some(view.clone());
             Root::new(view, window, cx)
@@ -603,6 +605,22 @@ mod interaction_tests {
         cx.update(|window, cx| {
             let _ = window.draw(cx);
         });
+        let english = cx.debug_bounds("font-family-input").expect("English field is visible");
+        let chinese = cx.debug_bounds("font-family-cjk-input").expect("Chinese field is visible");
+        assert_eq!(english.size.width, px(SETTINGS_SELECT_WIDTH));
+        assert_eq!(english.size, chinese.size, "both font fields share the same dimensions");
+        assert_eq!(
+            english.origin.x, chinese.origin.x,
+            "both font fields align in the control column"
+        );
+        assert_eq!(
+            pane.read_with(cx, |pane, cx| pane.font_family_input.read(cx).value().to_string()),
+            REQUIRED_FONT_FAMILY
+        );
+        assert_eq!(
+            pane.read_with(cx, |pane, cx| pane.font_family_cjk_input.read(cx).value().to_string()),
+            REQUIRED_FONT_FAMILY
+        );
         let bounds =
             cx.debug_bounds("font-picker-chevron").expect("font field exposes a dropdown arrow");
         let center = point(

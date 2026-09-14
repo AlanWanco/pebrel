@@ -203,7 +203,11 @@ impl Settings {
             cjk_bold_regular: runtime.cjk_bold_regular,
             shell_id: runtime.shell.clone(),
             font_family: normal_family,
-            font_cjk: runtime.font_family_cjk.as_deref().map(|family| {
+            font_cjk: Some({
+                let family = runtime
+                    .font_family_cjk
+                    .as_deref()
+                    .unwrap_or(crate::font_install::REQUIRED_FONT_FAMILY);
                 use gpui::{FontStyle, FontWeight};
                 [
                     (FontWeight::NORMAL, FontStyle::Normal),

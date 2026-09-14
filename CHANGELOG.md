@@ -12,13 +12,19 @@ Every release entry is provided in English and Simplified Chinese.
 
 - Added a confirmation dialog to Settings → Restore defaults, with an explicit cancel action before any preferences are reset. Contributed by [@WilliamWang1721](https://github.com/WilliamWang1721) in [#115](https://github.com/Kuddev/pebrel/pull/115).
 - Added Windows login-startup and silent-start switches in Settings → Advanced → Session lifecycle. Silent startup requires the system tray; opening a directory explicitly still shows a window. Contributed by [@WilliamWang1721](https://github.com/WilliamWang1721) in [#117](https://github.com/Kuddev/pebrel/pull/117).
-- Added separate interface font and size controls, plus an optional CJK terminal font fallback list, in Settings → Appearance. Interface size can be adjusted from 10 to 24 px independently of terminal text. Contributed by [@WilliamWang1721](https://github.com/WilliamWang1721) in [#127](https://github.com/Kuddev/pebrel/pull/127).
+- Added an interface text-size control and a CJK terminal font fallback list in Settings → Appearance. Interface size can be adjusted from 10 to 24 px independently of terminal text. Contributed by [@WilliamWang1721](https://github.com/WilliamWang1721) in [#127](https://github.com/Kuddev/pebrel/pull/127).
 - Added “Focus follows mouse” in Settings → Interaction, off by default, and “Dim inactive panes” in Settings → Appearance, on by default. Both preferences take effect immediately.
 - Added right-click actions to the Shell launcher for choosing the default Shell and, on Windows, opening the selected Shell inside a new administrator Pebrel window.
 - Added Connect, Edit, and Delete to SSH launcher context menus. Delete uses the existing confirmation and undo flow.
 - Added Trae CLI recognition and its tab icon, plus a dedicated Oh My Pi icon.
 
 #### Fixed
+
+- Aligned the English and Chinese terminal-font fields and kept the current font visible. Both default to the bundled Maple Mono NF CN font; the interface font-family setting has been removed while its text-size control remains.
+- Preserved the inherited working directory when a bare `pebrel` launch opens a new terminal, including handover to a running Windows instance.
+- Restored WSL panes in their saved guest directories, and kept queued AI resume commands and identities through shell initialization. Recognized the compact Codex resume screen without requiring another AI message, and cleared the foreground identity after the CLI exits.
+- Prevented long WSL directory titles and distribution labels from overlapping in sidebar and top tabs.
+- Ensured a quiet terminal receives its final startup viewport size even when no further output arrives.
 
 - Fixed Windows terminal focus consuming `Alt+F4` and `Alt+Space`. `Alt+F4` now uses the normal window-close flow, and `Alt+Space`, followed by `N`, uses the system menu to minimize the window.
 - Aligned macOS title-bar controls and tab spacing with the native window-button geometry. Contributed by [@WilliamWang1721](https://github.com/WilliamWang1721) in [#114](https://github.com/Kuddev/pebrel/pull/114).
@@ -29,7 +35,6 @@ Every release entry is provided in English and Simplified Chinese.
 
 #### Improved
 
-
 - Localized existing Git controls, status messages, history timestamps and file-operation notices. Switching the interface language preserves the commit draft and its text selection. Contributed by [@gao-jian-bin](https://github.com/gao-jian-bin) in [#118](https://github.com/Kuddev/pebrel/pull/118).
 - Replaced the low-resolution Claude Code icon with artwork exported from SVG at 1024 pixels, and prepared Agent icons at their display size for smoother tab edges.
 
@@ -39,13 +44,19 @@ Every release entry is provided in English and Simplified Chinese.
 
 - 为“设置 → 恢复默认设置”加入确认弹窗，可在重置任何偏好前明确取消操作。由 [@WilliamWang1721](https://github.com/WilliamWang1721) 在 [#115](https://github.com/Kuddev/pebrel/pull/115) 中贡献。
 - 在 Windows 的“设置 → 高级 → 会话生命周期”中新增“登录时自启动”和“静默启动”开关。静默启动需要启用系统托盘；显式打开目录时仍显示窗口。由 [@WilliamWang1721](https://github.com/WilliamWang1721) 在 [#117](https://github.com/Kuddev/pebrel/pull/117) 中贡献。
-- 在“设置 → 外观”中新增独立的界面字体、界面字号，以及可选的中文终端字体回退列表。界面字号可在 10–24 px 间调整，不影响终端文字字号。由 [@WilliamWang1721](https://github.com/WilliamWang1721) 在 [#127](https://github.com/Kuddev/pebrel/pull/127) 中贡献。
+- 在“设置 → 外观”中新增独立的界面字号和中文终端字体回退列表。界面字号可在 10–24 px 间调整，不影响终端文字字号。由 [@WilliamWang1721](https://github.com/WilliamWang1721) 在 [#127](https://github.com/Kuddev/pebrel/pull/127) 中贡献。
 - 在“设置 → 交互”中加入“焦点跟随鼠标”，默认关闭；在“设置 → 外观”中加入“调暗非活动窗格”，默认开启。两项设置均即时生效。
 - Shell 启动菜单新增右键操作，可设为默认 Shell；Windows 下还可在新的管理员 Pebrel 窗口内打开所选 Shell。
 - SSH 启动菜单新增“连接、编辑、删除”右键操作；删除沿用已有的确认与撤销流程。
 - 新增 Trae CLI 识别与标签图标，并为 Oh My Pi 加入独立图标。
 
 #### 修复
+
+- 对齐中英文终端字体输入框并显示当前字体，两项默认均采用内置 Maple Mono NF CN；撤掉界面字体设置，保留界面字号。
+- 不带目录参数运行 `pebrel` 并创建新终端时，继承实际启动目录；交接给已有 Windows 实例时也保留该目录。
+- WSL 窗格恢复到保存的来宾目录；AI 恢复命令与会话身份可跨越 shell 初始化阶段，识别 Codex 的精简恢复界面，无需再发送 AI 消息，CLI 退出后清除前台身份。
+- 避免 WSL 长目录标题与发行版名称在侧栏、顶部标签中互相覆盖。
+- 即使没有新的终端输出，也会在启动布局稳定后将最终视口尺寸同步给终端。
 
 - 修复 Windows 终端获得焦点时吞掉 `Alt+F4` 和 `Alt+Space` 的问题。`Alt+F4` 现在进入正常窗口关闭流程，`Alt+Space` 后按 `N` 可通过系统菜单最小化窗口。
 - 让 macOS 标题栏控件与标签间距跟随系统窗口按钮的实际几何位置。由 [@WilliamWang1721](https://github.com/WilliamWang1721) 在 [#114](https://github.com/Kuddev/pebrel/pull/114) 中贡献。
@@ -55,7 +66,6 @@ Every release entry is provided in English and Simplified Chinese.
 - 修复 `Alt+1–9` 和 `Ctrl+1–9` 标签快捷键优先级低于终端输入的问题。终端或 CLI 获得焦点时仍可切换标签，自定义快捷键的修改也无需重启即可生效。
 
 #### 改进
-
 
 - 为现有 Git 控件、状态提示、历史时间和文件操作提示补充国际化；切换界面语言时保留提交草稿及其文字选区。由 [@gao-jian-bin](https://github.com/gao-jian-bin) 在 [#118](https://github.com/Kuddev/pebrel/pull/118) 中贡献。
 - 将 Claude Code 的低分辨率图标替换为从 SVG 导出的 1024 像素图像，并按显示尺寸处理 Agent 图标，使标签图标边缘更平滑。

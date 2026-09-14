@@ -120,13 +120,14 @@ pub fn run_shell(
     {
         // 与另一份进程同时启动时，对方可能已经拿到 owner lock、但尚未来得及
         // 发布 endpoint。短暂等待并交接，避免继续打开一个无控制面的空窗口。
+        let handover_cwd = initial_cwd.clone().or_else(|| std::env::current_dir().ok());
         for _ in 0..40 {
             let behavior = nebula_settings::RuntimeSettings::load().windowing_behavior;
             let handed_over = match behavior {
                 nebula_settings::WindowingBehaviorName::UseNew => {
-                    crate::runtime_api::try_open_window_existing(initial_cwd.as_deref())
+                    crate::runtime_api::try_open_window_existing(handover_cwd.as_deref())
                 },
-                _ => initial_cwd.as_deref().map_or_else(
+                _ => handover_cwd.as_deref().map_or_else(
                     crate::runtime_api::try_open_default_tab_existing,
                     crate::runtime_api::try_open_directory_existing,
                 ),
@@ -193,9 +194,10 @@ fn register_bundled_fonts(cx: &App) {
     // GPUI resolves a family through the system collection first and silently
     // falls back when it is absent. Add Maple before any component/window can
     // resolve a font so the default remains the same private face as winit.
-    if let Err(error) =
-        cx.text_system().add_fonts(vec![Cow::Borrowed(crate::font_install::REQUIRED_FONT_BYTES)])
-    {
+    if let Err(error) = cx.text_system().add_fonts(vec![
+        Cow::Borrowed(crate::font_install::REQUIRED_FONT_BYTES),
+        Cow::Borrowed(include_bytes!("../../../assets/fonts/MapleMonoNormal-NF-CN-Regular.ttf")),
+    ]) {
         try_write_stderr(format_args!(
             "[nebula:gpui] failed to register bundled Maple font: {error}"
         ));
