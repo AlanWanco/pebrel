@@ -38,6 +38,9 @@ jobs:
         run: |
           Get-Acl diagnostic-runtime/pebrel.exe | Format-List
           Get-Acl $env:pythonLocation/python.exe | Format-List
+      - name: Test containment with an ordinary token
+        if: always()
+        run: python scripts/conformance/windows_standard_user.py -m unittest scripts.conformance.tests.test_lifecycle -v
       - name: Diagnose the previously built runtime
         if: always()
         shell: pwsh
