@@ -241,6 +241,7 @@ impl SettingsPane {
                     |_, _, _, _| {},
                 )
                 .absolute()
+                .inset_0()
                 .size_full(),
             );
         if self.active_section == 1 {
