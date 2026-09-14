@@ -31,7 +31,10 @@ try:
 finally:
     api.kernel.CloseHandle(token)
 assert sys.argv[1:] == ['path with spaces\\\\', '中文', 'literal & symbol']
-raise SystemExit(subprocess.call([sys.executable, '-c', 'raise SystemExit(73)']))
+child = subprocess.run([sys.executable, '-c', 'print("pipe output"); raise SystemExit(73)'],
+                       input='pipe input', capture_output=True, text=True)
+assert child.stdout.strip() == 'pipe output'
+raise SystemExit(child.returncode)
 """
         self.assertEqual(run_python(["-c", script, "path with spaces\\", "中文",
                                      "literal & symbol"]), 73)

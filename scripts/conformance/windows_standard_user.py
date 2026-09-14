@@ -57,6 +57,13 @@ class WindowsTokens:
             (self.security, "GetLengthSid", wt.DWORD, [wt.LPVOID]),
             (self.security, "ConvertStringSidToSidW", wt.BOOL,
              [wt.LPCWSTR, ctypes.POINTER(wt.LPVOID)]),
+            (self.security, "ConvertSidToStringSidW", wt.BOOL,
+             [wt.LPVOID, ctypes.POINTER(wt.LPWSTR)]),
+            (self.security, "ConvertStringSecurityDescriptorToSecurityDescriptorW", wt.BOOL,
+             [wt.LPCWSTR, wt.DWORD, ctypes.POINTER(wt.LPVOID), ctypes.POINTER(wt.DWORD)]),
+            (self.security, "GetSecurityDescriptorDacl", wt.BOOL,
+             [wt.LPVOID, ctypes.POINTER(wt.BOOL), ctypes.POINTER(wt.LPVOID),
+              ctypes.POINTER(wt.BOOL)]),
             (self.security, "CreateRestrictedToken", wt.BOOL,
              [wt.HANDLE, wt.DWORD, wt.DWORD, wt.LPVOID, wt.DWORD, wt.LPVOID,
               wt.DWORD, wt.LPVOID, ctypes.POINTER(wt.HANDLE)]),
@@ -100,6 +107,7 @@ class WindowsTokens:
             self.require(self.security.SetTokenInformation(
                 restricted, 25, ctypes.byref(label),
                 ctypes.sizeof(label) + self.security.GetLengthSid(sid)))
+            self.set_user_default_dacl(restricted)
             if self.elevated(restricted):
                 raise RuntimeError("restricted token is still elevated; refusing conformance")
             return restricted
@@ -109,6 +117,38 @@ class WindowsTokens:
         finally:
             if sid:
                 self.kernel.LocalFree(sid)
+
+    def set_user_default_dacl(self, token):
+        # Elevated runners can default new objects to Administrators/SYSTEM.
+        # After filtering administrators, anonymous pipes then deny their own
+        # creator access. Grant the same user and SYSTEM access on new objects
+        # created with this temporary token; no existing file ACL is changed.
+        size = wt.DWORD()
+        self.security.GetTokenInformation(token, 1, None, 0, ctypes.byref(size))
+        if not size.value:
+            raise ctypes.WinError(ctypes.get_last_error())
+        user = ctypes.create_string_buffer(size.value)
+        self.require(self.security.GetTokenInformation(
+            token, 1, user, size, ctypes.byref(size)))
+        sid, descriptor = wt.LPWSTR(), wt.LPVOID()
+        try:
+            self.require(self.security.ConvertSidToStringSidW(
+                SidAndAttributes.from_buffer(user).Sid, ctypes.byref(sid)))
+            self.require(self.security.ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                "D:(A;;GA;;;SY)(A;;GA;;;" + sid.value + ")", 1,
+                ctypes.byref(descriptor), None))
+            present, defaulted, acl = wt.BOOL(), wt.BOOL(), wt.LPVOID()
+            self.require(self.security.GetSecurityDescriptorDacl(
+                descriptor, ctypes.byref(present), ctypes.byref(acl), ctypes.byref(defaulted)))
+            if not present.value or not acl:
+                raise RuntimeError("ordinary token requires an explicit user DACL")
+            self.require(self.security.SetTokenInformation(
+                token, 6, ctypes.byref(acl), ctypes.sizeof(acl)))  # TokenDefaultDacl.
+        finally:
+            if descriptor:
+                self.kernel.LocalFree(descriptor)
+            if sid:
+                self.kernel.LocalFree(ctypes.cast(sid, wt.HANDLE))
 
     def run(self, token, arguments):
         command = ctypes.create_unicode_buffer(subprocess.list2cmdline(arguments))

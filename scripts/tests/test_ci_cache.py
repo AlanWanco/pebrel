@@ -23,6 +23,7 @@ class CacheIdentityTests(unittest.TestCase):
             environment = {
                 "CACHE_OS": "Linux", "CACHE_ARCH": "X64", "CACHE_WORKLOAD": "ci-product",
                 "CACHE_MANIFESTS": "pinned-manifests", "GITHUB_OUTPUT": str(output),
+                "CACHE_REVISION": "source-revision",
                 "CARGO_HOME": str(Path(temporary) / "cargo"), **changes,
             }
 
@@ -59,9 +60,12 @@ class CacheIdentityTests(unittest.TestCase):
         self.assertTrue(after["key"].startswith(after["restore-key"]))
 
     def test_source_only_revision_and_package_labels_do_not_bust_dependencies(self):
-        before = self.identity(GITHUB_SHA="one", PREVIEW_ID="first")
-        after = self.identity(GITHUB_SHA="two", PREVIEW_ID="second")
-        self.assertEqual(before["key"], after["key"])
+        before = self.identity(CACHE_REVISION="one", PREVIEW_ID="first")
+        after = self.identity(CACHE_REVISION="two", PREVIEW_ID="second")
+        self.assertNotEqual(before["key"], after["key"])
+        self.assertEqual(before["manifest-key"], after["manifest-key"])
+        self.assertEqual(before["restore-key"], after["restore-key"])
+        self.assertEqual(before["key"], self.identity(CACHE_REVISION="one", PREVIEW_ID="third")["key"])
 
     @unittest.skipUnless(os.name == "nt", "Windows cache migration")
     def test_windows_migration_preserves_compiler_and_workload_boundaries(self):

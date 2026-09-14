@@ -437,7 +437,9 @@ settings files.
   platform; each workload saves only the profiles it uses (native tests also keep
   release-check metadata). A fallback
   reads existing combined caches during migration. Cargo still validates source,
-  profile and feature fingerprints before reuse.
+  profile and feature fingerprints before reuse. Each source revision saves an
+  immutable entry while restoring compatible earlier revisions; a partially built
+  cache from a failed revision cannot prevent later successful cache updates.
 - **Scheduling:** Stable releases call the same complete four-platform native
   workflow used for contributions, including architecture, translation allocation
   contracts and the release-workspace check. Release branch pushes omit a duplicate

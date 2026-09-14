@@ -33,6 +33,7 @@ runs:
         CACHE_OS: ${{ runner.os }}
         CACHE_ARCH: ${{ runner.arch }}
         CACHE_WORKLOAD: ${{ inputs.key }}
+        CACHE_REVISION: ${{ github.sha }}
         CACHE_MANIFESTS: ${{ hashFiles('Cargo.lock', '**/Cargo.toml', 'rust-toolchain.toml', '**/.cargo/config.toml', '.github/ci-profile.toml') }}${{ inputs.extra-key }}
       run: |
         python - <<'PY'
@@ -56,7 +57,10 @@ runs:
                                               ("CACHE_OS", "CACHE_ARCH", "CACHE_WORKLOAD"))
         prefix += "-" + fingerprint + "-"
         with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-            output.write("key=" + prefix + os.environ["CACHE_MANIFESTS"] + "\n")
+            # Immutable caches need a new entry after a source change, including
+            # when the prior revision failed before it compiled every profile.
+            output.write("key=" + prefix + os.environ["CACHE_MANIFESTS"] + "-" + os.environ["CACHE_REVISION"] + "\n")
+            output.write("manifest-key=" + prefix + os.environ["CACHE_MANIFESTS"] + "\n")
             output.write("restore-key=" + prefix + "\n")
             # Recover the preceding Windows cache, which omitted ImageOS because
             # Python uppercases environment names there. Cargo revalidates it.
@@ -85,6 +89,7 @@ runs:
         path: ${{ inputs.target }}
         key: ${{ steps.identity.outputs.key }}
         restore-keys: |
+          ${{ steps.identity.outputs.manifest-key }}
           ${{ steps.identity.outputs.restore-key }}
           ${{ steps.identity.outputs.migration-key }}
     - name: Recover an existing combined cache during migration
