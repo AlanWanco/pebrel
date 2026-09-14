@@ -74,13 +74,12 @@ class WindowsTokens:
         if not success:
             raise ctypes.WinError(ctypes.get_last_error())
 
-    def current_token(self):
+    def current_token(self, access=0x0008):
         token = wt.HANDLE()
-        # QUERY | DUPLICATE | ASSIGN_PRIMARY | ADJUST_DEFAULT. The restricted
-        # handle inherits this access mask; lowering its integrity needs the last
-        # right. The original token is never modified.
+        # Elevation checks only need QUERY. In particular, a child launched from
+        # an administrator's restricted token may not reopen it for adjustment.
         self.require(self.security.OpenProcessToken(
-            self.kernel.GetCurrentProcess(), 0x008B, ctypes.byref(token)))
+            self.kernel.GetCurrentProcess(), access, ctypes.byref(token)))
         return token
 
     def elevated(self, token):
@@ -140,7 +139,13 @@ def run_python(arguments):
         command = [sys.executable, *arguments]
         if not api.elevated(token):
             return subprocess.run(command, check=False).returncode
-        restricted = api.restrict(token)
+        # QUERY | DUPLICATE | ASSIGN_PRIMARY | ADJUST_DEFAULT. Only the elevated
+        # parent needs these rights, to create and lower its restricted copy.
+        source = api.current_token(0x008B)
+        try:
+            restricted = api.restrict(source)
+        finally:
+            api.kernel.CloseHandle(source)
         print("Running native conformance with a verified non-elevated token", flush=True)
         return api.run(restricted, command)
     finally:

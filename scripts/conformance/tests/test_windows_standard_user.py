@@ -9,7 +9,7 @@ from scripts.conformance.windows_standard_user import WindowsTokens, run_python
 class StandardUserLaunchTests(unittest.TestCase):
     def test_restricted_token_can_launch_even_when_parent_is_already_ordinary(self):
         api = WindowsTokens()
-        token, restricted = api.current_token(), None
+        token, restricted = api.current_token(0x008B), None
         try:
             restricted = api.restrict(token)
             self.assertFalse(api.elevated(restricted))
@@ -22,6 +22,7 @@ class StandardUserLaunchTests(unittest.TestCase):
     def test_child_is_unelevated_and_preserves_arguments_and_failure_code(self):
         script = """
 import sys
+import subprocess
 from scripts.conformance.windows_standard_user import WindowsTokens
 api = WindowsTokens()
 token = api.current_token()
@@ -30,7 +31,7 @@ try:
 finally:
     api.kernel.CloseHandle(token)
 assert sys.argv[1:] == ['path with spaces\\\\', '中文', 'literal & symbol']
-raise SystemExit(73)
+raise SystemExit(subprocess.call([sys.executable, '-c', 'raise SystemExit(73)']))
 """
         self.assertEqual(run_python(["-c", script, "path with spaces\\", "中文",
                                      "literal & symbol"]), 73)
