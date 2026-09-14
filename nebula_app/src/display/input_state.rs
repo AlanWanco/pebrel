@@ -125,7 +125,6 @@ pub(crate) fn nebula_input_from_raw_grid<T: EventListener>(
     nebula_prompt_line_from_raw_grid(terminal, cursor, typed_tail, env).map(|line| line.input)
 }
 
-#[cfg(windows)]
 pub(crate) fn nebula_prompt_line_from_raw_grid<T: EventListener>(
     terminal: &Term<T>,
     cursor: Point,
@@ -134,6 +133,24 @@ pub(crate) fn nebula_prompt_line_from_raw_grid<T: EventListener>(
 ) -> Option<PromptLineSnapshot> {
     let text = raw_grid_logical_line(terminal, cursor)?;
     prompt_line_snapshot(&text, typed_tail, env, terminal.nebula_prompt_active())
+}
+
+/// Cold startup has no typed input mirror yet. Readiness is distinct from
+/// reconciling user keystrokes, which must continue to reject an empty mirror.
+pub(crate) fn nebula_shell_ready_from_raw_grid<T: EventListener>(
+    terminal: &Term<T>,
+    env: &SuggestEnv,
+) -> bool {
+    let Some(text) = raw_grid_logical_line(terminal, terminal.grid().cursor.point) else {
+        return false;
+    };
+    if let Some(line) = prompt_line_snapshot(&text, "", env, terminal.nebula_prompt_active()) {
+        return line.input.trim().is_empty();
+    }
+    let prompt = text.trim_end();
+    let Some(marker) = prompt.chars().next_back() else { return false };
+    safe_shell_prompt_marker(prompt, marker, env)
+        && (terminal.nebula_prompt_active() || likely_prompt(prompt, marker, env))
 }
 
 pub(crate) fn nebula_shell_prompt_restored_from_raw_grid<T: EventListener>(

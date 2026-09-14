@@ -77,6 +77,13 @@
       "background_cover_description": "The image will extend beneath the title bar, window buttons, tabs, and SSH sidebar. Low-contrast images may make controls harder to see; the interface retains a minimum-opacity safeguard."
     },
     "font": {
+      "ui_family": "Interface font",
+      "ui_family_description": "Enter an installed font family; leave empty for the default. Applies on Enter or leaving the field.",
+      "ui_size": "Interface font size",
+      "ui_size_description": "Changes interface text and component sizing independently of terminal text.",
+      "english": "English terminal font",
+      "chinese": "Chinese terminal font",
+      "chinese_description": "Used for Chinese and other full-width characters. Enter a font family or comma-separated families; leave empty to use Maple Mono NF CN. Applies on Enter or leaving the field.",
       "fallback_description": "The first family is preferred; missing glyphs fall back through the remaining families, with bundled Maple as the final safe fallback.",
       "group_description": "The first family is primary; the rest are used in fallback order.",
       "loading": "Enumerating system fonts...",
@@ -118,7 +125,16 @@
       "dim_inactive": "Dim inactive panes",
       "dim_inactive_description": "Darken other split panes to make the active pane easier to identify."
     },
-    "save_failed": "Could not save settings: {error}"
+    "save_failed": "Could not save settings: {error}",
+    "reset_title": "Restore default settings?",
+    "reset_description": "This will reset your settings and keyboard shortcuts. SSH hosts, credentials and history will be kept, and your current settings will be backed up. Continue?",
+    "startup": {
+      "launch_at_login": "Start at login",
+      "launch_at_login_help": "Start Pebrel when you sign in to Windows. Uses the same startup shortcut as the installer.",
+      "silent_start": "Start silently",
+      "silent_start_help": "Start in the background without showing a window. Enables the system tray; click its icon to reopen. Applies while the tray is enabled, except when opening a directory explicitly.",
+      "save_failed": "Could not change startup settings: {error}"
+    }
   },
   "provider": {
     "test": {

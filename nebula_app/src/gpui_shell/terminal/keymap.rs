@@ -213,7 +213,7 @@ fn kitty_sequence(ks: &Keystroke, mode: &TermMode) -> Option<Vec<u8>> {
 /// and native system menu run. Other modifiers retain their terminal meaning.
 pub(super) fn is_native_window_shortcut(ks: &Keystroke) -> bool {
     let mods = &ks.modifiers;
-    cfg!(windows)
+    crate::platform::Platform::current() == crate::platform::Platform::Windows
         && mods.alt
         && !mods.control
         && !mods.shift
@@ -347,9 +347,9 @@ mod tests {
         Keystroke { modifiers: gpui::Modifiers::default(), key: key.to_owned(), key_char: None }
     }
 
-    #[cfg(windows)]
     #[test]
-    fn native_window_shortcuts_never_enter_a_terminal_protocol() {
+    fn native_window_shortcuts_follow_the_host_window_policy() {
+        let native = crate::platform::Platform::current() == crate::platform::Platform::Windows;
         for mode in [
             TermMode::empty(),
             TermMode::WIN32_INPUT_MODE,
@@ -362,7 +362,17 @@ mod tests {
                     let mut key = Keystroke::parse(combo).unwrap();
                     for text in [None, Some(" ".to_owned())] {
                         key.key_char = text;
-                        assert_eq!(encode(&key, &(mode | screen)), None, "{combo}: {mode:?}");
+                        if native {
+                            assert_eq!(encode(&key, &(mode | screen)), None, "{combo}: {mode:?}");
+                        } else {
+                            assert!(!is_native_window_shortcut(&key), "{combo}");
+                            if key.key == "f4" || key.key_char.is_some() {
+                                assert!(
+                                    encode(&key, &(mode | screen)).is_some(),
+                                    "{combo}: {mode:?}"
+                                );
+                            }
+                        }
                     }
                 }
             }
@@ -384,8 +394,7 @@ mod tests {
                 "{combo}",
             );
         }
-        #[cfg(not(windows))]
-        {
+        if crate::platform::Platform::current() != crate::platform::Platform::Windows {
             let mut space = Keystroke::parse("alt-space").unwrap();
             space.key_char = Some(" ".to_owned());
             assert_eq!(encode(&space, &TermMode::empty()), Some(b"\x1b ".to_vec()));
@@ -396,7 +405,7 @@ mod tests {
         }
     }
 
-    #[cfg(all(windows, feature = "gpui-test-support"))]
+    #[cfg(feature = "gpui-test-support")]
     #[gpui::test]
     fn native_window_shortcuts_propagate_through_root_and_terminal(cx: &mut gpui::TestAppContext) {
         use gpui::{
@@ -447,6 +456,7 @@ mod tests {
         });
         let probe = probe_out.unwrap();
         cx.run_until_parked();
+        let native = crate::platform::Platform::current() == crate::platform::Platform::Windows;
         for mode in [
             TermMode::empty(),
             TermMode::WIN32_INPUT_MODE,
@@ -457,16 +467,21 @@ mod tests {
             for combo in ["alt-f4", "alt-space"] {
                 cx.update(|window, cx| {
                     let before = probe.read(cx).received;
+                    probe.update(cx, |probe, _| probe.encoded.clear());
+                    let mut keystroke = Keystroke::parse(combo).unwrap();
+                    if combo == "alt-space" {
+                        keystroke.key_char = Some(" ".to_owned());
+                    }
                     let result = window.dispatch_event(
                         gpui::PlatformInput::KeyDown(KeyDownEvent {
-                            keystroke: Keystroke::parse(combo).unwrap(),
+                            keystroke,
                             is_held: false,
                             prefer_character_input: false,
                         }),
                         cx,
                     );
-                    assert!(result.propagate, "Windows must receive {combo} in {mode:?}");
-                    assert!(probe.read(cx).encoded.is_empty());
+                    assert_eq!(result.propagate, native, "{combo} in {mode:?}");
+                    assert_eq!(probe.read(cx).encoded.is_empty(), native);
                     assert_eq!(probe.read(cx).received, before + 1);
                 });
             }
@@ -809,7 +824,10 @@ mod tests {
         for (name, codepoint) in [("space", 32), ("[", 91), ("/", 47)] {
             let mut key = keystroke(name);
             key.modifiers.alt = true;
-            let expected = if cfg!(windows) && name == "space" {
+            let expected = if crate::platform::Platform::current()
+                == crate::platform::Platform::Windows
+                && name == "space"
+            {
                 None
             } else {
                 Some(format!("\x1b[{codepoint};3u").into_bytes())

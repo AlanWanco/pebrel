@@ -77,6 +77,13 @@
       "background_cover_description": "背景图会延伸到标题栏、窗口按钮、Tab 与 SSH 侧栏下方，低对比度图片可能影响操作可见性；界面仍会保留最低不透明度保护。"
     },
     "font": {
+      "ui_family": "界面字体",
+      "ui_family_description": "输入已安装的字体名称；留空使用默认字体。按回车或离开输入框后生效。",
+      "ui_size": "界面字号",
+      "ui_size_description": "独立调整界面文字和组件字号，不影响终端文字。",
+      "english": "英文终端字体",
+      "chinese": "中文终端字体",
+      "chinese_description": "用于中文等全宽字符。输入字体名称，多个字体以逗号分隔；留空时使用 Maple Mono NF CN。按回车或离开输入框后生效。",
       "fallback_description": "第 1 项优先显示；缺失字形依次使用后续字体，内置 Maple 是最终安全兜底。",
       "group_description": "第 1 项是主字体，其余按顺序回退",
       "loading": "正在枚举系统字体…",
@@ -118,7 +125,16 @@
       "dim_inactive": "调暗非活动窗格",
       "dim_inactive_description": "降低其他分屏窗格的亮度，突出当前活动窗格。"
     },
-    "save_failed": "无法保存设置：{error}"
+    "save_failed": "无法保存设置：{error}",
+    "reset_title": "恢复默认设置？",
+    "reset_description": "这将重置你的设置与快捷键。SSH 主机、凭据和历史将保留，当前设置会备份。是否继续？",
+    "startup": {
+      "launch_at_login": "登录时自启动",
+      "launch_at_login_help": "登录 Windows 后启动 Pebrel，与安装器使用同一个启动快捷方式。",
+      "silent_start": "静默启动",
+      "silent_start_help": "启动后在后台运行，不显示窗口。开启时会同时启用系统托盘，点击托盘图标可重新打开窗口。托盘启用时生效，显式打开目录时除外。",
+      "save_failed": "无法更改启动设置：{error}"
+    }
   },
   "provider": {
     "test": {

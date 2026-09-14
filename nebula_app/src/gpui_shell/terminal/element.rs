@@ -497,8 +497,14 @@ impl Element for TerminalElement {
             .try_global::<crate::gpui_shell::config::Settings>()
             .map(|settings| settings.cjk_bold_regular)
             .unwrap_or(true);
+        let cjk_fonts = cx
+            .try_global::<crate::gpui_shell::config::Settings>()
+            .and_then(|settings| settings.font_cjk.clone());
         let pick_font = |bold: bool, italic: bool, wide: bool| {
             let bold = bold && !(wide && cjk_bold_regular);
+            if let Some(fonts) = cjk_fonts.as_ref().filter(|_| wide) {
+                return fonts[usize::from(bold) + 2 * usize::from(italic)].clone();
+            }
             match (bold, italic) {
                 (false, false) => font.clone(),
                 (true, false) => bold_font.clone(),

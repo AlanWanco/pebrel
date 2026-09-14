@@ -941,6 +941,9 @@ pub struct RuntimeSettings {
     /// 系统外观变化时自动在主题家族的深浅成员间切换（默认关，尊重显式选择）。
     pub follow_system_theme: bool,
     pub font_family: Option<String>,
+    pub font_family_cjk: Option<String>,
+    pub ui_font_family: Option<String>,
+    pub ui_font_size_px: Option<f32>,
     /// **逻辑像素**（旧壳写盘语义：设置页 spinner 与 Ctrl+滚轮缩放持久化时
     /// 已除以 scale factor）。`None` = 跟随 nebula.toml 的 `font.size`（pt）。
     pub font_size_px: Option<f32>,
@@ -988,6 +991,8 @@ pub struct RuntimeSettings {
     /// from the Application settings page when this is disabled.
     pub auto_check_updates: bool,
     pub keep_session: bool,
+    /// Start the first window hidden when a system tray is available and enabled.
+    pub silent_start: bool,
     pub restore_session: bool,
     pub resume_ai: bool,
     /// 常驻系统托盘图标。
@@ -1085,6 +1090,9 @@ impl RuntimeSettings {
                 .unwrap_or_default(),
             follow_system_theme: raw.bool_on("follow_system_theme").unwrap_or(false),
             font_family: raw.value("font_family").map(str::to_owned),
+            font_family_cjk: raw.value("font_family_cjk").map(str::to_owned),
+            ui_font_family: raw.value("ui_font_family").map(str::to_owned),
+            ui_font_size_px: raw.f32("ui_font_size").map(|size| size.clamp(10.0, 24.0)),
             font_size_px: raw.f32("font_size").map(|size| size.clamp(4.0, 96.0)),
             cursor_shape: raw.value("cursor_shape").and_then(CursorShapeName::from_settings),
             cursor_blink: raw.bool_on("cursor_blink"),
@@ -1134,6 +1142,7 @@ impl RuntimeSettings {
             fetch: raw.bool_on("fetch").unwrap_or(false),
             auto_check_updates: raw.bool_on("auto_check_updates").unwrap_or(true),
             keep_session: raw.bool_on("keep_session").unwrap_or(false),
+            silent_start: raw.bool_on("silent_start").unwrap_or(false),
             restore_session: raw.bool_on("restore_session").unwrap_or(true),
             resume_ai: raw.bool_on("resume_ai").unwrap_or(true),
             tray: raw.bool_on("tray").unwrap_or(true),
@@ -1338,6 +1347,9 @@ mod tests {
              completion_style=popup\n\
              shell=pwsh\n\
              font_family=Maple Mono Normal NF CN\n\
+             ui_font_family=Arial\n\
+             ui_font_size=18\n\
+             font_family_cjk=PingFang SC\n\
              font_size=16.3\n\
              cursor_shape=beam\n\
              cursor_blink=1\n\
@@ -1355,6 +1367,7 @@ mod tests {
              fetch=1\n\
              powerline=0\n\
              keep_session=1\n\
+             silent_start=1\n\
              restore_session=0\n\
              resume_ai=0\n\
              tray=0\n\
@@ -1372,6 +1385,9 @@ mod tests {
         assert_eq!(settings.language, LanguagePref::ZhCn);
         assert_eq!(settings.theme, ThemeName::SilverLight);
         assert_eq!(settings.font_family.as_deref(), Some("Maple Mono Normal NF CN"));
+        assert_eq!(settings.font_family_cjk.as_deref(), Some("PingFang SC"));
+        assert_eq!(settings.ui_font_family.as_deref(), Some("Arial"));
+        assert_eq!(settings.ui_font_size_px, Some(18.0));
         // font_size 键存的是逻辑像素（旧壳写盘语义），不做 pt 换算。
         assert_eq!(settings.font_size_px, Some(16.3));
         assert_eq!(settings.cursor_shape, Some(CursorShapeName::Beam));
@@ -1392,6 +1408,7 @@ mod tests {
         assert_eq!(settings.cell_width_mode, CellWidthModeName::Relaxed);
         assert!(settings.fetch);
         assert!(settings.keep_session);
+        assert!(settings.silent_start);
         assert!(!settings.restore_session);
         assert!(!settings.resume_ai);
         assert!(!settings.tray);
@@ -1414,6 +1431,9 @@ mod tests {
         assert_eq!(settings.language, LanguagePref::System);
         assert_eq!(settings.theme, ThemeName::Nord);
         assert_eq!(settings.font_family, None);
+        assert_eq!(settings.font_family_cjk, None);
+        assert_eq!(settings.ui_font_family, None);
+        assert_eq!(settings.ui_font_size_px, None);
         assert!(!settings.copy_on_select);
         assert!(settings.multiline_paste_confirm, "多行粘贴确认默认开（上游兼容）");
         assert!(settings.tab_close_visible, "标签关闭按钮默认可见（上游兼容）");
@@ -1432,6 +1452,7 @@ mod tests {
         assert!(!settings.fetch);
         assert!(settings.auto_check_updates);
         assert!(!settings.keep_session);
+        assert!(!settings.silent_start);
         assert!(settings.restore_session);
         assert!(settings.resume_ai);
         assert!(settings.tray);

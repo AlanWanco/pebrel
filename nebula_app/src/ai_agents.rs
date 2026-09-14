@@ -48,10 +48,11 @@ pub enum AgentKind {
     Qoder,
     Maki,
     Trae,
+    CodeBuddy,
 }
 
 impl AgentKind {
-    pub const ALL: [Self; 26] = [
+    pub const ALL: [Self; 27] = [
         Self::Claude,
         Self::Codex,
         Self::Gemini,
@@ -78,6 +79,7 @@ impl AgentKind {
         Self::Qoder,
         Self::Maki,
         Self::Trae,
+        Self::CodeBuddy,
     ];
 
     pub fn slug(self) -> &'static str {
@@ -108,6 +110,7 @@ impl AgentKind {
             Self::Qoder => "qodercli",
             Self::Maki => "maki",
             Self::Trae => "trae-cli",
+            Self::CodeBuddy => "codebuddy",
         }
     }
 
@@ -139,6 +142,7 @@ impl AgentKind {
             Self::Qoder => "Qoder",
             Self::Maki => "Maki",
             Self::Trae => "Trae CLI",
+            Self::CodeBuddy => "CodeBuddy Code",
         }
     }
 
@@ -177,6 +181,8 @@ impl AgentKind {
             Self::Maki => &["maki"],
             // ByteDance's trae-agent declares this console entry point.
             Self::Trae => &["trae-cli"],
+            // @tencent-ai/codebuddy-code 2.150.0's interactive bin entries.
+            Self::CodeBuddy => &["codebuddy", "cbc", "codebuddy-code", "codebuddy-lowmem"],
         }
     }
 
@@ -225,6 +231,9 @@ impl AgentKind {
 
         tokens
             .filter(|token| !token.starts_with('-'))
+            // The prewarm helper also lives inside the codebuddy-code package;
+            // its parent directory alone must not identify it as a live CLI.
+            .filter(|token| launcher_stem(token) != "cbc-prewarm")
             .find_map(|token| token.split(['/', '\\']).find_map(Self::parse))
     }
 
@@ -257,7 +266,8 @@ impl AgentKind {
             | Self::Kilo
             | Self::Qoder
             | Self::Maki
-            | Self::Trae => return None,
+            | Self::Trae
+            | Self::CodeBuddy => return None,
             Self::Kimi => format!("kimi --session {session_id}"),
         })
     }
@@ -497,6 +507,7 @@ const BUNDLED: &[(AgentKind, &str)] = &[
     (AgentKind::Kilo, include_str!("agent_detection/kilo.toml")),
     (AgentKind::Qoder, include_str!("agent_detection/qodercli.toml")),
     (AgentKind::Maki, include_str!("agent_detection/maki.toml")),
+    (AgentKind::CodeBuddy, include_str!("agent_detection/codebuddy.toml")),
 ];
 
 static CACHE: OnceLock<RwLock<Cache>> = OnceLock::new();
@@ -836,6 +847,60 @@ mod tests {
     }
 
     #[test]
+    fn codebuddy_entry_points_identify_the_cli_without_claiming_its_helper() {
+        for command in [
+            "codebuddy",
+            "cbc",
+            "codebuddy-code",
+            "codebuddy-lowmem",
+            r"C:\tools\CODEBUDDY.CMD",
+            "/usr/bin/cbc",
+        ] {
+            assert_eq!(AgentKind::parse(command), Some(AgentKind::CodeBuddy), "{command}");
+        }
+        for command in [
+            "npx --yes @tencent-ai/codebuddy-code",
+            "node /opt/node_modules/@tencent-ai/codebuddy-code/dist/codebuddy.js",
+            "env DEBUG=1 codebuddy --help",
+        ] {
+            assert_eq!(AgentKind::parse_command(command), Some(AgentKind::CodeBuddy), "{command}");
+        }
+        for command in [
+            "cbc-prewarm",
+            "codebuddy-helper",
+            "cat codebuddy.md",
+            "node /opt/node_modules/@tencent-ai/codebuddy-code/bin/cbc-prewarm",
+        ] {
+            assert_eq!(AgentKind::parse_command(command), None, "{command}");
+        }
+        assert_eq!(AgentKind::CodeBuddy.start_command(), None);
+        assert_eq!(AgentKind::CodeBuddy.resume_command("session-1"), None);
+        assert_eq!(AgentKind::CodeBuddy.fork_command("session-1"), None);
+    }
+
+    #[test]
+    fn codebuddy_screen_identity_requires_brand_and_live_footer() {
+        // Transcribed from the user's 2.150.0 Windows/WSL screenshot, not a
+        // runtime capture. Only the observed prompt/footer establishes idle.
+        let screen = "╭─ CodeBuddy Code v2.150.0 ─╮\nTips for getting started\n\
+                      ────────────────\n> \n────────────────\n\
+                      /agent-mode to switch · ? for shortcuts ← for agents";
+        assert_eq!(identify(screen), Some(AgentKind::CodeBuddy));
+        let idle = detect("codebuddy", screen).unwrap();
+        assert_eq!(idle.status, AgentStatus::Idle);
+        for text in [
+            "CodeBuddy Code is a CLI.",
+            "CodeBuddy Code v2.150.0\nuser@host:~$ ",
+            "/agent-mode to switch · ? for shortcuts ← for agents",
+            "> generic prompt\n? for shortcuts ← for agents",
+            &format!("{screen}\nuser@host:~$ "),
+        ] {
+            assert_eq!(identify(text), None, "{text}");
+        }
+        assert!(detect("codebuddy", &format!("{screen}\nuser@host:~$ ")).is_none());
+    }
+
+    #[test]
     fn submitted_commands_resolve_agents_across_wsl_launch_forms() {
         for agent in AgentKind::ALL {
             assert_eq!(AgentKind::parse_command(agent.slug()), Some(agent), "{}", agent.slug());
@@ -916,6 +981,20 @@ mod tests {
         assert_eq!(working.status, AgentStatus::Working);
         let idle = detect("claude", "────────────────\n❯ ").unwrap();
         assert_eq!(idle.status, AgentStatus::Idle);
+    }
+
+    #[test]
+    fn review_regression_restored_codex_identity_requires_live_prompt_and_footer() {
+        let live = "› Ask Codex to do anything\n\n  gpt-6-astra max · /mnt/d/temp_build/project · Saved conversation";
+        assert_eq!(identify(live), Some(AgentKind::Codex));
+        for text in [
+            "› generic shell prompt",
+            "The CLI says Ask Codex to do anything.",
+            "› Ask Codex to do anything\nuser@host:~$ ",
+            "› Ask Codex to do anything\ngpt-6-astra max · /project\nuser@host:~$ ",
+        ] {
+            assert_eq!(identify(text), None, "{text}");
+        }
     }
 
     #[test]
