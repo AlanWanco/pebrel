@@ -20,7 +20,7 @@ Every release entry is provided in English and Simplified Chinese.
 
 #### Fixed
 
-- Aligned the English and Chinese terminal-font fields and kept the current font visible. Both default to the bundled Maple Mono NF CN font; the interface font-family setting has been removed while its text-size control remains.
+- Aligned the English and Chinese terminal-font fields, kept the current font visible, and placed font candidates above the field when space below is limited. Both default to the bundled Maple Mono NF CN font; the interface font-family setting has been removed while its text-size control remains.
 - Preserved the inherited working directory when a bare `pebrel` launch opens a new terminal, including handover to a running Windows instance.
 - Restored WSL panes in their saved guest directories, and kept queued AI resume commands and identities through shell initialization. Recognized the compact Codex resume screen without requiring another AI message, and cleared the foreground identity after the CLI exits.
 - Prevented long WSL directory titles and distribution labels from overlapping in sidebar and top tabs.
@@ -52,7 +52,7 @@ Every release entry is provided in English and Simplified Chinese.
 
 #### 修复
 
-- 对齐中英文终端字体输入框并显示当前字体，两项默认均采用内置 Maple Mono NF CN；撤掉界面字体设置，保留界面字号。
+- 对齐中英文终端字体输入框并显示当前字体；下方空间不足时，候选列表向上展开。两项默认均采用内置 Maple Mono NF CN；撤掉界面字体设置，保留界面字号。
 - 不带目录参数运行 `pebrel` 并创建新终端时，继承实际启动目录；交接给已有 Windows 实例时也保留该目录。
 - WSL 窗格恢复到保存的来宾目录；AI 恢复命令与会话身份可跨越 shell 初始化阶段，识别 Codex 的精简恢复界面，无需再发送 AI 消息，CLI 退出后清除前台身份。
 - 避免 WSL 长目录标题与发行版名称在侧栏、顶部标签中互相覆盖。
