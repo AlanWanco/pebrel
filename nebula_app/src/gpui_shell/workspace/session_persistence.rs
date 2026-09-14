@@ -119,6 +119,12 @@ mod tests {
     }
     use crate::session::{AgentSession, LayoutSession, TabSession};
 
+    fn ordinary_window() -> SessionPersistence {
+        // Hosted Windows runners can be elevated. These tests exercise ordinary
+        // window persistence; privileged isolation has its own negative test.
+        SessionPersistence { isolated: false, ..SessionPersistence::default() }
+    }
+
     fn sample_session() -> Session {
         let mut tab = TabSession::single("D:/work".into(), Some("Workspace".into()), None);
         tab.layout = Some(LayoutSession::Pane {
@@ -145,7 +151,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("session.json");
         let expected = sample_session();
-        let mut state = SessionPersistence::default();
+        let mut state = ordinary_window();
         save_to(&mut state, &path, Some(expected.clone()), SaveReason::WindowClose);
         save_to(&mut state, &path, None, SaveReason::Checkpoint);
         save_to(&mut state, &path, None, SaveReason::Quit);
@@ -160,7 +166,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("session.json");
         let expected = sample_session();
-        let mut state = SessionPersistence::default();
+        let mut state = ordinary_window();
         save_to(&mut state, &path, Some(expected.clone()), SaveReason::Checkpoint);
         drop(state);
         let restored = crate::session::load_from(&path).unwrap();
@@ -171,7 +177,7 @@ mod tests {
 
     #[test]
     fn teardown_events_cannot_overwrite_the_final_snapshot() {
-        let mut state = SessionPersistence::default();
+        let mut state = ordinary_window();
         let expected = sample_session();
         state.save_with(Some(expected.clone()), SaveReason::Quit, |_| Ok(()));
         for reason in [SaveReason::Checkpoint, SaveReason::TabsClosed, SaveReason::WindowClose] {
@@ -187,7 +193,7 @@ mod tests {
 
     #[test]
     fn explicitly_closing_all_tabs_does_not_resurrect_them() {
-        let mut state = SessionPersistence::default();
+        let mut state = ordinary_window();
         state.save_with(Some(sample_session()), SaveReason::Checkpoint, |_| Ok(()));
         state.save_with(Some(Session::new(0, vec![])), SaveReason::TabsClosed, |_| Ok(()));
         state.save_with(None, SaveReason::Quit, |_| Ok(()));
@@ -198,7 +204,7 @@ mod tests {
 
     #[test]
     fn an_empty_startup_or_auxiliary_window_cannot_erase_a_saved_session() {
-        let mut state = SessionPersistence::default();
+        let mut state = ordinary_window();
         for current in [None, Some(Session::new(0, vec![]))] {
             state.save_with(current, SaveReason::Checkpoint, |_| {
                 panic!("initial empty state must not reach storage")
@@ -209,7 +215,7 @@ mod tests {
 
     #[test]
     fn failed_checkpoint_and_final_writes_are_retried() {
-        let mut state = SessionPersistence::default();
+        let mut state = ordinary_window();
         let session = sample_session();
         let fail = |_: &Session| Err(std::io::Error::other("storage unavailable"));
         state.save_with(Some(session.clone()), SaveReason::Checkpoint, fail);
@@ -225,7 +231,7 @@ mod tests {
 
     #[test]
     fn unchanged_checkpoints_do_not_rewrite_storage() {
-        let mut state = SessionPersistence::default();
+        let mut state = ordinary_window();
         state.save_with(Some(sample_session()), SaveReason::Checkpoint, |_| Ok(()));
         state.save_with(Some(sample_session()), SaveReason::Checkpoint, |_| {
             panic!("unchanged checkpoint must not write")
@@ -234,7 +240,7 @@ mod tests {
 
     #[test]
     fn failed_window_close_is_retried_even_without_remaining_windows() {
-        let mut state = SessionPersistence::default();
+        let mut state = ordinary_window();
         state.save_with(Some(sample_session()), SaveReason::WindowClose, |_| {
             Err(std::io::Error::other("temporary write failure"))
         });
@@ -248,7 +254,7 @@ mod tests {
 
     #[test]
     fn failed_explicit_empty_snapshot_is_retried_without_resurrecting_tabs() {
-        let mut state = SessionPersistence::default();
+        let mut state = ordinary_window();
         state.save_with(Some(sample_session()), SaveReason::Checkpoint, |_| Ok(()));
         state.save_with(Some(Session::new(0, vec![])), SaveReason::WindowClose, |_| {
             Err(std::io::Error::other("temporary write failure"))
