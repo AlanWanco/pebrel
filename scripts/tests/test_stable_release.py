@@ -68,21 +68,17 @@ def notes(checksum_placeholder: bool = True) -> str:
 
 
 class StableReleaseTests(unittest.TestCase):
-    def test_stable_workflow_runs_gpui_interaction_tests_on_every_platform(self) -> None:
+    def test_stable_workflow_requires_full_native_tests_before_aggregation(self) -> None:
         root = Path(__file__).resolve().parents[2]
         workflow = (root / ".github/workflows/release.yml").read_text(encoding="utf-8")
-        command = "cargo test --locked -p nebula --bin pebrel --features gpui-test-support gpui_shell::"
-        self.assertEqual(workflow.count(command), 3)
-        windows_step = workflow.split("      - name: Test workspace and native harness\n", 1)[1]
-        windows_step = windows_step.split("      - name:", 1)[0]
-        self.assertIn("shell: pwsh", windows_step)
-        lines = [line.strip() for line in windows_step.splitlines()]
-        commands = 0
-        for index, line in enumerate(lines):
-            if line.startswith(("cargo test ", "python -m unittest ")):
-                commands += 1
-                self.assertEqual(lines[index + 1], "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }")
-        self.assertEqual(commands, 5)
+        native = workflow.split("  native-tests:\n", 1)[1].split("\n  linux:\n", 1)[0]
+        for platform in ("linux-x64", "windows-x64", "macos-arm64", "macos-x64"):
+            self.assertIn("platform: " + platform, native)
+        self.assertIn("run: python scripts/ci_native_tests.py", native)
+        self.assertNotIn("continue-on-error", native)
+        aggregate = workflow.split("\n  aggregate:\n", 1)[1].split("\n  publish:\n", 1)[0]
+        self.assertIn("needs: [prepare, native-tests, linux, macos, windows]", aggregate)
+        self.assertNotIn("always()", aggregate)
 
     def test_native_packagers_expose_stable_channel_without_preview_id(self) -> None:
         root = Path(__file__).resolve().parents[2]

@@ -17,8 +17,8 @@ edition = "2024"
 rust-version = "1.97.1"
 
 [profile.release]
-# fat LTO 会用顶层 opt-level 重跑全程序 codegen，把下面的热路径 O3 钉子
-# 冲掉；thin + codegen-units=1 保住钉子，体积差距只有个位数百分点。
+# Thin LTO preserves package-specific optimization levels. Dependencies retain
+# one codegen unit; the application uses parallel codegen with the same O3 level.
 lto = "thin"
 debug = 0
 strip = "symbols"
@@ -38,7 +38,7 @@ smol = { opt-level = 3 }
 gpui = { opt-level = 3 }
 gpui-component = { opt-level = 3 }
 nebula_terminal = { opt-level = 3 }
-nebula = { opt-level = 3 }
+nebula = { opt-level = 3, codegen-units = 16 }
 image = { opt-level = 3 }
 
 # Debug 壳仍要承担真实终端负载：GPUI 布局/字体塑形和 VT 解析若以

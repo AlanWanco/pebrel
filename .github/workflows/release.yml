@@ -106,6 +106,7 @@ jobs:
           python3 scripts/check_platform_cfg.py
           python3 -m unittest \
             scripts.tests.test_stable_release \
+            scripts.tests.test_ci_native_tests \
             scripts.tests.test_preview_release \
             scripts.tests.test_macos_dmg \
             scripts.tests.test_ai_session_probe \
@@ -117,6 +118,66 @@ jobs:
             scripts.tests.test_xplat
           bash -n scripts/package-linux.sh scripts/package-macos.sh
           python3 -m py_compile scripts/stable_release.py scripts/preview_release.py
+
+  native-tests:
+    name: Native tests (${{ matrix.platform }})
+    if: ${{ !inputs.windows_only }}
+    needs: prepare
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            platform: linux-x64
+            cache: linux
+          - runner: windows-2022
+            platform: windows-x64
+            cache: windows
+          - runner: macos-26
+            platform: macos-arm64
+            cache: macos
+          - runner: macos-26-intel
+            platform: macos-x64
+            cache: macos
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install native test dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config zsh libasound2-dev libdbus-1-dev libudev-dev \
+            libfontconfig1-dev libfreetype6-dev libegl1-mesa-dev libgl1-mesa-dev \
+            libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev libx11-xcb-dev \
+            libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libxcb-xinput-dev libxcb-xkb-dev libxi-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ matrix.cache }}
+          cache-workspace-crates: true
+          cache-on-failure: true
+      - name: Prepare pinned Windows console runtime
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/prepare-windows-runtime.ps1 -Destination assets/windows/conhost
+      - name: Test complete workspace and native harness
+        run: python scripts/ci_native_tests.py
+      - name: Upload native compilation timings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-timings-${{ matrix.platform }}
+          path: target/cargo-timings
+          if-no-files-found: warn
+          retention-days: 14
 
   linux:
     name: Linux x86_64 stable package
@@ -151,15 +212,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-      - name: Test workspace and startup contracts
-        run: |
-          cargo test --locked --workspace
-          cargo test --locked -p nebula --bin pebrel --features gpui-shell
-          python3 -m unittest scripts.tests.test_shell_integration
-          cargo test --locked -p nebula --features gpui-test-support dialog
-          cargo test --locked -p nebula --bin pebrel --features gpui-test-support gpui_shell::
+          cache-workspace-crates: true
       - name: Build GPUI release binary
-        run: cargo build --locked --release -p nebula --bin pebrel --features gpui-shell
+        run: cargo build --locked --release -p nebula --bin pebrel --features gpui-shell --timings
       - name: Download pinned linuxdeploy
         env:
           LINUXDEPLOY: ${{ runner.temp }}/linuxdeploy-x86_64.AppImage
@@ -284,15 +339,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-      - name: Test workspace and native startup contracts
-        run: |
-          cargo test --locked --workspace
-          cargo test --locked -p nebula --bin pebrel --features gpui-shell
-          python3 -m unittest scripts.tests.test_shell_integration scripts.conformance.tests.test_posix_lifecycle
-          cargo test --locked -p nebula --features gpui-test-support dialog
-          cargo test --locked -p nebula --bin pebrel --features gpui-test-support gpui_shell::
+          cache-workspace-crates: true
       - name: Build GPUI release binary
-        run: cargo build --locked --release -p nebula --bin pebrel --features gpui-shell
+        run: cargo build --locked --release -p nebula --bin pebrel --features gpui-shell --timings
       - name: Import Developer ID signing credentials
         if: ${{ env.MACOS_SIGNING == 'developer-id' }}
         env:
@@ -422,9 +471,9 @@ jobs:
           $run = Invoke-RestMethod -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/runs/$env:VALIDATED_RUN" -Headers $headers -ErrorAction Stop
           if ($run.head_sha -ne $env:SELECTED_COMMIT) { throw 'Validated run source differs.' }
           $jobs = Invoke-RestMethod -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/runs/$env:VALIDATED_RUN/jobs?per_page=100" -Headers $headers -ErrorAction Stop
-          $windows = @($jobs.jobs | Where-Object name -eq 'Windows x64 stable package')
-          $tests = @($windows.steps | Where-Object { $_.name -eq 'Test workspace and native harness' -and $_.conclusion -eq 'success' })
-          if ($windows.Count -ne 1 -or $tests.Count -ne 1) { throw 'Prior Windows native tests did not pass.' }
+          $windows = @($jobs.jobs | Where-Object { $_.name -in @('Windows x64 stable package', 'Native tests (windows-x64)') })
+          $tests = @($windows.steps | Where-Object { $_.name -in @('Test workspace and native harness', 'Test complete workspace and native harness') -and $_.conclusion -eq 'success' })
+          if ($tests.Count -ne 1) { throw 'Prior Windows native tests did not pass.' }
       - uses: actions/checkout@v4
         if: ${{ inputs.source_commit != '' }}
         with:
@@ -438,32 +487,18 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+          cache-workspace-crates: true
       - name: Prepare pinned Windows console runtime
         shell: pwsh
         run: |
           & "$env:RUNNER_TEMP/prepare-windows-runtime.ps1" -Destination assets/windows/conhost
           & "$env:RUNNER_TEMP/runtime-tests/windows-runtime.tests.ps1" -ArchivePath (Join-Path ([IO.Path]::GetTempPath()) 'pebrel-conpty-source-v1.5.0.zip')
       - name: Test workspace and native harness
-        if: ${{ inputs.source_commit == '' }}
-        shell: pwsh
-        run: |
-          python -m unittest scripts.conformance.tests.test_lifecycle scripts.conformance.tests.test_scrollback
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --locked --workspace
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --locked -p nebula --bin pebrel --features gpui-shell
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --locked -p nebula --features gpui-test-support dialog
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --locked -p nebula --bin pebrel --features gpui-test-support gpui_shell::
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        if: ${{ inputs.windows_only && inputs.source_commit == '' }}
+        run: python scripts/ci_native_tests.py
       - name: Build GPUI release binary
         shell: pwsh
-        run: |
-          cargo build --locked --release -p nebula_hook --bin pebrel-hook
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo build --locked --release -p nebula --bin pebrel --features gpui-shell
-          exit $LASTEXITCODE
+        run: ./scripts/build-windows-product.ps1 -Configuration release -TargetDirectory target
       - name: Retain built Windows runtime before packaging
         uses: actions/upload-artifact@v4
         with:
@@ -519,7 +554,7 @@ jobs:
   aggregate:
     name: Verify stable assets and upload complete set
     if: ${{ !inputs.windows_only }}
-    needs: [prepare, linux, macos, windows]
+    needs: [prepare, native-tests, linux, macos, windows]
     runs-on: ubuntu-22.04
     env:
       PACKAGE_VERSION: ${{ needs.prepare.outputs.version }}

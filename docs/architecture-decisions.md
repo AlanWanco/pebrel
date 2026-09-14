@@ -420,3 +420,36 @@ settings files.
 - **Replacement condition:** Revisit the budgets or an OS-backed index only with
   measured query latency, completeness and sustained allocation evidence. Do not
   restore eager full-tree indexing to improve a synthetic latency number.
+
+## ADR-0014 — Parallel release validation with one product build graph
+
+- **Date:** 2026-09-14
+- **Context:** The 1.7.0 Windows release job took 41m28s despite a full dependency
+  cache hit. Its logs show three application test compilations (4m44s, 9m16s and
+  4m07s), a 15m08s release build, and 4m16s of additional dependency compilation
+  during packaging. The user requested a slowest-job target of ten minutes.
+- **Decision:** Run the complete Rust workspace with the product interaction
+  feature enabled in one unfiltered invocation. Run native tests independently
+  from package construction; asset aggregation depends on both. Each native
+  platform still runs the complete Python helper and harness suites. Cache keys
+  preserve the existing platform namespace and retain workspace crates. Cargo
+  still validates source, profile and feature fingerprints before reuse.
+- **Product compilation:** The application keeps O3 and Thin LTO and uses 16
+  codegen units to parallelize its large translation unit. Other package settings
+  retain their existing values. Both Windows packagers call one explicit builder
+  for the product and its packaged hook, preserving the same feature graph.
+  Packaging still invokes Cargo and validates source freshness and binary identity.
+- **Contract clarification:** The old packaging test required the literal
+  `--workspace --exclude nebula`, rejecting a valid explicit selection of the two
+  shipped binaries. It now verifies the actual selected packages, binaries and
+  product feature, plus failure propagation and restoration of the caller's target.
+  No test filtering, freshness bypass, size-budget increase or dependency change
+  is part of this decision.
+- **Validation:** The release pipeline runs native tests, packaging fixtures,
+  package-size/identity checks and installed or mounted conformance on all four
+  platforms. Actual job timings determine whether the target is met; cache input
+  changes and first compilation must be reported separately. A configured timeout
+  or parallel scheduling alone is not evidence of a ten-minute successful build.
+- **Revisit condition:** Retain only changes whose complete CI run and package
+  checks pass. Reconsider codegen partitioning if artifact size or runtime
+  measurements regress, and remove redundant caches if restore/save cost grows.

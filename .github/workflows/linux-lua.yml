@@ -34,6 +34,8 @@ jobs:
     env:
       PYTHONUTF8: "1"
       CARGO_TERM_COLOR: always
+      RUST_BACKTRACE: "1"
+      RUST_TOOLCHAIN: "1.97.1"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -61,22 +63,12 @@ jobs:
         with:
           toolchain: "1.97.1"
       - uses: Swatinem/rust-cache@v2
-      - name: Test native titlebar alignment
-        if: runner.os == 'macOS'
-        run: >-
-          cargo test --locked -p nebula --bin pebrel --features gpui-test-support platform::window_chrome::macos::tests::
-      - name: Test all Python helpers
-        if: ${{ !cancelled() }}
-        run: python -m unittest discover -s scripts/tests -v
-      - name: Test all conformance harness helpers
-        if: ${{ !cancelled() }}
-        run: python -m unittest discover -s scripts/conformance/tests -v
-      - name: Test the full Rust workspace
-        if: ${{ !cancelled() }}
-        run: cargo test --locked --workspace
-      - name: Test all GPUI product and interaction cases
-        if: ${{ !cancelled() }}
-        run: cargo test --locked -p nebula --bin pebrel --features gpui-test-support
+        with:
+          shared-key: ${{ runner.os == 'Windows' && 'windows' || runner.os == 'Linux' && 'linux' || 'macos' }}
+          cache-workspace-crates: true
+          cache-on-failure: true
+      - name: Test complete workspace and native harness
+        run: python scripts/ci_native_tests.py
       - name: Check source architecture
         if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: python scripts/check_architecture.py
