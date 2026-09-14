@@ -487,5 +487,17 @@
   "wallpaper": {
     "load_failed": "Could not load the background image. Choose a readable PNG, JPEG, WebP, GIF or BMP image.",
     "too_large": "The background image exceeds the memory limit. Choose a smaller image."
-  }
+  },
+  "files.search_failed": "Unable to complete search",
+  "files.search_running": "Searching…",
+  "files.search_limited": "Showing {count} results · narrow the search for more",
+  "files.search_count": "{count} results",
+  "files.search_retry": "Check the directory and query, or turn off the search options and try again.",
+  "files.search_progress": "Matching files appear as the search progresses.",
+  "files.search_continue": "You can continue typing or switch directories.",
+  "files.search_incomplete": "Search is incomplete",
+  "files.search_limit_reason": "The search reached a limit or some directories could not be read.",
+  "files.search_narrow": "Choose a smaller directory or use a more specific query.",
+  "files.search_empty": "No matching files",
+  "files.search_empty_reason": "No files or folders match this query in the current directory."
 }

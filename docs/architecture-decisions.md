@@ -376,3 +376,47 @@ settings files.
 - **Revisit condition:** Replace manual atlas retirement if upstream introduces
   equivalent ownership-aware image resources. Adopt target-size native decoding
   only with verified peak accounting and compatibility evidence.
+
+## ADR-0013 — Bounded, on-demand filename search
+
+- **Date:** 2026-09-14
+- **Context:** Opening Files previously crawled up to 500,000 paths even with an
+  empty query. The index retained its full array and several strings per path.
+  Users requested approximately 10–15 MiB of sustained browsing/search overhead,
+  unchanged matching options and reuse during repeated panel use.
+- **Decision:** Keep filename matching in the shared side-panel model. Empty
+  queries only enumerate the visible tree. Nonempty queries reuse one bounded
+  cache and stream uncached paths through the same matcher/ranker. Cache capacity
+  never determines search coverage. Plain, case-sensitive, whole-word and regex
+  matching retain their existing semantics and best-first ordering.
+- **Ownership and budgets:** Each existing worker owns one root cache (6 MiB);
+  all caches share an 8 MiB allocation quota. Published rows carry a lease into
+  their consuming view (512 KiB per snapshot, 2 MiB shared). One process-wide
+  execution lock bounds simultaneous traversal/ranking buffers; UI threads never
+  acquire it. Ranking retains at most 1,000 candidates and 1 MiB. Query regex and
+  path parsing have independent bounds. These are allocation budgets, not a
+  promise that OS working set or total application memory equals those values.
+- **Lifecycle:** A latest-request mailbox replaces the unbounded command queue.
+  Revisions cancel obsolete traversal and reject stale publication. Clearing or
+  closing Files releases result rows, while a bounded warm cache survives reopening.
+  Root changes replace that cache. Local nonrecursive watches are installed before
+  enumeration, capped at 128 directories / 64 KiB of path storage. Caches with
+  incomplete watch coverage (including WSL) expire after two seconds. WSL search
+  executes `find` directly with `wsl.exe --exec`, streams NUL records through a
+  four-record channel and terminates its owned command on cancellation/timeout.
+  Direct execution preserves paths and `find` arguments containing shell syntax.
+  It never terminates terminal sessions.
+- **Tradeoff:** Unchanged directories that fit in the watched cache avoid repeat
+  walks. Larger trees reuse a prefix for early results but require streaming for
+  full coverage. Search reports partial results at its existing 500,000-entry
+  ceiling, depth 64, inaccessible paths or result limits. Explicit refresh remains
+  available. No new dependency, persisted index or daemon is introduced.
+- **Validation:** Matching, watch changes, cancellation, panel reopening, root
+  replacement, bounded ranking and allocation ownership have focused regressions.
+  An opt-in Windows stress test drives the production panel through multiple
+  directories, clear/query/reopen cycles and records actual Vec/String capacities,
+  the Windows array heap block and process private commit after allocator warmup.
+  Runtime evidence must accompany any claim about the sustained memory target.
+- **Replacement condition:** Revisit the budgets or an OS-backed index only with
+  measured query latency, completeness and sustained allocation evidence. Do not
+  restore eager full-tree indexing to improve a synthetic latency number.

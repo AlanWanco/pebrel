@@ -487,5 +487,17 @@
   "wallpaper": {
     "load_failed": "无法加载背景图。请选择可正常读取的 PNG、JPEG、WebP、GIF 或 BMP 图片。",
     "too_large": "背景图超出内存限制，请选择尺寸更小的图片。"
-  }
+  },
+  "files.search_failed": "无法完成搜索",
+  "files.search_running": "正在搜索…",
+  "files.search_limited": "显示 {count} 项结果 · 缩小范围可查找更多",
+  "files.search_count": "{count} 个结果",
+  "files.search_retry": "检查目录和关键词，或关闭搜索选项后重试。",
+  "files.search_progress": "找到的文件会逐步显示。",
+  "files.search_continue": "可以继续输入关键词或切换目录。",
+  "files.search_incomplete": "搜索尚未覆盖全部文件",
+  "files.search_limit_reason": "搜索已达到限制，或部分目录无法读取。",
+  "files.search_narrow": "选择更小的目录，或输入更具体的关键词。",
+  "files.search_empty": "没有匹配的文件",
+  "files.search_empty_reason": "当前目录中没有符合查询条件的文件或文件夹。"
 }

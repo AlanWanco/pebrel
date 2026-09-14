@@ -44,7 +44,7 @@ impl NebulaWorkspace {
 
         self.settings_restore_side_panel_open = self.side_panel.open;
         if self.side_panel.open {
-            self.side_panel.open = false;
+            self.side_panel.toggle(self.side_panel.view);
             self.side_panel_anim_armed = true;
             self.file_tree_menu = None;
         }
