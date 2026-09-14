@@ -343,3 +343,36 @@ has an optional GUI override of the compatible TOML setting (default off), while
 inactive-pane dimming defaults on to preserve the existing appearance. Both are
 cached by the GPUI settings adapter; pointer movement and rendering do not read
 settings files.
+
+## ADR-0012 — Bounded background images and explicit atlas retirement
+
+- **Status:** Requested by the maintainer, 2026-09-14; implementation and validation in progress.
+- **Evidence:** With blur disabled, twenty window size changes retained an additional
+  84 MiB (card) / 190 MiB (window-cover) of dedicated GPU memory on the local Windows
+  QA binary. The pinned GPUI atlas does not retire image IDs when Rust Arcs drop.
+- **Decision:** Keep one bounded CPU RenderImage shared by the background layers and
+  windows. Use the existing renderer authority for fit/alignment and GPUI image
+  bounds for GPU sampling; resizing no longer produces new images. Opacity is a
+  layer property. Explicitly retire replaced image IDs across window atlases and
+  invalidate replayed scenes. Platform atlas copies remain per window.
+- **Loading and ownership:** The App visual-effects state owns one active background
+  executor job and one latest desired source. Generation checks cancel superseded
+  work before expensive stages and prevent stale publication; dropping the owner
+  invalidates outstanding work. Metadata and decoding run off the UI thread. There
+  is no new service, thread pool, dependency, persisted format or AI lifecycle change.
+- **Memory policy:** Retained BGRA is limited to 8 MiB and an edge of 2048 pixels;
+  encoded input is streamed with a 64 MiB file limit, and decoder/output admission
+  is limited to 128 MiB. Integer thumbnailing precedes RGBA conversion and avoids
+  a full-image floating-point resize buffer. These are owned-resource limits, not
+  a whole-process or undocumented decoder-scratch guarantee. Existing native-fit
+  geometry remains independent of reduced texture resolution.
+- **Tradeoff:** High-resolution wallpaper detail is reduced and inputs over the
+  admission limits receive a visible error. The window can appear with its normal
+  base color while the background loads. These favor the user's explicit memory
+  and responsiveness priorities.
+- **Validation:** Targeted decode/lifetime/geometry tests, Windows GPUI build,
+  repeated-size memory probes and real card/crop/opacity visual checks are required.
+  Results are recorded separately and are not implied by this decision.
+- **Revisit condition:** Replace manual atlas retirement if upstream introduces
+  equivalent ownership-aware image resources. Adopt target-size native decoding
+  only with verified peak accounting and compatibility evidence.

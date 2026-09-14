@@ -499,6 +499,13 @@ pub fn reapply_shell_opacity(name: ThemeName, follow_system: bool, cx: &mut App)
     apply_shell_opacity(chrome, cx);
 }
 
+/// Wallpaper readiness changes on the cold load-completion path without a
+/// settings event. Resolve the active theme before reapplying its surface alpha.
+pub(super) fn reapply_prepared_surface_opacity(cx: &mut App) {
+    let chrome = chrome_theme(effective_theme_name(cx));
+    apply_shell_opacity(chrome, cx);
+}
+
 /// 一体化外壳（对齐旧壳 draw_chrome）：窗口背景、侧栏、顶栏是同一块
 /// 壳色，各自的分隔线取同色隐形；唯一的结构分界是内容区那张圆角卡。
 /// 壳色带用户透明度（文字 token 不带——对比度不塌，旧壳裁定）。

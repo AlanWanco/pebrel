@@ -483,5 +483,9 @@
     "admin_started": "Requested {shell} in a new administrator Pebrel window.",
     "admin_cancelled": "Administrator launch cancelled.",
     "admin_failed": "Could not open an administrator terminal: {error}"
+  },
+  "wallpaper": {
+    "load_failed": "Could not load the background image. Choose a readable PNG, JPEG, WebP, GIF or BMP image.",
+    "too_large": "The background image exceeds the memory limit. Choose a smaller image."
   }
 }

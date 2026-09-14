@@ -3905,17 +3905,8 @@ impl Render for NebulaWorkspace {
             .child(
                 // 用户显式配置的背景图画在 chrome 之下；系统 Mica/Aero/Acrylic
                 // 位于整个 GPUI 内容层下方，由 DWM 合成，不能在这里读取壁纸仿画。
-                // 卡外区域由这层负责，卡内切片由终端元素在卡底色之上重画。
-                gpui::canvas(
-                    |_, _, _| (),
-                    |bounds, _, window, cx| {
-                        crate::gpui_shell::wallpaper::paint_wallpaper_under_chrome(
-                            bounds, window, cx,
-                        );
-                    },
-                )
-                .absolute()
-                .inset_0(),
+                // 拓展模式只在此绘图，壳/卡衬底在其上保留原有文字对比度。
+                crate::gpui_shell::wallpaper::window_layer(cx),
             )
             .child(
                 self.render_window_title_bar(
@@ -4019,18 +4010,9 @@ impl Render for NebulaWorkspace {
                                 .overflow_hidden()
                                 .child(
                                     // 壁纸层（卡底色之上、内容之下，覆盖整卡含
-                                    // 内边距带）：卡模式按卡定位，铺满整窗模式画
-                                    // 窗口锚定的卡内切片。
-                                    gpui::canvas(
-                                        |_, _, _| (),
-                                        |bounds, _, window, cx| {
-                                            crate::gpui_shell::wallpaper::paint_wallpaper_card(
-                                                bounds, window, cx,
-                                            );
-                                        },
-                                    )
-                                    .absolute()
-                                    .inset_0(),
+                                    // 内边距带）：卡模式按卡定位；拓展模式由
+                                    // 窗口底层统一绘图，此处不覆盖原有衬底。
+                                    crate::gpui_shell::wallpaper::card_layer(cx),
                                 )
                                 .children(content),
                         )

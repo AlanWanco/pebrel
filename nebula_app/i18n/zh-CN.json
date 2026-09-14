@@ -483,5 +483,9 @@
     "admin_started": "已请求在新的管理员 Pebrel 窗口中打开 {shell}。",
     "admin_cancelled": "已取消管理员启动。",
     "admin_failed": "无法打开管理员终端：{error}"
+  },
+  "wallpaper": {
+    "load_failed": "无法加载背景图。请选择可正常读取的 PNG、JPEG、WebP、GIF 或 BMP 图片。",
+    "too_large": "背景图超出内存限制，请选择尺寸更小的图片。"
   }
 }
