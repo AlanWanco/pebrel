@@ -85,7 +85,7 @@
       "ui_size_description": "独立调整界面文字和组件字号，不影响终端文字。",
       "english": "英文终端字体",
       "chinese": "中文终端字体",
-      "chinese_description": "用于中文等全宽字符。输入字体名称，多个字体以逗号分隔；留空时使用英文字体设置。按回车或离开输入框后生效。",
+      "chinese_description": "用于中文等全宽字符。输入字体名称，多个字体以逗号分隔；留空时使用 Maple Mono NF CN。按回车或离开输入框后生效。",
       "fallback_description": "第 1 项优先显示；缺失字形依次使用后续字体，内置 Maple 是最终安全兜底。",
       "group_description": "第 1 项是主字体，其余按顺序回退",
       "loading": "正在枚举系统字体…",
