@@ -332,7 +332,7 @@ mod tests {
 
     #[test]
     fn vector_sourced_logos_keep_color_and_antialiased_edges_at_tab_sizes() {
-        for logo in [AiLogo::Claude, AiLogo::Trae, AiLogo::OhMyPi, AiLogo::CodeBuddy] {
+        for logo in [AiLogo::Claude, AiLogo::Trae, AiLogo::OhMyPi] {
             let (width, height, source) = decode_png(logo.png(false));
             assert_eq!((width, height), (1024, 1024));
             for size in [16, 18, 24, 27, 36, 48] {
@@ -373,6 +373,38 @@ mod tests {
         }
         for command in ["cbc-prewarm", "codebuddy-helper", "cat codebuddy.md"] {
             assert_eq!(logo_for_command(command), None, "{command}");
+        }
+    }
+
+    #[test]
+    fn codebuddy_square_logo_smooths_edges_without_recoloring_the_brand() {
+        let logo = AiLogo::CodeBuddy;
+        let (width, height, source) = decode_png(logo.png(false));
+        assert_eq!((width, height), (1024, 1024));
+        let original = image::RgbaImage::from_raw(width, height, source.clone()).unwrap();
+        let partial_coverage =
+            |pixels: &[u8]| pixels.chunks_exact(4).filter(|p| p[3] > 0 && p[3] < 255).count();
+        for size in [16, 18, 24, 27, 36, 48] {
+            let (pixels, width, height) = prepare_ai_logo_texture(&source, width, height, size);
+            assert_eq!((width, height), (size, size));
+            assert!(pixels.chunks_exact(4).any(|p| p[3] == 0));
+            assert!(pixels.chunks_exact(4).any(|p| p[3] == 255));
+            // A symmetric rounded square has fewer distinct edge alpha levels
+            // than the asymmetric marks above. Compare actual fractional edge
+            // coverage with a deliberately aliased nearest-neighbor sample.
+            let aliased = image::imageops::resize(
+                &original,
+                size,
+                size,
+                image::imageops::FilterType::Nearest,
+            );
+            assert!(partial_coverage(&pixels) > partial_coverage(aliased.as_raw()), "{size}px");
+            assert!(pixels.chunks_exact(4).any(|p| p[3] > 128 && p[2] > p[0].saturating_add(50)));
+            for ink in [[236, 239, 245], [35, 40, 50]] {
+                let mut tinted = pixels.clone();
+                logo.tint_pixels(&mut tinted, ink);
+                assert_eq!(tinted, pixels);
+            }
         }
     }
 }
