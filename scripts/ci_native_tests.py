@@ -8,11 +8,16 @@ import sys
 
 
 def native_commands() -> list[list[str]]:
+    profile = ["--config", ".github/ci-profile.toml", "--profile", "ci"]
     return [
         [sys.executable, "-m", "unittest", "discover", "-s", "scripts/tests", "-v"],
         [sys.executable, "-m", "unittest", "discover", "-s", "scripts/conformance/tests", "-v"],
         [
-            "cargo", "test", "--locked", "--workspace",
+            "cargo", "check", "--locked", *profile, "-p", "nebula", "--bin", "pebrel",
+            "--features", "gpui-shell", "--timings",
+        ],
+        [
+            "cargo", "test", "--locked", *profile, "--workspace",
             "--features", "nebula/gpui-test-support", "--timings",
         ],
     ]

@@ -10,6 +10,7 @@ on:
       - "Cargo.lock"
       - "rust-toolchain.toml"
       - ".github/workflows/linux-lua.yml"
+      - ".github/ci-profile.toml"
   pull_request:
     paths:
       - "**/*.rs"
@@ -18,6 +19,7 @@ on:
       - "Cargo.lock"
       - "rust-toolchain.toml"
       - ".github/workflows/linux-lua.yml"
+      - ".github/ci-profile.toml"
 
 permissions:
   contents: read

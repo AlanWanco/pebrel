@@ -434,6 +434,11 @@ settings files.
   platform still runs the complete Python helper and harness suites. Cache keys
   preserve the existing platform namespace and retain workspace crates. Cargo
   still validates source, profile and feature fingerprints before reuse.
+- **Test profile:** An explicit CI-only profile removes developer-preview
+  optimization and debug information from test compilation, including named
+  dependency overrides. It retains debug assertions and overflow checks. The
+  native suite also checks the actual product feature configuration, since GPUI
+  test support changes dependency features. Release optimization is unaffected.
 - **Product compilation:** The application keeps O3 and Thin LTO and uses 16
   codegen units to parallelize its large translation unit. Other package settings
   retain their existing values. Both Windows packagers call one explicit builder
