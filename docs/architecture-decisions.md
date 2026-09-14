@@ -462,6 +462,14 @@ settings files.
   platforms. Actual job timings determine whether the target is met; cache input
   changes and first compilation must be reported separately. A configured timeout
   or parallel scheduling alone is not evidence of a ten-minute successful build.
+- **Windows host privileges:** The first hosted run exposed administrator-token
+  dependence in ordinary-window persistence fixtures and runtime discovery.
+  Persistence tests now explicitly select ordinary-window state while retaining
+  privileged isolation tests. Native conformance launches under a restricted copy
+  of the runner's own token, verifies that elevation was removed and preserves
+  the desktop, environment and child exit status. It does not weaken the product's
+  administrator isolation or create a separate user account. Native launch tests
+  cover elevation, literal argument passing and successful/failed child exit.
 - **Revisit condition:** Retain only changes whose complete CI run and package
   checks pass. Reconsider codegen partitioning if artifact size or runtime
   measurements regress, and remove redundant caches if restore/save cost grows.

@@ -419,6 +419,7 @@ jobs:
         shell: pwsh
         run: |
           Copy-Item scripts/prepare-windows-runtime.ps1 "$env:RUNNER_TEMP/prepare-windows-runtime.ps1"
+          Copy-Item scripts/conformance/windows_standard_user.py "$env:RUNNER_TEMP/windows-standard-user.py"
           New-Item -ItemType Directory -Path "$env:RUNNER_TEMP/runtime-tests" -Force | Out-Null
           Copy-Item scripts/tests/windows-runtime.tests.ps1 "$env:RUNNER_TEMP/runtime-tests/windows-runtime.tests.ps1"
       - name: Verify the previous Windows test result
@@ -516,7 +517,7 @@ jobs:
           $actual = git rev-parse HEAD
           if ($actual -ne $env:SELECTED_COMMIT) { throw 'Checked-out source differs from the requested build.' }
           $env:GITHUB_SHA = $actual
-          python scripts/conformance/run.py --app target/release/pebrel.exe --platform windows-x86_64 --output dist/conformance/windows-report.json
+          python "$env:RUNNER_TEMP/windows-standard-user.py" scripts/conformance/run.py --app target/release/pebrel.exe --platform windows-x86_64 --output dist/conformance/windows-report.json
           exit $LASTEXITCODE
       - name: Upload Windows stable assets
         if: always()
