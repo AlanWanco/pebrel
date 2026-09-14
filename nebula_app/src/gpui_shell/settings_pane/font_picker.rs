@@ -668,12 +668,20 @@ mod interaction_tests {
         let panel = cx.debug_bounds("font-picker-panel").unwrap();
         let list = cx.debug_bounds("font-picker-list").unwrap();
         let candidate = cx.debug_bounds("font-available-0").unwrap();
+        assert!(
+            panel.origin.y >= px(0.0) && panel.bottom_right().y <= px(735.0),
+            "font menu stays within the window: {panel:?}"
+        );
         assert_eq!(panel.size.width, px(FONT_PICKER_PANEL_WIDTH));
-        assert!(panel.bottom_right().y <= trigger.origin.y, "menu opens above a low trigger");
+        assert!(
+            panel.bottom_right().y <= trigger.origin.y
+                || panel.origin.y >= trigger.bottom_right().y,
+            "menu must not cover the field after focus scrolling: panel={panel:?}, trigger={trigger:?}"
+        );
         assert!(
             candidate.origin.y >= list.origin.y
                 && candidate.bottom_right().y <= list.bottom_right().y,
-            "at least the first available family is fully visible without scrolling"
+            "at least the first available family is fully visible without scrolling: list={list:?}, candidate={candidate:?}, trigger={trigger:?}"
         );
         cx.simulate_click(bounds.center(), gpui::Modifiers::default());
         cx.run_until_parked();
