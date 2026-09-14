@@ -6,7 +6,7 @@ inputs:
     description: Compiled workload (core, product, release or legacy)
     required: true
   target:
-    description: Compiled profile directory to retain, relative to the repository
+    description: Compiled profile directories to retain, relative to the repository
     required: true
   legacy-key:
     description: Previous combined cache key, restored only during migration
@@ -45,8 +45,10 @@ runs:
         prefixes = ("CARGO_PROFILE_", "CFLAGS", "CXXFLAGS", "RUSTFLAGS")
         names = {"CARGO_BUILD_TARGET", "CARGO_ENCODED_RUSTFLAGS", "RUSTC_WRAPPER",
                  "CC", "CXX", "ImageOS", "MACOSX_DEPLOYMENT_TARGET", "SDKROOT", "DEVELOPER_DIR"}
-        facts["environment"] = {key: value for key, value in os.environ.items()
-                                if key in names or key.startswith(prefixes)}
+        normalize = str.upper if os.name == "nt" else str
+        names = {normalize(name) for name in names}
+        facts["environment"] = {normalize(key): value for key, value in os.environ.items()
+                                if normalize(key) in names or normalize(key).startswith(prefixes)}
         if os.environ["CACHE_OS"] == "macOS":
             facts["sdk"] = subprocess.check_output(["xcrun", "--sdk", "macosx", "--show-sdk-version"], text=True)
         fingerprint = hashlib.sha256(json.dumps(facts, sort_keys=True).encode()).hexdigest()[:16]
@@ -56,7 +58,13 @@ runs:
         with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
             output.write("key=" + prefix + os.environ["CACHE_MANIFESTS"] + "\n")
             output.write("restore-key=" + prefix + "\n")
-            output.write("cargo-home=" + os.environ.get("CARGO_HOME", str(Path.home() / ".cargo")) + "\n")
+            # Recover the preceding Windows cache, which omitted ImageOS because
+            # Python uppercases environment names there. Cargo revalidates it.
+            if os.name == "nt":
+                facts["environment"].pop("IMAGEOS", None)
+                previous = hashlib.sha256(json.dumps(facts, sort_keys=True).encode()).hexdigest()[:16]
+                output.write("migration-key=" + prefix.replace(fingerprint, previous) + "\n")
+            output.write("cargo-home=" + (os.environ.get("CARGO_HOME") or str(Path.home() / ".cargo")) + "\n")
         PY
     - name: Restore shared Cargo downloads
       id: downloads
@@ -76,14 +84,15 @@ runs:
       with:
         path: ${{ inputs.target }}
         key: ${{ steps.identity.outputs.key }}
-        restore-keys: ${{ steps.identity.outputs.restore-key }}
+        restore-keys: |
+          ${{ steps.identity.outputs.restore-key }}
+          ${{ steps.identity.outputs.migration-key }}
     - name: Recover an existing combined cache during migration
       if: steps.target.outputs.cache-matched-key == '' && inputs.legacy-key != ''
       uses: Swatinem/rust-cache@v2
       with:
         shared-key: ${{ inputs.legacy-key }}
         workspaces: . -> target
-        env-vars: MACOSX_DEPLOYMENT_TARGET
         cache-bin: false
         cache-on-failure: true
         save-if: false

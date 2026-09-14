@@ -434,7 +434,8 @@ settings files.
   platform still runs the complete Python helper and harness suites. Separate
   test and release cache keys prevent concurrent jobs from replacing one another's
   compiled workload. Dependency archives and Git objects are shared within each
-  platform; only the relevant compiled profile is saved per workload. A fallback
+  platform; each workload saves only the profiles it uses (native tests also keep
+  release-check metadata). A fallback
   reads existing combined caches during migration. Cargo still validates source,
   profile and feature fingerprints before reuse.
 - **Scheduling:** Stable releases call the same complete four-platform native

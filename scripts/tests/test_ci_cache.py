@@ -32,7 +32,7 @@ class CacheIdentityTests(unittest.TestCase):
                 self.assertEqual(arguments, ["xcrun", "--sdk", "macosx", "--show-sdk-version"])
                 return sdk
 
-            with patch.dict(os.environ, environment), patch("subprocess.check_output", side_effect=command):
+            with patch.dict(os.environ, environment, clear=True), patch("subprocess.check_output", side_effect=command):
                 exec(compile(code, str(ACTION), "exec"), {})
             return dict(line.split("=", 1) for line in output.read_text(encoding="utf-8").splitlines())
 
@@ -62,6 +62,15 @@ class CacheIdentityTests(unittest.TestCase):
         before = self.identity(GITHUB_SHA="one", PREVIEW_ID="first")
         after = self.identity(GITHUB_SHA="two", PREVIEW_ID="second")
         self.assertEqual(before["key"], after["key"])
+
+    @unittest.skipUnless(os.name == "nt", "Windows cache migration")
+    def test_windows_migration_preserves_compiler_and_workload_boundaries(self):
+        before = self.identity()
+        after = self.identity(ImageOS="win22")
+        self.assertEqual(before["restore-key"], after["migration-key"])
+        for change in ({"compiler": "rustc 1.98.0"}, {"CACHE_WORKLOAD": "release"},
+                       {"RUSTFLAGS": "-C opt-level=1"}):
+            self.assertNotEqual(after["migration-key"], self.identity(**change)["migration-key"])
 
 
 if __name__ == "__main__":

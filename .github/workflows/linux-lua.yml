@@ -73,7 +73,10 @@ jobs:
         id: rust-cache
         with:
           key: native
-          target: target/ci
+          extra-key: -release-check-v2
+          target: |
+            target/ci
+            target/release
           legacy-key: ${{ runner.os == 'Windows' && 'windows' || runner.os == 'Linux' && 'linux' || 'macos' }}
       - name: Prepare pinned Windows console runtime
         if: runner.os == 'Windows'
@@ -81,12 +84,6 @@ jobs:
         run: ./scripts/prepare-windows-runtime.ps1 -Destination assets/windows/conhost
       - name: Test complete workspace and native harness
         run: python scripts/ci_native_tests.py
-      - name: Save compiled workload
-        if: ${{ always() && steps.rust-cache.outcome == 'success' && steps.rust-cache.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v4
-        with:
-          path: target/ci
-          key: ${{ steps.rust-cache.outputs.cache-key }}
       - name: Check source architecture
         if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: python scripts/check_architecture.py
@@ -96,6 +93,14 @@ jobs:
       - name: Check the release workspace
         if: ${{ !cancelled() }}
         run: cargo check --locked --workspace --release
+      - name: Save compiled workload
+        if: ${{ always() && steps.rust-cache.outcome == 'success' && steps.rust-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            target/ci
+            target/release
+          key: ${{ steps.rust-cache.outputs.cache-key }}
       - name: Upload native compilation timings
         if: always()
         uses: actions/upload-artifact@v4

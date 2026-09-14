@@ -76,9 +76,11 @@ class WindowsTokens:
 
     def current_token(self):
         token = wt.HANDLE()
-        # QUERY | DUPLICATE | ASSIGN_PRIMARY, for a restricted copy of ourselves.
+        # QUERY | DUPLICATE | ASSIGN_PRIMARY | ADJUST_DEFAULT. The restricted
+        # handle inherits this access mask; lowering its integrity needs the last
+        # right. The original token is never modified.
         self.require(self.security.OpenProcessToken(
-            self.kernel.GetCurrentProcess(), 0x000B, ctypes.byref(token)))
+            self.kernel.GetCurrentProcess(), 0x008B, ctypes.byref(token)))
         return token
 
     def elevated(self, token):
