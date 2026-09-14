@@ -2,6 +2,11 @@ name: Full native tests
 
 on:
   workflow_dispatch:
+    inputs:
+      windows_diagnostics_run:
+        description: Diagnose a previous Windows runtime without running a release validation
+        type: string
+        default: ""
   workflow_call:
   push:
     # Releases call this entire workflow instead of duplicating branch-push jobs.
@@ -28,9 +33,17 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
+  windows-diagnostics:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.windows_diagnostics_run != '' }}
+    uses: ./.github/workflows/windows-conformance.yml
+    with:
+      runtime_run: ${{ inputs.windows_diagnostics_run }}
+
   native-tests:
+    if: ${{ inputs.windows_diagnostics_run == '' }}
     name: Tests (${{ matrix.os }})
     strategy:
       fail-fast: false

@@ -1,7 +1,7 @@
 name: Windows conformance diagnostics
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       runtime_run:
         description: Release run whose Windows runtime artifact should be diagnosed

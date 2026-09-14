@@ -121,6 +121,9 @@ jobs:
 
   native-tests:
     name: Native tests
+    permissions:
+      contents: read
+      actions: read
     if: ${{ !inputs.windows_only }}
     needs: prepare
     uses: ./.github/workflows/linux-lua.yml
