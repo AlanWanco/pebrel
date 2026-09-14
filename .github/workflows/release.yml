@@ -120,65 +120,10 @@ jobs:
           python3 -m py_compile scripts/stable_release.py scripts/preview_release.py
 
   native-tests:
-    name: Native tests (${{ matrix.platform }})
+    name: Native tests
     if: ${{ !inputs.windows_only }}
     needs: prepare
-    timeout-minutes: 120
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: ubuntu-22.04
-            platform: linux-x64
-            cache: linux
-          - runner: windows-2022
-            platform: windows-x64
-            cache: windows
-          - runner: macos-26
-            platform: macos-arm64
-            cache: macos
-          - runner: macos-26-intel
-            platform: macos-x64
-            cache: macos
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - name: Install native test dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential cmake pkg-config zsh libasound2-dev libdbus-1-dev libudev-dev \
-            libfontconfig1-dev libfreetype6-dev libegl1-mesa-dev libgl1-mesa-dev \
-            libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev libx11-xcb-dev \
-            libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-            libxcb-xinput-dev libxcb-xkb-dev libxi-dev
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: ${{ matrix.cache }}
-          cache-workspace-crates: true
-          cache-on-failure: true
-      - name: Prepare pinned Windows console runtime
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: ./scripts/prepare-windows-runtime.ps1 -Destination assets/windows/conhost
-      - name: Test complete workspace and native harness
-        run: python scripts/ci_native_tests.py
-      - name: Upload native compilation timings
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          compression-level: 0
-          name: native-timings-${{ matrix.platform }}
-          path: target/cargo-timings
-          if-no-files-found: warn
-          retention-days: 14
+    uses: ./.github/workflows/linux-lua.yml
 
   linux:
     name: Linux x86_64 stable package
@@ -210,12 +155,20 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
-      - uses: Swatinem/rust-cache@v2
+      - uses: ./.github/actions/rust-cache
+        id: rust-cache
         with:
-          cache-on-failure: true
-          cache-workspace-crates: true
+          key: release
+          target: target/release
+          legacy-key: linux
       - name: Build GPUI release binary
         run: cargo build --locked --release -p nebula --bin pebrel --features gpui-shell --timings
+      - name: Save compiled workload
+        if: ${{ always() && steps.rust-cache.outcome == 'success' && steps.rust-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: target/release
+          key: ${{ steps.rust-cache.outputs.cache-key }}
       - name: Download pinned linuxdeploy
         env:
           LINUXDEPLOY: ${{ runner.temp }}/linuxdeploy-x86_64.AppImage
@@ -339,12 +292,20 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
-      - uses: Swatinem/rust-cache@v2
+      - uses: ./.github/actions/rust-cache
+        id: rust-cache
         with:
-          cache-on-failure: true
-          cache-workspace-crates: true
+          key: release
+          target: target/release
+          legacy-key: macos
       - name: Build GPUI release binary
         run: cargo build --locked --release -p nebula --bin pebrel --features gpui-shell --timings
+      - name: Save compiled workload
+        if: ${{ always() && steps.rust-cache.outcome == 'success' && steps.rust-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: target/release
+          key: ${{ steps.rust-cache.outputs.cache-key }}
       - name: Import Developer ID signing credentials
         if: ${{ env.MACOS_SIGNING == 'developer-id' }}
         env:
@@ -476,7 +437,7 @@ jobs:
           $run = Invoke-RestMethod -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/runs/$env:VALIDATED_RUN" -Headers $headers -ErrorAction Stop
           if ($run.head_sha -ne $env:SELECTED_COMMIT) { throw 'Validated run source differs.' }
           $jobs = Invoke-RestMethod -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/runs/$env:VALIDATED_RUN/jobs?per_page=100" -Headers $headers -ErrorAction Stop
-          $windows = @($jobs.jobs | Where-Object { $_.name -in @('Windows x64 stable package', 'Native tests (windows-x64)') })
+          $windows = @($jobs.jobs | Where-Object { $_.name -in @('Windows x64 stable package', 'Native tests (windows-x64)') -or $_.name -match 'Tests \(windows-2022\)$' })
           $tests = @($windows.steps | Where-Object { $_.name -in @('Test workspace and native harness', 'Test complete workspace and native harness') -and $_.conclusion -eq 'success' })
           if ($tests.Count -ne 1) { throw 'Prior Windows native tests did not pass.' }
       - uses: actions/checkout@v4
@@ -489,10 +450,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: ./.github/actions/rust-cache
+        id: rust-cache
+        with:
+          key: release
+          target: target/release
+          legacy-key: windows
+        if: ${{ inputs.source_commit == '' }}
       - uses: Swatinem/rust-cache@v2
+        if: ${{ inputs.source_commit != '' }}
         with:
           cache-on-failure: true
-          cache-workspace-crates: true
       - name: Prepare pinned Windows console runtime
         shell: pwsh
         run: |
@@ -503,7 +471,19 @@ jobs:
         run: python scripts/ci_native_tests.py
       - name: Build GPUI release binary
         shell: pwsh
-        run: ./scripts/build-windows-product.ps1 -Configuration release -TargetDirectory target
+        run: |
+          if (Test-Path scripts/build-windows-product.ps1) {
+            ./scripts/build-windows-product.ps1 -Configuration release -TargetDirectory target
+          } else {
+            cargo build --locked --release -p nebula --bin pebrel -p nebula_hook --bin pebrel-hook --features nebula/gpui-shell
+            if ($LASTEXITCODE -ne 0) { throw 'Windows product build failed' }
+          }
+      - name: Save compiled workload
+        if: ${{ always() && steps.rust-cache.outcome == 'success' && steps.rust-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: target/release
+          key: ${{ steps.rust-cache.outputs.cache-key }}
       - name: Retain built Windows runtime before packaging
         uses: actions/upload-artifact@v4
         with:

@@ -72,9 +72,15 @@ class StableReleaseTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[2]
         workflow = (root / ".github/workflows/release.yml").read_text(encoding="utf-8")
         native = workflow.split("  native-tests:\n", 1)[1].split("\n  linux:\n", 1)[0]
-        for platform in ("linux-x64", "windows-x64", "macos-arm64", "macos-x64"):
-            self.assertIn("platform: " + platform, native)
-        self.assertIn("run: python scripts/ci_native_tests.py", native)
+        self.assertIn("uses: ./.github/workflows/linux-lua.yml", native)
+        shared = (root / ".github/workflows/linux-lua.yml").read_text(encoding="utf-8")
+        for platform in ("ubuntu-24.04", "windows-2022", "macos-26", "macos-26-intel"):
+            self.assertIn(platform, shared)
+        self.assertIn("workflow_call:", shared)
+        self.assertIn("run: python scripts/ci_native_tests.py", shared)
+        self.assertIn("cargo check --locked --workspace --release", shared)
+        self.assertIn("tools/i18n-contract/Cargo.toml", shared)
+        self.assertNotIn("continue-on-error", shared)
         self.assertNotIn("continue-on-error", native)
         aggregate = workflow.split("\n  aggregate:\n", 1)[1].split("\n  publish:\n", 1)[0]
         self.assertIn("needs: [prepare, native-tests, linux, macos, windows]", aggregate)

@@ -431,9 +431,16 @@ settings files.
 - **Decision:** Run the complete Rust workspace with the product interaction
   feature enabled in one unfiltered invocation. Run native tests independently
   from package construction; asset aggregation depends on both. Each native
-  platform still runs the complete Python helper and harness suites. Cache keys
-  preserve the existing platform namespace and retain workspace crates. Cargo
-  still validates source, profile and feature fingerprints before reuse.
+  platform still runs the complete Python helper and harness suites. Separate
+  test and release cache keys prevent concurrent jobs from replacing one another's
+  compiled workload. Dependency archives and Git objects are shared within each
+  platform; only the relevant compiled profile is saved per workload. A fallback
+  reads existing combined caches during migration. Cargo still validates source,
+  profile and feature fingerprints before reuse.
+- **Scheduling:** Stable releases call the same complete four-platform native
+  workflow used for contributions, including architecture, translation allocation
+  contracts and the release-workspace check. Release branch pushes omit a duplicate
+  automatic invocation; the release aggregation still requires the called suite.
 - **Test profile:** An explicit CI-only profile removes developer-preview
   optimization and debug information from test compilation, including named
   dependency overrides. It retains debug assertions and overflow checks. The
