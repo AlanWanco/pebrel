@@ -17,6 +17,7 @@ Every release entry is provided in English and Simplified Chinese.
 - Added right-click actions to the Shell launcher for choosing the default Shell and, on Windows, opening the selected Shell inside a new administrator Pebrel window.
 - Added Connect, Edit, and Delete to SSH launcher context menus. Delete uses the existing confirmation and undo flow.
 - Added Trae CLI recognition and its tab icon, plus a dedicated Oh My Pi icon.
+- Added CodeBuddy CLI recognition and its color tab icon, including its official command aliases and the observed Windows/WSL welcome screen.
 
 #### Fixed
 
@@ -50,6 +51,7 @@ Every release entry is provided in English and Simplified Chinese.
 - Shell 启动菜单新增右键操作，可设为默认 Shell；Windows 下还可在新的管理员 Pebrel 窗口内打开所选 Shell。
 - SSH 启动菜单新增“连接、编辑、删除”右键操作；删除沿用已有的确认与撤销流程。
 - 新增 Trae CLI 识别与标签图标，并为 Oh My Pi 加入独立图标。
+- 新增 CodeBuddy CLI 识别和标签彩色图标，覆盖官方命令别名及已观察到的 Windows/WSL 欢迎界面。
 
 #### 修复
 

@@ -12,10 +12,11 @@ pub enum AiLogo {
     Antigravity,
     Trae,
     OhMyPi,
+    CodeBuddy,
 }
 
 impl AiLogo {
-    pub(crate) const ALL: [Self; 8] = [
+    pub(crate) const ALL: [Self; 9] = [
         Self::Claude,
         Self::OpenAi,
         Self::OpenCode,
@@ -24,6 +25,7 @@ impl AiLogo {
         Self::Antigravity,
         Self::Trae,
         Self::OhMyPi,
+        Self::CodeBuddy,
     ];
 
     /// One source catalog for both shells. Official color assets are embedded unchanged.
@@ -38,6 +40,7 @@ impl AiLogo {
             Self::Antigravity => include_bytes!("../../../extra/logo/ai_antigravity.png"),
             Self::Trae => include_bytes!("../../../extra/logo/ai_trae.png"),
             Self::OhMyPi => include_bytes!("../../../extra/logo/ai_omp.png"),
+            Self::CodeBuddy => include_bytes!("../../../extra/logo/ai_codebuddy.png"),
         }
     }
 
@@ -46,7 +49,12 @@ impl AiLogo {
             Self::OpenAi | Self::Pi => false,
             // OpenCode stores a luma map: the frame is white, the inner block gray.
             Self::OpenCode => true,
-            Self::Claude | Self::Grok | Self::Antigravity | Self::Trae | Self::OhMyPi => return,
+            Self::Claude
+            | Self::Grok
+            | Self::Antigravity
+            | Self::Trae
+            | Self::OhMyPi
+            | Self::CodeBuddy => return,
         };
         for pixel in pixels.chunks_exact_mut(4) {
             let luma = if preserve_luma { u16::from(pixel[0]) } else { 255 };
@@ -123,6 +131,7 @@ pub(crate) fn ai_logo_for_program(program: &str) -> Option<AiLogo> {
         AgentKind::Antigravity => Some(AiLogo::Antigravity),
         AgentKind::Trae => Some(AiLogo::Trae),
         AgentKind::OhMyPi => Some(AiLogo::OhMyPi),
+        AgentKind::CodeBuddy => Some(AiLogo::CodeBuddy),
         _ => None,
     }
 }
@@ -144,6 +153,7 @@ pub(crate) fn program_icon(program: &str) -> &'static str {
         "aider" | "goose" | "crush" | "ollama" => "\u{f06a9}",
         "opencode" | "trae-cli" => "\u{f489}",
         "pi" | "omp" | "oh-my-pi" => "\u{f135}",
+        "codebuddy" | "cbc" | "codebuddy-code" | "codebuddy-lowmem" => "\u{f06a9}",
         "git" | "lazygit" => "\u{f418}",
         "vim" | "nvim" | "vi" | "hx" | "nano" => "\u{e62b}",
         "ssh" | "mosh" => "\u{f489}",
@@ -322,7 +332,7 @@ mod tests {
 
     #[test]
     fn vector_sourced_logos_keep_color_and_antialiased_edges_at_tab_sizes() {
-        for logo in [AiLogo::Claude, AiLogo::Trae, AiLogo::OhMyPi] {
+        for logo in [AiLogo::Claude, AiLogo::Trae, AiLogo::OhMyPi, AiLogo::CodeBuddy] {
             let (width, height, source) = decode_png(logo.png(false));
             assert_eq!((width, height), (1024, 1024));
             for size in [16, 18, 24, 27, 36, 48] {
@@ -347,6 +357,22 @@ mod tests {
         assert_eq!(logo_for_command("trae-cli-helper"), None);
         for command in ["omp", "oh-my-pi", r"C:\tools\OMP.EXE"] {
             assert_eq!(logo_for_command(command), Some(AiLogo::OhMyPi));
+        }
+    }
+
+    #[test]
+    fn codebuddy_commands_share_the_color_logo_without_matching_helpers() {
+        for command in [
+            "codebuddy",
+            "cbc",
+            "codebuddy-code",
+            "codebuddy-lowmem",
+            r"C:\tools\CODEBUDDY.CMD --help",
+        ] {
+            assert_eq!(logo_for_command(command), Some(AiLogo::CodeBuddy), "{command}");
+        }
+        for command in ["cbc-prewarm", "codebuddy-helper", "cat codebuddy.md"] {
+            assert_eq!(logo_for_command(command), None, "{command}");
         }
     }
 }
