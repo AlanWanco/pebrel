@@ -570,3 +570,154 @@ settings files.
 - **Revisit condition:** Remove the font fork patch when upstream provides the same
   ownership contract. Revisit native adapters when supported platform interfaces
   provide equivalent process identity and resource-lifetime guarantees.
+
+
+## ADR-0016 — Completion ownership follows the active connection
+
+- **Date:** 2026-09-15
+- **Context:** Launch-time Local/WSL/SSH pools do not follow a typed SSH/WSL
+  connection. History and directory candidates consequently retain the outer
+  pane's source. A remote command-done marker does not mean SSH has exited.
+- **Decision:** Keep one shared completion context for both UI adapters. Record
+  the connection command in the parent scope, then select a separate connection
+  scope for subsequent commands. A known parent shell's prompt restores its scope.
+  Clear ghost/popup candidates, dismissal state, input mirrors, cwd and pending
+  directory requests on scope changes. Every cache/result retains its environment.
+  Local directory history only accepts local reports. Empty/unreadable input and
+  ordinary shell commands do not disable completion or learning.
+- **Shell adapter:** Reuse OSC 1337 SetUserVar. `pebrel_shell` identifies a shell
+  instance at its prompt. `pebrel_command` carries that instance and PSReadLine's
+  accepted command, including simple PowerShell alias resolution. This handles
+  recall and completed input that the key mirror cannot reconstruct. The SSH/WSL
+  execution wrapper reports expanded argv as NUL-separated `pebrel_connection`
+  fields, then restores the owner when the actual process returns. Thus a variable
+  such as `$targetHost` does not merge different destinations, and return inside a
+  compound command does not wait for the next prompt. PowerShell invokes the
+  native application; bash/zsh share one payload and preserve user wrappers and
+  redirected command output. Integration tokens are generated once per shell and remain unexported. Existing local
+  PowerShell/bash/zsh, WSL bash hooks and SSH bootstrap hooks carry these signals.
+  Preserve terminal event order across chunks so a cwd cannot move past the
+  parent-context report. A new shell on the same host keeps that host's history.
+- **Connection identity:** Existing JSONL files/schema remain authoritative. Typed
+  SSH/WSL contexts use a `typed:` SHA-256 key in their respective history category,
+  incorporating the parent history scope and argument boundaries. This separates
+  bastion/config/port routes without reusing an outer SFTP channel for an inner
+  host. Typed-connection path completion stays with the native shell. WSL launch
+  resolves the default distro from Windows' Lxss registry; an unavailable name
+  stays a distinct WSL scope, never Local, and its shell report can supply the
+  actual distro. No new service or dependency is added.
+- **Native completion:** Preserve PSReadLine prediction settings. The existing
+  grid reconciliation yields when shell text occupies the space after the cursor,
+  so native inline predictions keep their own acceptance keys. The Pebrel toggle
+  only controls its candidates; it does not reconfigure the shell editor.
+- **Scope:** This change addresses connection history and candidate ownership.
+  It adds no deletion, exit-status filtering, command blacklist or input-quality
+  learning switch. Existing records without provenance are retained. Return from
+  nested connections is verified with parent shell integration; it is not inferred
+  from an untagged exit code or claimed to cover arbitrary uninstrumented wrappers.
+- **Validation:** Regressions cover local/SSH/WSL entry, parent return, nested
+  reported shells, failed connections, options/ancestry separation, native accepted
+  commands, same-host shells and candidate invalidation. Test delayed directory
+  results against a changed context and parser order at every byte split. Native
+  PowerShell hook tests validate emitted identity, accepted alias text and native
+  prediction preservation. A Windows integration test sends execution/return
+  reports through the production ConPTY and parses the resulting byte stream. Report
+  actual executed checks separately from live remote-server validation.
+
+## ADR-0017 — Scrollback allocation and user scrolling preferences
+
+- **Date:** 2026-09-15
+- **Context:** The first history expansion initialized at least 1,000 full-width
+  rows per grid. Large column reductions retained oversized cell vectors. Users
+  requested lower memory without reducing retained history or scrolling behavior.
+- **Decision:** Keep history limits and ring indexing intact. Initialize ahead by
+  one viewport, bounded to 32–128 rows, and reclaim surplus against the current
+  viewport. During row shrinking, release capacity only when at least 32 cells and
+  half the allocation are unused. Retain enough space for short reflow tails to
+  reach the destination width without immediately growing again.
+- **Cost:** Smaller batches increase ring normalization frequency; vector growth
+  is still geometric. Row reclamation runs synchronously during resize and can
+  increase a large shrink's latency. Allocation reduction is not a working-set or
+  universal throughput guarantee. Existing-history scrolling does not allocate
+  new history rows. Compare identical content, geometry and build profiles.
+- **Preferences:** `nebula_settings` owns additive `scrollback_lines` and
+  `scroll_speed` keys, validation and defaults. History offers seven values from
+  1,000 to 100,000, defaults to 10,000 and is passed only to newly created terminal
+  sessions; changing it cannot truncate open sessions. Wheel speed defaults to
+  1.0 and is bounded to 0.25–4.0. GPUI reads its cached value, retains fractional
+  input and leaves pixel-precise trackpad input, font zoom and completion scrolling
+  independent. Dragging previews speed; release persists it with failure feedback.
+  No smoothing timer, new dependency, worker or terminal persistence format is added.
+- **Validation:** Cover rotated growth/reclamation, threshold boundaries, reflow
+  content/cursor space, preference round trips/reset and actual selector/slider
+  interactions. Record native product, allocation and timing results separately.
+- **Revisit condition:** Reconsider batching or deferred reclamation if measured
+  large-history output or resize latency becomes unacceptable; preserve the same
+  history, ordering and input contracts when evaluating alternatives.
+
+## ADR-0018 — Durable recovery targets and update handoff
+
+- **Status:** Implementation authorized by the maintainer on 2026-09-15; native
+  upgrade acceptance is required before declaring this behavior delivered.
+- **Context:** Launching setup before terminal shutdown races executable-file
+  ownership. A failed snapshot write must be able to cancel exit. A resume command
+  submitted to a PTY is not evidence that the provider opened the requested chat.
+- **Recovery ownership:** The shared v4 session schema gains optional native file
+  and per-pane launch fields. Older snapshots remain readable; per-tab launch is
+  only the compatibility fallback. The terminal owns a durable recovery target
+  separately from native-confirmed foreground identity. Failed verification or
+  resume keeps that target available for retry, while an intentional exit after
+  confirmation clears it. Provider metadata is read on the background executor,
+  within bounded file/output/time budgets and the original execution environment.
+  No conversation text, arbitrary environment map or authentication secret is saved.
+- **Identity:** Pi metadata/header IDs are authoritative; process badges and
+  timestamped filenames are not native IDs. Legacy timestamp IDs require an exact
+  header match. Multiple matching files are an error, never a most-recent-file rule.
+  Bridge process identity orders Pi session switches within one monotonic stream.
+- **Persistence:** Quit freezes only after durable success. Failure leaves windows
+  open and allows later checkpoints to include new native identity. Draft approval
+  covers all participating windows, including drafts changed while prompts are up.
+  Renderer adapters capture window state; shared persistence owns the write rule.
+  Optional window boundaries partition the existing flat tab list in the same
+  atomically replaced session document. Old readers retain that flat list; both
+  immediate and next-start installation use the last durable window partition
+  and reopen the active window last. Invalid partitions cancel installation.
+  This preserves window/tab grouping, not desktop coordinates or window sizes
+  that the current startup policy deliberately derives from preferences.
+- **Download ownership:** Optional predownload grants no permission to install.
+  One process-wide state serves prompts and settings. Generation checks reject
+  cancelled/obsolete progress and completion. Disk metadata is a cache descriptor;
+  reopening and installing reverify the package bytes using the existing official
+  asset, proxy, length and SHA-256 contracts.
+- **Handoff boundary:** A temporary Windows helper must live outside the target
+  installation. It acquires exact process handles, verifies the package, and
+  acknowledges readiness before an explicit durable commit allows exit/install.
+  Setup starts only after participant exit, with a specific validated target
+  directory and without process-name force termination. Kernel lifetime locks
+  block competing installation/startup and cannot remain owned after a crash.
+  Upgrade restore state and installation failures survive process exit. Inno
+  in-place installation is not claimed to provide arbitrary mid-install rollback.
+  Native path normalization, process creation time and hidden helper spawning
+  belong to `platform::update_installation`; transaction state and commit authority
+  remain in the updater. UI startup consults the existing installation capability.
+- **Validation boundary:** Provider bridge execution, serialization/failure cases,
+  actual GPUI lifecycle tests and native simulated upgrades are separate evidence.
+  Metadata compilation alone does not validate restoration or installer behavior.
+  Debug-only local rehearsal shares version eligibility with scheduled updates:
+  it permits an exact-version reinstall, never a downgrade. Such a reinstall
+  must replace the executable bytes; an unchanged executable after setup exits
+  zero is a failure. This does not substitute for a full packaged upgrade test.
+
+## ADR-0019 — Optional release contributor section
+
+- **Status:** Approved by the maintainer on 2026-09-15.
+- **Context:** A release without new PR contributors previously failed validation
+  unless it listed a contributor. This encouraged crediting maintainers or issue
+  reporters in the PR contributor area, contrary to the maintainer's policy.
+- **Decision:** Omit Contributors when there are no PR contributors to credit.
+  When present, the section still requires GitHub links, occurs once after both
+  languages, and precedes SHA256. PR eligibility is checked against GitHub during
+  release review; the local Markdown checker cannot establish it from a link.
+- **Validation:** A bilingual release without Contributors passes. Empty,
+  duplicated, unlinked or misplaced contributor sections fail; language and
+  asset checksum contracts remain required.

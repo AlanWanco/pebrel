@@ -8,8 +8,11 @@ use std::fmt::Write as _;
 use std::fs::{File, OpenOptions};
 use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
+
+mod cache;
+pub(crate) mod handoff;
 use std::time::Duration;
 
 use sha2::{Digest as _, Sha256};
@@ -22,6 +25,8 @@ const LEGACY_RELEASE_DOWNLOAD_PREFIX: &str = "https://github.com/Kuddev/nebula/r
 const MAX_INSTALLER_BYTES: u64 = 512 * 1024 * 1024;
 const DOWNLOAD_CHUNK_BYTES: usize = 64 * 1024;
 
+static NEXT_GENERATION: AtomicU64 = AtomicU64::new(1);
+
 static DOWNLOAD_SESSION: Mutex<Option<DownloadSession>> = Mutex::new(None);
 
 #[derive(Clone, Debug)]
@@ -30,16 +35,18 @@ pub(crate) enum DownloadStatus {
     Downloading { downloaded: u64, total: Option<u64> },
     Ready { path: PathBuf, bytes: u64 },
     Failed(String),
+    InstallFailed(String),
 }
 
 impl DownloadStatus {
     pub(crate) fn is_terminal(&self) -> bool {
-        matches!(self, Self::Ready { .. } | Self::Failed(_))
+        !matches!(self, Self::Downloading { .. })
     }
 }
 
 #[derive(Clone, Debug)]
 struct DownloadSession {
+    generation: u64,
     asset: UpdateAsset,
     status: DownloadStatus,
 }
@@ -56,8 +63,23 @@ pub(crate) fn status(asset: &UpdateAsset) -> DownloadStatus {
         .unwrap_or(DownloadStatus::Idle)
 }
 
-/// 将当前资产切换到下载态。`false` 表示同一资产已经在下载或已经校验完成。
-pub(crate) fn begin(asset: &UpdateAsset) -> Result<bool, String> {
+/// A task owns one generation. Cancellation or a new asset invalidates every
+/// progress/completion write from the old task, even for the same version.
+#[derive(Clone)]
+pub(crate) struct DownloadJob {
+    asset: UpdateAsset,
+    generation: u64,
+}
+
+impl DownloadJob {
+    pub(crate) fn is_current(&self) -> bool {
+        session().as_ref().is_some_and(|current| {
+            current.generation == self.generation && current.asset == self.asset
+        })
+    }
+}
+
+pub(crate) fn begin(asset: &UpdateAsset) -> Result<Option<DownloadJob>, String> {
     validate_asset(asset)?;
     let mut current = session();
     if let Some(existing) = current.as_ref().filter(|existing| existing.asset == *asset)
@@ -66,29 +88,79 @@ pub(crate) fn begin(asset: &UpdateAsset) -> Result<bool, String> {
             DownloadStatus::Downloading { .. } | DownloadStatus::Ready { .. }
         )
     {
-        return Ok(false);
+        return Ok(None);
     }
+    let generation = NEXT_GENERATION.fetch_add(1, Ordering::Relaxed);
     *current = Some(DownloadSession {
+        generation,
         asset: asset.clone(),
         status: DownloadStatus::Downloading { downloaded: 0, total: asset.size },
     });
-    Ok(true)
+    Ok(Some(DownloadJob { asset: asset.clone(), generation }))
 }
 
-/// 在后台执行器线程调用；进度直接写入进程内会话，UI 以低频轮询刷新。
-pub(crate) fn run(asset: UpdateAsset, language: UiLanguage) {
-    let outcome = download_and_verify(&asset, language);
+pub(crate) fn cancel(asset: &UpdateAsset) {
     let mut current = session();
-    let Some(current) = current.as_mut().filter(|current| current.asset == asset) else {
+    if current.as_ref().is_some_and(|current| current.asset == *asset) {
+        *current = None;
+    }
+}
+
+/// Runs off the UI thread. Cached files are always reverified before Ready.
+pub(crate) fn run(job: DownloadJob, language: UiLanguage) {
+    if !job.is_current() {
         return;
-    };
-    current.status = match outcome {
+    }
+    let outcome = download_and_verify(&job.asset, language, Some(&job));
+    let status = match outcome {
         Ok((path, bytes)) => DownloadStatus::Ready { path, bytes },
         Err(error) => DownloadStatus::Failed(error),
     };
+    {
+        let mut current = session();
+        let Some(current) = current.as_mut().filter(|current| current.generation == job.generation)
+        else {
+            return;
+        };
+        current.status = status.clone();
+    }
+    // File sync can take seconds on a busy disk. UI status polling never waits
+    // for it; the cache writer rechecks ownership separately.
+    if let Err(error) = cache::save_job(&job, &status) {
+        log::warn!("Could not persist update download state: {error}");
+    }
 }
 
-pub(crate) fn launch_ready(asset: &UpdateAsset) -> Result<(), String> {
+/// Restore local update state without requiring a successful network check.
+/// Call once on a background executor; a user-started task always takes priority.
+pub(crate) fn hydrate() {
+    let cached = handoff::failed_update()
+        .map(|(asset, error)| (asset, DownloadStatus::InstallFailed(error)))
+        .or_else(cache::load);
+    let Some((asset, status)) = cached else {
+        return;
+    };
+    let mut current = session();
+    if current.is_none() {
+        *current = Some(DownloadSession {
+            generation: NEXT_GENERATION.fetch_add(1, Ordering::Relaxed),
+            asset,
+            status,
+        });
+    }
+}
+
+pub(crate) fn cached_asset() -> Option<UpdateAsset> {
+    session().as_ref().map(|current| current.asset.clone())
+}
+
+/// A failure that happened after "later" is new information. Once its details
+/// were viewed/dismissed, normal reminder suppression applies again.
+pub(crate) fn installation_failure_unseen(prompt_state: &Path) -> bool {
+    handoff::failure_unseen(prompt_state) || cache::failure_unseen(prompt_state)
+}
+
+pub(crate) fn ready_path(asset: &UpdateAsset) -> Result<PathBuf, String> {
     let path = match status(asset) {
         DownloadStatus::Ready { path, .. } => path,
         _ => return Err("安装包尚未下载并通过校验".to_owned()),
@@ -101,32 +173,13 @@ pub(crate) fn launch_ready(asset: &UpdateAsset) -> Result<(), String> {
     // 弹窗等待用户确认期间被替换后仍直接执行。
     verify_file(&path, asset).map_err(|error| format!("安装前重新校验失败：{error}"))?;
 
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt as _;
-
-        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
-        Command::new(&path)
-            // 安装向导必须可见；这里只切断旧进程的标准流并让安装器独立存活。
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .creation_flags(CREATE_NEW_PROCESS_GROUP)
-            .spawn()
-            .map_err(|error| format!("无法启动更新安装包：{error}"))?;
-        Ok(())
-    }
-
-    #[cfg(not(windows))]
-    {
-        let _ = path;
-        Err("当前平台暂不支持应用内安装更新".to_owned())
-    }
+    Ok(path)
 }
 
 fn download_and_verify(
     asset: &UpdateAsset,
     language: UiLanguage,
+    job: Option<&DownloadJob>,
 ) -> Result<(PathBuf, u64), String> {
     validate_asset(asset)?;
     let (partial_path, final_path) = download_paths(asset)?;
@@ -140,7 +193,10 @@ fn download_and_verify(
         return Ok((final_path, bytes));
     }
 
-    let result = download_to_partial(asset, &partial_path, language).and_then(|bytes| {
+    let result = download_to_partial(asset, &partial_path, language, job).and_then(|bytes| {
+        if job.is_some_and(|job| !job.is_current()) {
+            return Err("Download cancelled".into());
+        }
         crate::atomic_file::replace(&partial_path, &final_path)
             .map_err(|error| format!("无法保存已校验的更新安装包：{error}"))?;
         Ok((final_path.clone(), bytes))
@@ -155,19 +211,34 @@ fn download_to_partial(
     asset: &UpdateAsset,
     partial_path: &Path,
     language: UiLanguage,
+    job: Option<&DownloadJob>,
 ) -> Result<u64, String> {
+    #[cfg(feature = "update-test-source")]
+    if crate::update_check::test_source::origin()?.is_some() {
+        let agent = crate::update_check::test_source::agent(Duration::from_secs(15 * 60));
+        return download_with_job(asset, partial_path, language, &agent, job);
+    }
     let agent = crate::update_proxy::agent(&asset.download_url, Duration::from_secs(15 * 60));
-    download_with_agent(asset, partial_path, language, &agent)
+    download_with_job(asset, partial_path, language, &agent, job)
 }
 
-fn download_with_agent(
+fn download_with_job(
     asset: &UpdateAsset,
     partial_path: &Path,
     language: UiLanguage,
     agent: &ureq::Agent,
+    job: Option<&DownloadJob>,
 ) -> Result<u64, String> {
+    if job.is_some_and(|job| !job.is_current()) {
+        return Err("Download cancelled".into());
+    }
+    let download_url = asset.download_url.clone();
+    #[cfg(feature = "update-test-source")]
+    let download_url = crate::update_check::test_source::origin()?
+        .map(|origin| format!("{origin}/{}", asset.name))
+        .unwrap_or(download_url);
     let mut response = agent
-        .get(&asset.download_url)
+        .get(&download_url)
         .header("User-Agent", "pebrel-updater")
         .header("Accept", "application/octet-stream")
         .header("Accept-Encoding", "identity")
@@ -197,6 +268,9 @@ fn download_with_agent(
     let mut pe_header = Vec::with_capacity(2);
     let mut buffer = vec![0_u8; DOWNLOAD_CHUNK_BYTES];
     loop {
+        if job.is_some_and(|job| !job.is_current()) {
+            return Err("Download cancelled".into());
+        }
         let read =
             reader.read(&mut buffer).map_err(|error| network_error_text(error.into(), language))?;
         if read == 0 {
@@ -214,12 +288,22 @@ fn download_with_agent(
         output
             .write_all(&buffer[..read])
             .map_err(|error| format!("写入更新临时文件失败：{error}"))?;
-        set_progress(asset, downloaded, total);
+        set_progress(job, downloaded, total);
     }
     output.sync_all().map_err(|error| format!("同步更新临时文件失败：{error}"))?;
 
     verify_download(downloaded, &pe_header, hasher.finalize(), asset)?;
     Ok(downloaded)
+}
+
+#[cfg(test)]
+fn download_with_agent(
+    asset: &UpdateAsset,
+    partial_path: &Path,
+    language: UiLanguage,
+    agent: &ureq::Agent,
+) -> Result<u64, String> {
+    download_with_job(asset, partial_path, language, agent, None)
 }
 
 /// 网络错误用稳定类别解释；不把代理 URL、认证信息或 CDN 查询串拼进 UI。
@@ -301,9 +385,12 @@ fn verify_download(
     Ok(())
 }
 
-fn set_progress(asset: &UpdateAsset, downloaded: u64, total: Option<u64>) {
+fn set_progress(job: Option<&DownloadJob>, downloaded: u64, total: Option<u64>) {
+    let Some(job) = job else {
+        return;
+    };
     let mut current = session();
-    if let Some(current) = current.as_mut().filter(|current| current.asset == *asset) {
+    if let Some(current) = current.as_mut().filter(|current| current.generation == job.generation) {
         current.status = DownloadStatus::Downloading { downloaded, total };
     }
 }
@@ -362,6 +449,31 @@ mod tests {
         LEGACY_RELEASE_DOWNLOAD_PREFIX, MAX_INSTALLER_BYTES, RELEASE_DOWNLOAD_PREFIX, UpdateAsset,
         validate_windows_asset_contract, verify_download,
     };
+
+    #[cfg(windows)]
+    #[test]
+    fn cancel_then_retry_rejects_old_progress_and_old_completion() {
+        let asset = branded_asset("Pebrel");
+        super::cancel(&asset);
+        let old = super::begin(&asset).unwrap().unwrap();
+        assert!(super::begin(&asset).unwrap().is_none(), "duplicate click owns no second task");
+        super::cancel(&asset);
+        let current = super::begin(&asset).unwrap().unwrap();
+        super::set_progress(Some(&old), 100, Some(200));
+        super::run(old.clone(), crate::i18n::UiLanguage::EnUs);
+        assert!(!old.is_current());
+        assert!(current.is_current());
+        assert!(matches!(
+            super::status(&asset),
+            super::DownloadStatus::Downloading { downloaded: 0, .. }
+        ));
+        super::set_progress(Some(&current), 25, Some(200));
+        assert!(matches!(
+            super::status(&asset),
+            super::DownloadStatus::Downloading { downloaded: 25, .. }
+        ));
+        super::cancel(&asset);
+    }
 
     #[test]
     fn proxy_download_follows_redirect_and_verifies_the_streamed_installer() {

@@ -7,6 +7,15 @@ pub(super) fn localized_select_labels(
     values: &[&'static str],
     language: crate::display::UiLanguage,
 ) -> Vec<SharedString> {
+    if key == "scrollback_lines" {
+        return values
+            .iter()
+            .map(|value| {
+                let number = value.parse::<usize>().expect("validated scrollback choice");
+                format!("{},000", number / 1_000).into()
+            })
+            .collect();
+    }
     let labels: Vec<&'static str> = match key {
         "language" => nebula_settings::LanguagePref::ALL
             .iter()

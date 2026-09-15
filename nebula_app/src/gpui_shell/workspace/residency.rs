@@ -1002,12 +1002,22 @@ impl NebulaWorkspace {
         {
             return false;
         }
-        super::windowing::save_current_window_session(
+        if let Err(error) = super::windowing::save_current_window_session(
             self.runtime_window_id,
             self.snapshot_session(cx),
             super::session_persistence::SaveReason::Checkpoint,
             cx,
-        );
+        ) {
+            log::warn!("Could not checkpoint before hiding window: {error}");
+            let language = crate::gpui_shell::config::ui_language(cx);
+            crate::gpui_shell::toast::banner(
+                window,
+                cx,
+                crate::display::ToastKind::Warning,
+                language.text(crate::i18n::Message::SessionSaveFailed),
+            );
+            return true;
+        }
         crate::gpui_shell::hide_native_window(window);
         self.window_hidden = true;
         true

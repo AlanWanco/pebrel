@@ -246,7 +246,7 @@ pub(crate) fn spawn(
     }
 }
 
-fn execute(
+pub(crate) fn execute(
     context: PaneExecContext,
     cwd: String,
     argv: Vec<String>,

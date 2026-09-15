@@ -25,6 +25,11 @@ pub use custom_theme::{
 };
 mod language;
 mod quick_terminal;
+mod scrolling;
+pub use scrolling::{
+    DEFAULT_SCROLL_SPEED, DEFAULT_SCROLLBACK_LINES, MAX_SCROLL_SPEED, MIN_SCROLL_SPEED,
+    SCROLL_SPEED_STEP, SCROLLBACK_VALUES, normalize_scroll_speed,
+};
 mod themes;
 pub use language::{LanguageInfo, LanguagePref};
 pub use quick_terminal::{QuickTerminalMode, QuickTerminalSize};
@@ -959,6 +964,10 @@ pub struct RuntimeSettings {
     pub cursor_shape: Option<CursorShapeName>,
     pub cursor_blink: Option<bool>,
     pub copy_on_select: bool,
+    /// Maximum retained history for new terminals, without altering open sessions.
+    pub scrollback_lines: usize,
+    /// Wheel multiplier; pixel-precise trackpad input is independent.
+    pub scroll_speed: f32,
     /// GUI override for mouse.focus_follows_mouse in TOML; absent there too means false.
     pub focus_follows_mouse: Option<bool>,
     /// Preserve the existing dimming of inactive split panes unless explicitly disabled.
@@ -999,6 +1008,8 @@ pub struct RuntimeSettings {
     /// Check GitHub Releases after startup. Manual checks remain available
     /// from the Application settings page when this is disabled.
     pub auto_check_updates: bool,
+    /// Optional background package download; never grants install permission.
+    pub auto_download_updates: bool,
     pub keep_session: bool,
     /// Start the first window hidden when a system tray is available and enabled.
     pub silent_start: bool,
@@ -1120,6 +1131,10 @@ impl RuntimeSettings {
             cursor_shape: raw.value("cursor_shape").and_then(CursorShapeName::from_settings),
             cursor_blink: raw.bool_on("cursor_blink"),
             copy_on_select: raw.bool_on("copy_on_select").unwrap_or(false),
+            scrollback_lines: scrolling::scrollback_lines(raw),
+            scroll_speed: normalize_scroll_speed(
+                raw.f32("scroll_speed").unwrap_or(DEFAULT_SCROLL_SPEED),
+            ),
             focus_follows_mouse: raw.bool_on("focus_follows_mouse"),
             dim_inactive_panes: raw.bool_on("dim_inactive_panes").unwrap_or(true),
             multiline_paste_confirm: raw.bool_on("multiline_paste_confirm").unwrap_or(true),
@@ -1164,6 +1179,7 @@ impl RuntimeSettings {
             ai_toasts: raw.bool_on("ai_toasts").unwrap_or(true),
             fetch: raw.bool_on("fetch").unwrap_or(false),
             auto_check_updates: raw.bool_on("auto_check_updates").unwrap_or(true),
+            auto_download_updates: raw.bool_on("auto_download_updates").unwrap_or(false),
             keep_session: raw.bool_on("keep_session").unwrap_or(false),
             silent_start: raw.bool_on("silent_start").unwrap_or(false),
             restore_session: raw.bool_on("restore_session").unwrap_or(true),

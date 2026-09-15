@@ -49,6 +49,19 @@ pub fn interactive_args(id: &str) -> Vec<String> {
     }
 }
 
+/// Preserve the actual Windows PTY default in a pane's durable launch snapshot.
+/// Unix keeps an unspecified shell unspecified so the login-shell policy applies.
+pub(crate) fn snapshot_shell(
+    configured: Option<nebula_terminal::tty::Shell>,
+) -> Option<nebula_terminal::tty::Shell> {
+    #[cfg(windows)]
+    {
+        configured.or_else(|| Some(nebula_terminal::tty::resolved_default_shell()))
+    }
+    #[cfg(not(windows))]
+    configured
+}
+
 #[cfg(target_os = "macos")]
 const fn default_unix_shell_id() -> &'static str {
     "zsh"
@@ -87,6 +100,25 @@ pub fn uses_legacy_pty_bootstrap(id: &str) -> bool {
     {
         let _ = id;
         false
+    }
+}
+
+/// Resolve the same default distro that wsl.exe launches, without starting a
+/// subprocess on the pane-spawn path.
+pub(crate) fn default_wsl_distro() -> Option<String> {
+    #[cfg(windows)]
+    {
+        use winreg::{RegKey, enums::HKEY_CURRENT_USER};
+        let lxss = RegKey::predef(HKEY_CURRENT_USER)
+            .open_subkey(r"Software\Microsoft\Windows\CurrentVersion\Lxss")
+            .ok()?;
+        let guid: String = lxss.get_value("DefaultDistribution").ok()?;
+        let distro: String = lxss.open_subkey(guid).ok()?.get_value("DistributionName").ok()?;
+        (!distro.is_empty()).then_some(distro)
+    }
+    #[cfg(not(windows))]
+    {
+        None
     }
 }
 

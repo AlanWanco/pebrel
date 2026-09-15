@@ -132,6 +132,13 @@ impl SettingsPane {
                 help("cell_width_mode", language),
                 cx,
             ))
+            .child(self.select_row(
+                "scrollback_lines",
+                language.text(crate::i18n::Message::SettingsScrollingHistory),
+                language.text(crate::i18n::Message::SettingsScrollingHistoryDescription),
+                cx,
+            ))
+            .child(self.scroll_speed_row(cx))
             .child(self.switch_row(
                 "fetch",
                 language.pick("启动欢迎信息", "Startup system information"),

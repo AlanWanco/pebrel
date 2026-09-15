@@ -339,6 +339,10 @@ pub struct AiHookEvent {
     /// `thread-id`（即 rollout 文件名尾部的 uuid，`codex resume` 认它）。
     /// 冷恢复接续对话的唯一事实源——文件系统扫描只能靠 mtime 猜。
     pub session_id: Option<String>,
+    /// Exact native file, never a filename-derived or process badge ID.
+    pub session_file: Option<String>,
+    /// Bridge process lifetime identity; orders switches between native sessions.
+    pub bridge_instance: Option<String>,
     /// Provider 给出的幂等身份；只在同一 source/session/pane 内去重。
     pub event_id: Option<String>,
     /// Nebula bridge 盖的单调序号（不是 provider 原生顺序）。没有时只承诺
@@ -377,7 +381,13 @@ impl AiHookEvent {
     fn stream_key(&self, pane: Option<u64>) -> AiHookStreamKey {
         AiHookStreamKey {
             source: self.source.clone(),
-            session_id: self.session_id.clone(),
+            // Pi switches conversations inside one process. Its bridge sequence
+            // orders that whole owner lifetime, including session changes.
+            session_id: if self.source == "pi" && self.bridge_instance.is_some() {
+                self.bridge_instance.clone()
+            } else {
+                self.session_id.clone()
+            },
             pane,
             agent_pid: self.agent_pid,
         }
@@ -761,6 +771,18 @@ fn parse_envelope(bytes: &[u8]) -> Option<AiHookEvent> {
         kind,
         message,
         session_id,
+        session_file: payload
+            .get("session_file")
+            .and_then(Value::as_str)
+            .filter(|path| crate::session::valid_native_session_file(path))
+            .map(str::to_owned),
+        bridge_instance: payload
+            .get("bridge_instance")
+            .and_then(Value::as_str)
+            .filter(|id| {
+                id.len() <= 128 && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+            })
+            .map(str::to_owned),
         event_id,
         bridge_sequence,
         occurred_at_ms,
@@ -1335,6 +1357,26 @@ mod remote_tests {
             finished.verdict(&event("{\"kind\":\"tool-complete\",\"session_id\":\"v\"}"), 3),
             GateVerdict::UnorderedAfterDone
         );
+    }
+
+    #[test]
+    fn late_pi_event_cannot_restore_the_previous_native_session_after_a_switch() {
+        let event = |id: &str, sequence: u64| {
+            let body = serde_json::json!({"kind":"session-start", "session_id":id,
+                "bridge_instance":"same-process", "bridge_sequence":sequence});
+            parse_remote_envelope(
+                format!("nebula-hook/1 source=pi pane=7\n{body}").as_bytes(),
+                Some(7),
+            )
+            .unwrap()
+        };
+        let mut gate = AiHookEventGate::default();
+        assert!(gate.accept(&event("first", 1), 7));
+        assert!(gate.accept(&event("second", 3), 7));
+        assert_eq!(gate.verdict(&event("first", 2), 7), GateVerdict::StaleSequence);
+        let mut next_process = event("third", 1);
+        next_process.bridge_instance = Some("next-process".into());
+        assert!(gate.accept(&next_process, 7));
     }
 
     #[test]

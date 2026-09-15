@@ -6,6 +6,12 @@
     "en_us": "English"
   },
   "settings": {
+    "scrolling": {
+      "history": "Scrollback lines",
+      "history_description": "History lines retained per terminal. Applies to new terminals only.",
+      "speed": "Scrolling speed",
+      "speed_description": "Mouse wheel multiplier. Takes effect immediately; trackpad scrolling is unchanged."
+    },
     "sidebar": {
       "application": "Application",
       "appearance": "Appearance",
@@ -679,6 +685,10 @@
     "too_large": "The background image exceeds the memory limit. Choose a smaller image."
   },
   "update": {
+    "installation_failed": "Update installation failed",
+    "installation_failed_hint": "The update did not complete. Your original session snapshot is retained. Review the error, recheck the package, then confirm installation again.",
+    "recheck_package": "Recheck package",
+    "view_details": "View details",
     "download": {
       "dns": "Could not resolve the update server or proxy address. Check your network and proxy settings, then retry.",
       "tls": "Could not establish a secure connection for the update. Check your system clock and whether a proxy is intercepting TLS.",
@@ -688,7 +698,16 @@
       "proxy": "Could not connect through the update proxy. Check its address, protocol and authentication, then retry.",
       "http": "The update server returned HTTP {status}. Retry later or download the installer from the Releases page.",
       "network": "Could not download the update. Check your network and proxy settings, or use the Releases page."
-    }
+    },
+    "auto_download": "Download updates in the background",
+    "stop_download": "Stop download",
+    "restart_install": "Restart and install",
+    "install_next_launch": "Install on next launch",
+    "ready_hint": "The update is ready. Pebrel will save your workspace and exit before installation, then reopen it.",
+    "later": "Later",
+    "prepare_failed": "Could not prepare the update: {error}. Pebrel will stay open.",
+    "draft_changed": "A document changed while preparing to exit. Save or discard the latest changes, then retry.",
+    "in_progress": "This installation is being updated. Wait for the update to finish; Pebrel will reopen automatically."
   },
   "files.search_failed": "Unable to complete search",
   "files.search_running": "Searching…",
@@ -701,5 +720,12 @@
   "files.search_limit_reason": "The search reached a limit or some directories could not be read.",
   "files.search_narrow": "Choose a smaller directory or use a more specific query.",
   "files.search_empty": "No matching files",
-  "files.search_empty_reason": "No files or folders match this query in the current directory."
+  "files.search_empty_reason": "No files or folders match this query in the current directory.",
+  "session": {
+    "save_failed": "Could not save the workspace. The application will stay open. Check free space and folder permissions, then retry.",
+    "identity_pending": "Some running AI sessions have not reported a recovery identity. Try again after their startup finishes.",
+    "restore_failed": "This AI conversation could not be restored. Its saved target is preserved. Use Retry recovery in the tab menu, or locate it in session history.",
+    "restore_ambiguous": "More than one native session file matches this conversation. The saved target is preserved; choose the exact conversation from session history.",
+    "retry": "Retry session recovery"
+  }
 }

@@ -46,7 +46,7 @@ class PebrelBrandingTests(unittest.TestCase):
             "AppName=Pebrel",
             "AppId={{61022144-7D0A-4E54-94F2-C329A8F58656}",
             "DefaultDirName={code:DefaultInstallDir}",
-            "UsePreviousAppDir=no",
+            "UsePreviousAppDir=yes",
             r"Software\Pebrel",
             r"App Paths\pebrel.exe",
             r"shell\Pebrel",

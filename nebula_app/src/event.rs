@@ -2845,10 +2845,7 @@ impl input::Processor<EventProxy, ActionContext<'_, Notifier, EventProxy>> {
                         if let Some(rest) = title.strip_prefix("NEBULA|") {
                             let mut parts = rest.splitn(3, '|');
                             let cwd = parts.next().unwrap_or("").to_owned();
-                            if self.ctx.nebula_state.cwd != cwd {
-                                self.ctx.nebula_state.cwd.clone_from(&cwd);
-                                self.ctx.display.nebula_record_directory(&cwd);
-                            }
+                            self.ctx.display.nebula_report_cwd(self.ctx.nebula_state, &cwd);
                             self.ctx.nebula_state.branch = parts.next().unwrap_or("").to_owned();
                             if let Some(program) = parts.next() {
                                 self.ctx.nebula_state.running_program = if program.is_empty() {
@@ -2895,9 +2892,7 @@ impl input::Processor<EventProxy, ActionContext<'_, Notifier, EventProxy>> {
                         // Standard OSC 7 / 9;9 directory report. Update cwd only,
                         // leaving any branch captured from a `NEBULA|cwd|branch`
                         // title intact, so the two channels coexist.
-                        if self.ctx.nebula_state.cwd != cwd {
-                            self.ctx.nebula_state.cwd.clone_from(&cwd);
-                            self.ctx.display.nebula_record_directory(&cwd);
+                        if self.ctx.display.nebula_report_cwd(self.ctx.nebula_state, &cwd) {
                             *self.ctx.dirty = true;
                         }
                     },
@@ -3060,8 +3055,7 @@ impl input::Processor<EventProxy, ActionContext<'_, Notifier, EventProxy>> {
                         }
                     },
                     TerminalEvent::UserVar { name, value } => {
-                        // `nebula_ai_query`（`#` 自然语言转命令）是阶段二的
-                        // 消费者；通道先贯通，其余变量目前无人认领。
+                        self.ctx.nebula_state.completion_shell_report(&name, &value);
                         if name == "nebula_ai_query" {
                             info!(
                                 "assistant: query channel received ({} chars)",

@@ -22,6 +22,9 @@ pub const RELEASES_PAGE: &str = "https://github.com/Kuddev/pebrel/releases";
 const UPDATE_STATE_FILE: &str = "update_state.json";
 const REMIND_LATER_SECS: u64 = 3 * 24 * 60 * 60;
 
+#[cfg(feature = "update-test-source")]
+pub(crate) mod test_source;
+
 static UPDATE_STATE_LOCK: Mutex<()> = Mutex::new(());
 
 /// 自动提示状态独立于通用设置文件，避免后台版本检查改写用户设置正文。
@@ -69,7 +72,7 @@ impl UpdatePromptState {
 
 /// 可由当前平台直接下载的 release 资产。名称与架构在解析 API 时已精确匹配，
 /// 下载器仍会再次验证 URL、文件名、大小与 SHA-256，避免 UI 数据被误用。
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct UpdateAsset {
     pub version: String,
     pub name: String,
@@ -151,15 +154,37 @@ pub fn spawn_once(proxy: EventLoopProxy<Event>) {
 /// 轻通知，再由用户决定是否打开更新详情弹窗。
 #[cfg(feature = "gpui-shell")]
 pub fn spawn_gpui_once(sender: std::sync::mpsc::Sender<crate::gpui_shell::GpuiShellEvent>) {
-    if !nebula_settings::RuntimeSettings::load().auto_check_updates {
-        log::debug!("update-check: automatic checks disabled in settings");
-        return;
-    }
     static STARTED: AtomicBool = AtomicBool::new(false);
     if STARTED.swap(true, Ordering::SeqCst) {
         return;
     }
     let spawned = std::thread::Builder::new().name("update-check-gpui".into()).spawn(move || {
+        crate::update_download::hydrate();
+        if let Some(asset) = crate::update_download::cached_asset() {
+            let failed = matches!(
+                crate::update_download::status(&asset),
+                crate::update_download::DownloadStatus::InstallFailed(_)
+            );
+            if (failed || can_install_version(&asset.version).unwrap_or(false))
+                && (should_prompt(&asset.version)
+                    || (failed
+                        && crate::update_download::installation_failure_unseen(
+                            &update_state_path(),
+                        )))
+            {
+                let _ = sender.send(crate::gpui_shell::GpuiShellEvent::UpdateAvailable(
+                    UpdateCheckResult {
+                        current: env!("CARGO_PKG_VERSION").into(),
+                        latest: asset.version.clone(),
+                        update_available: true,
+                        asset: Some(asset),
+                    },
+                ));
+            }
+        }
+        if !nebula_settings::RuntimeSettings::load().auto_check_updates {
+            return;
+        }
         // 对齐旧壳：首屏和首个终端会话稳定后再联网。
         std::thread::sleep(Duration::from_secs(12));
         let result = match check_now() {
@@ -189,8 +214,9 @@ pub fn spawn_gpui_once(sender: std::sync::mpsc::Sender<crate::gpui_shell::GpuiSh
 pub fn check_now() -> Result<UpdateCheckResult, String> {
     let release = fetch_latest_release()?;
     let current = env!("CARGO_PKG_VERSION").to_owned();
+    let update_available = can_install_version(&release.version)?;
     Ok(UpdateCheckResult {
-        update_available: is_newer(&release.version, &current),
+        update_available,
         current,
         latest: release.version,
         asset: release.asset,
@@ -258,6 +284,12 @@ pub fn skip_version(version: &str) -> Result<(), String> {
 }
 
 fn fetch_latest_release() -> Result<LatestRelease, String> {
+    #[cfg(feature = "update-test-source")]
+    if let Some(origin) = test_source::origin()? {
+        let url = format!("{origin}/release.json");
+        let agent = test_source::agent(Duration::from_secs(10));
+        return fetch_release_with_agent(&agent, &url);
+    }
     let agent = crate::update_proxy::agent(RELEASES_API, Duration::from_secs(10));
     fetch_release_with_agent(&agent, RELEASES_API)
 }
@@ -344,9 +376,22 @@ fn checksum_from_release_body(body: &str, asset_name: &str) -> Option<String> {
     })
 }
 
+/// Discovery and scheduled installation share one version policy. The explicit
+/// debug rehearsal may reinstall exactly this version, but never downgrade it.
+pub(crate) fn can_install_version(latest: &str) -> Result<bool, String> {
+    let rehearsal = false;
+    #[cfg(feature = "update-test-source")]
+    let rehearsal = rehearsal || test_source::origin()?.is_some();
+    Ok(version_is_installable(latest, env!("CARGO_PKG_VERSION"), rehearsal))
+}
+
+fn version_is_installable(latest: &str, current: &str, rehearsal: bool) -> bool {
+    is_newer(latest, current) || (rehearsal && latest == current)
+}
+
 /// Compare dotted numeric prefixes ("0.7.10" > "0.7.9"); anything after the
 /// digits in a segment is ignored, so "1.0.0-rc1" reads as `[1, 0, 0]`.
-fn is_newer(latest: &str, current: &str) -> bool {
+pub(crate) fn is_newer(latest: &str, current: &str) -> bool {
     fn segments(version: &str) -> Vec<u64> {
         version
             .split('.')
@@ -391,6 +436,17 @@ mod tests {
         GitHubReleaseAsset, REMIND_LATER_SECS, UpdatePromptState, checksum_from_release_body,
         is_newer, parse_latest_release, select_windows_x64_installer, windows_x64_installer_names,
     };
+
+    #[test]
+    fn rehearsal_permits_only_exact_reinstall_or_upgrade() {
+        for rehearsal in [false, true] {
+            assert!(super::version_is_installable("1.9.0", "1.8.0", rehearsal));
+            assert!(!super::version_is_installable("1.7.0", "1.8.0", rehearsal));
+            assert!(!super::version_is_installable("1.8.0-rc1", "1.8.0", rehearsal));
+        }
+        assert!(!super::version_is_installable("1.8.0", "1.8.0", false));
+        assert!(super::version_is_installable("1.8.0", "1.8.0", true));
+    }
 
     #[test]
     fn version_comparison_is_numeric_per_segment() {
