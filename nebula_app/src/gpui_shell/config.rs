@@ -74,6 +74,8 @@ pub struct Settings {
     pub cursor_blink: Option<bool>,
     /// 选区完成即复制（旧壳 `copy_on_select` 设置）。
     pub copy_on_select: bool,
+    pub scrollback_lines: usize,
+    pub scroll_speed: f32,
     /// Pointer handlers and split rendering only read these cached preferences.
     pub focus_follows_mouse: bool,
     pub dim_inactive_panes: bool,
@@ -266,6 +268,8 @@ impl Settings {
             }),
             cursor_blink: runtime.cursor_blink,
             copy_on_select: runtime.copy_on_select,
+            scrollback_lines: runtime.scrollback_lines,
+            scroll_speed: runtime.scroll_speed,
             focus_follows_mouse: runtime
                 .focus_follows_mouse
                 .unwrap_or(raw.mouse.focus_follows_mouse),
@@ -316,6 +320,7 @@ impl Settings {
     /// 引擎 Term 的启动配置（默认光标形状/闪烁来自运行时设置）。
     pub fn term_config(&self) -> nebula_terminal::term::Config {
         let mut config = nebula_terminal::term::Config::default();
+        config.scrolling_history = self.scrollback_lines;
         if let Some(shape) = self.cursor_shape {
             config.default_cursor_style.shape = shape;
         }

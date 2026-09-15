@@ -623,3 +623,34 @@ settings files.
   prediction preservation. A Windows integration test sends execution/return
   reports through the production ConPTY and parses the resulting byte stream. Report
   actual executed checks separately from live remote-server validation.
+
+## ADR-0017 — Scrollback allocation and user scrolling preferences
+
+- **Date:** 2026-09-15
+- **Context:** The first history expansion initialized at least 1,000 full-width
+  rows per grid. Large column reductions retained oversized cell vectors. Users
+  requested lower memory without reducing retained history or scrolling behavior.
+- **Decision:** Keep history limits and ring indexing intact. Initialize ahead by
+  one viewport, bounded to 32–128 rows, and reclaim surplus against the current
+  viewport. During row shrinking, release capacity only when at least 32 cells and
+  half the allocation are unused. Retain enough space for short reflow tails to
+  reach the destination width without immediately growing again.
+- **Cost:** Smaller batches increase ring normalization frequency; vector growth
+  is still geometric. Row reclamation runs synchronously during resize and can
+  increase a large shrink's latency. Allocation reduction is not a working-set or
+  universal throughput guarantee. Existing-history scrolling does not allocate
+  new history rows. Compare identical content, geometry and build profiles.
+- **Preferences:** `nebula_settings` owns additive `scrollback_lines` and
+  `scroll_speed` keys, validation and defaults. History offers seven values from
+  1,000 to 100,000, defaults to 10,000 and is passed only to newly created terminal
+  sessions; changing it cannot truncate open sessions. Wheel speed defaults to
+  1.0 and is bounded to 0.25–4.0. GPUI reads its cached value, retains fractional
+  input and leaves pixel-precise trackpad input, font zoom and completion scrolling
+  independent. Dragging previews speed; release persists it with failure feedback.
+  No smoothing timer, new dependency, worker or terminal persistence format is added.
+- **Validation:** Cover rotated growth/reclamation, threshold boundaries, reflow
+  content/cursor space, preference round trips/reset and actual selector/slider
+  interactions. Record native product, allocation and timing results separately.
+- **Revisit condition:** Reconsider batching or deferred reclamation if measured
+  large-history output or resize latency becomes unacceptable; preserve the same
+  history, ordering and input contracts when evaluating alternatives.

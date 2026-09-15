@@ -47,6 +47,7 @@ mod design;
 mod font_picker;
 mod providers;
 mod reset;
+mod scrolling;
 mod search_header;
 mod setting_help;
 mod theme_picker;
@@ -136,6 +137,8 @@ pub struct SettingsPane {
     pub(super) theme_foreground_picker: theme_foreground::ThemeForegroundState,
     opacity_slider: Entity<SliderState>,
     wallpaper_opacity_slider: Entity<SliderState>,
+    scroll_speed_slider: Entity<SliderState>,
+    scroll_speed_focus: FocusHandle,
     pub(super) proxy_url_input: Entity<InputState>,
     pub(super) proxy_protocol_select: SharedSelect,
     pub(super) proxy_test_seq: u64,
@@ -669,6 +672,7 @@ impl SettingsPane {
         // sk.accent）。闭框/背景都不带文字色，包一层就能继承下去；右侧
         // chevron 在组件内自带 muted，不会被染色。
         let control = div()
+            .debug_selector(move || format!("settings-select-{key}"))
             .w(px(SETTINGS_SELECT_WIDTH))
             .text_color(cx.theme().link)
             .children(select.map(|state| Select::new(&state)));
@@ -748,6 +752,10 @@ impl SettingsPane {
             "new_tab_position" => pick!(new_tab_position),
             "windowing_behavior" => pick!(windowing_behavior),
             "cell_width_mode" => pick!(cell_width_mode),
+            "scrollback_lines" => Some((
+                cur.scrollback_lines != def.scrollback_lines,
+                def.scrollback_lines.to_string(),
+            )),
             "vcs_display" => pick!(vcs_display),
             "bell" => pick!(bell),
             "blur" => pick!(blur),
@@ -801,6 +809,10 @@ impl SettingsPane {
                     desc,
                     dirty,
                     move |this, window, cx| {
+                        if key == "scrollback_lines" {
+                            this.commit_scrollback_lines(&factory, window, cx);
+                            return;
+                        }
                         this.persist(&[(key, factory.clone())], cx);
                         // 开关行读 `runtime`，notify 就够；下拉框自己存索引，
                         // 必须显式拉回，否则撤销只改了值不改显示。

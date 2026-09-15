@@ -5,6 +5,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const RESET_KEYS: &[&str] = &[
+    "scrollback_lines",
+    "scroll_speed",
     "language",
     "theme",
     "app_icon",
@@ -123,6 +125,16 @@ fn restore_defaults_at(path: &Path) -> io::Result<Option<PathBuf>> {
 mod tests {
     use super::*;
     use crate::{RawSettings, RuntimeSettings};
+
+    #[test]
+    fn reset_restores_scrolling_defaults_and_preserves_unknown_keys() {
+        let restored =
+            default_settings_text("scrollback_lines=100000\nscroll_speed=4.00\ncustom=keep\n");
+        assert_eq!(restored, "custom=keep\n");
+        let runtime = RuntimeSettings::from_raw(&RawSettings::from_text(&restored));
+        assert_eq!(runtime.scrollback_lines, 10_000);
+        assert_eq!(runtime.scroll_speed, 1.0);
+    }
 
     #[test]
     fn reset_restores_split_dimming_and_removes_mouse_override() {
