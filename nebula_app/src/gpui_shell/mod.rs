@@ -217,7 +217,7 @@ fn register_bundled_fonts(cx: &App) {
     // resolve a font so the default remains the same private face as winit.
     if let Err(error) = cx.text_system().add_fonts(vec![
         Cow::Borrowed(crate::font_install::REQUIRED_FONT_BYTES),
-        Cow::Borrowed(include_bytes!("../../../assets/fonts/MapleMonoNormal-NF-CN-Regular.ttf")),
+        Cow::Borrowed(include_bytes!("../../../assets/fonts/MapleMono-NF-CN-Regular.ttf")),
     ]) {
         try_write_stderr(format_args!(
             "[nebula:gpui] failed to register bundled Maple font: {error}"
