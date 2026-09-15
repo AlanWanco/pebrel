@@ -32,7 +32,11 @@ impl SettingsPane {
                     if let SelectEvent::Confirm(Some(_)) = event {
                         let row = entity.read(cx).selected_index(cx).map(|path| path.row);
                         if let Some(value) = row.and_then(|row| values.get(row)) {
-                            this.persist(&[(key, (*value).to_string())], cx);
+                            if key == "ui_scale" {
+                                this.set_ui_scale(value, window, cx);
+                            } else {
+                                this.persist(&[(key, (*value).to_string())], cx);
+                            }
                             if key == "language" {
                                 this.refresh_localized_controls(window, cx);
                                 cx.refresh_windows();
@@ -63,6 +67,13 @@ impl SettingsPane {
             cx,
         );
         add_select("theme", &THEME_VALUES, runtime.theme.prompt_name(), window, cx);
+        add_select(
+            "ui_scale",
+            nebula_settings::UiScale::VALUES,
+            runtime.ui_scale.settings_value(),
+            window,
+            cx,
+        );
         // 选项顺序与文案照抄旧壳 `CURSOR_SHAPE_OPTIONS` / `cursor_shape_label`。
         add_select(
             "cursor_shape",
@@ -202,7 +213,8 @@ impl SettingsPane {
         // 白名单，否则 CMD/Nushell/WSL 会出现在新建终端菜单，却无法设为默认。
         // 选项 = 彩色品牌 PNG（extra/shell-icons，与旧壳设置页/命令面板同
         // 一批资产）+ 名称，闭态与下拉同源（SelectItem::display_title/render）。
-        let shell_icon_scale = window.scale_factor().max(0.5);
+        let shell_icon_scale =
+            window.scale_factor().max(0.5) * crate::gpui_shell::ui_scale::factor(cx);
         let (shell_items, shell_index) =
             shell_select_items(&shell_current, shell_icon_scale, language);
         let shell_select = cx.new(|cx| {

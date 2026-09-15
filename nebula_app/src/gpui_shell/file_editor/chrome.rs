@@ -18,30 +18,30 @@ impl TextFileView {
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
         h_flex()
-            .h(px(design::TOOLBAR_HEIGHT))
+            .h(ui(design::TOOLBAR_HEIGHT))
             .flex_shrink_0()
-            .px(px(design::PANEL_PADDING))
-            .gap(px(9.0))
+            .px(ui(design::PANEL_PADDING))
+            .gap(ui(9.0))
             .border_b_1()
             .border_color(cx.theme().border)
             .child(
                 h_flex()
                     .flex_1()
                     .min_w_0()
-                    .gap(px(7.0))
-                    .child(Icon::new(IconName::File).size(px(design::ICON_SIZE)).text_color(muted))
+                    .gap(ui(7.0))
+                    .child(Icon::new(IconName::File).size(ui(design::ICON_SIZE)).text_color(muted))
                     .when(!parent.is_empty(), |row| {
                         row.child(
                             div()
-                                .max_w(px(140.0))
+                                .max_w(ui(140.0))
                                 .truncate()
-                                .text_size(px(design::SECONDARY_SIZE))
+                                .text_size(ui(design::SECONDARY_SIZE))
                                 .text_color(muted)
                                 .child(parent),
                         )
                         .child(
                             div()
-                                .text_size(px(design::SECONDARY_SIZE))
+                                .text_size(ui(design::SECONDARY_SIZE))
                                 .text_color(muted)
                                 .child("/"),
                         )
@@ -50,14 +50,14 @@ impl TextFileView {
                         div()
                             .min_w_0()
                             .truncate()
-                            .text_size(px(design::CHROME_SIZE))
+                            .text_size(ui(design::CHROME_SIZE))
                             .font_semibold()
                             .child(self.title.clone()),
                     )
                     .when(self.dirty, |row| {
                         row.child(
                             div()
-                                .size(px(5.0))
+                                .size(ui(5.0))
                                 .flex_shrink_0()
                                 .rounded_full()
                                 .bg(cx.theme().warning),
@@ -65,13 +65,13 @@ impl TextFileView {
                     }),
             )
             .when(self.markdown, |bar| bar.child(self.render_mode_switch(cx)))
-            .child(div().w(px(1.0)).h(px(18.0)).mx_1().bg(cx.theme().border))
+            .child(div().w(px(1.0)).h(ui(18.0)).mx_1().bg(cx.theme().border))
             .child(
                 Button::new("file-details-toggle")
                     .ghost()
-                    .size(px(design::CONTROL_HEIGHT))
+                    .size(ui(design::CONTROL_HEIGHT))
                     .flex_shrink_0()
-                    .icon(Icon::new(IconName::PanelRight).size(px(design::ICON_SIZE)))
+                    .icon(Icon::new(IconName::PanelRight).size(ui(design::ICON_SIZE)))
                     .selected(self.show_details)
                     .tooltip(language.text(Message::EditorDetailsToggle))
                     .on_click(cx.listener(|this, _, _, cx| {
@@ -100,7 +100,7 @@ impl TextFileView {
             .child(
                 Button::new("file-fullscreen")
                     .ghost()
-                    .size(px(design::CONTROL_HEIGHT))
+                    .size(ui(design::CONTROL_HEIGHT))
                     .flex_shrink_0()
                     .icon(
                         Icon::new(if self.markdown {
@@ -110,7 +110,7 @@ impl TextFileView {
                         } else {
                             IconName::Maximize
                         })
-                        .size(px(design::ICON_SIZE)),
+                        .size(ui(design::ICON_SIZE)),
                     )
                     .tooltip(language.text(if self.markdown {
                         if self.reader_focus {
@@ -136,10 +136,10 @@ impl TextFileView {
                 Button::new("file-save")
                     .ghost()
                     .xsmall()
-                    .h(px(design::CONTROL_HEIGHT))
-                    .px(px(12.0))
+                    .h(ui(design::CONTROL_HEIGHT))
+                    .px(ui(12.0))
                     .flex_shrink_0()
-                    .text_size(px(design::CHROME_SIZE))
+                    .text_size(ui(design::CHROME_SIZE))
                     .label(language.text(if self.saving {
                         Message::EditorSaving
                     } else {
@@ -158,9 +158,9 @@ impl TextFileView {
         let language = super::super::config::ui_language(cx);
         h_flex()
             .flex_shrink_0()
-            .p(px(3.0))
-            .gap(px(2.0))
-            .rounded(px(6.0))
+            .p(ui(3.0))
+            .gap(ui(2.0))
+            .rounded(ui(6.0))
             .border_1()
             .border_color(cx.theme().border)
             .bg(cx.theme().muted)
@@ -175,10 +175,10 @@ impl TextFileView {
                         Button::new(id)
                             .ghost()
                             .xsmall()
-                            .h(px(design::CONTROL_HEIGHT))
-                            .rounded(px(4.0))
-                            .px(px(10.0))
-                            .text_size(px(design::SECONDARY_SIZE))
+                            .h(ui(design::CONTROL_HEIGHT))
+                            .rounded(px(4.0 * crate::gpui_shell::ui_scale::factor(cx)))
+                            .px(ui(10.0))
+                            .text_size(ui(design::SECONDARY_SIZE))
                             .label(language.text(label))
                             .when(self.preview == preview, |button| {
                                 button.bg(cx.theme().background).text_color(cx.theme().foreground)
@@ -200,10 +200,10 @@ impl TextFileView {
     pub(super) fn render_details_header(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
         let language = super::super::config::ui_language(cx);
         h_flex()
-            .h(px(design::PANEL_HEADER_HEIGHT))
+            .h(ui(design::PANEL_HEADER_HEIGHT))
             .flex_shrink_0()
-            .px(px(design::PANEL_PADDING))
-            .gap(px(20.0))
+            .px(ui(design::PANEL_PADDING))
+            .gap(ui(20.0))
             .border_b_1()
             .border_color(cx.theme().border)
             .children(
@@ -226,10 +226,10 @@ impl TextFileView {
                                 .ghost()
                                 .xsmall()
                                 .h_full()
-                                .min_w(px(48.0))
-                                .px(px(8.0))
+                                .min_w(ui(48.0))
+                                .px(ui(8.0))
                                 .rounded(px(0.0))
-                                .text_size(px(design::SECONDARY_SIZE))
+                                .text_size(ui(design::SECONDARY_SIZE))
                                 .label(language.text(label))
                                 .text_color(if self.info == info {
                                     cx.theme().foreground
@@ -251,7 +251,7 @@ impl TextFileView {
                                     .bottom_0()
                                     .left_0()
                                     .right_0()
-                                    .h(px(2.0))
+                                    .h(ui(2.0))
                                     .bg(cx.theme().foreground.opacity(0.55)),
                             )
                         })
@@ -261,9 +261,9 @@ impl TextFileView {
             .child(
                 Button::new("file-details-close")
                     .ghost()
-                    .size(px(design::CONTROL_HEIGHT))
+                    .size(ui(design::CONTROL_HEIGHT))
                     .flex_shrink_0()
-                    .icon(Icon::new(IconName::Close).size(px(design::ICON_SIZE)))
+                    .icon(Icon::new(IconName::Close).size(ui(design::ICON_SIZE)))
                     .tooltip(language.text(Message::EditorDetailsClose))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.show_details = false;
@@ -284,8 +284,8 @@ impl TextFileView {
             .absolute()
             .top_0()
             .bottom_0()
-            .left(px(-(design::DETAILS_RESIZE_HIT_WIDTH * 0.5)))
-            .w(px(design::DETAILS_RESIZE_HIT_WIDTH))
+            .left(ui(-(design::DETAILS_RESIZE_HIT_WIDTH * 0.5)))
+            .w(ui(design::DETAILS_RESIZE_HIT_WIDTH))
             .cursor_col_resize()
             .hover(move |handle| handle.bg(hover_line))
             .on_mouse_down(

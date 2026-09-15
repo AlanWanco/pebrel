@@ -34,6 +34,7 @@ impl SettingsPane {
         );
         gpui_component::set_locale(settings.ui_language.gpui_component_locale());
         cx.set_global(settings);
+        crate::gpui_shell::theme::apply_chrome_theme(cx);
         *self = Self::new(window, cx);
         self.active_section = active_section;
         self.about_update = about_update;

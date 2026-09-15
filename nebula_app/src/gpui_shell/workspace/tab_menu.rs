@@ -105,7 +105,7 @@ impl NebulaWorkspace {
         cx.notify();
     }
 
-    pub(super) fn render_tab_context_menu(&self) -> Option<AnyElement> {
+    pub(super) fn render_tab_context_menu(&self, cx: &App) -> Option<AnyElement> {
         let state = self.tab_menu.as_ref()?;
         if state.ix >= self.tabs.len() {
             return None;
@@ -114,7 +114,7 @@ impl NebulaWorkspace {
             deferred(
                 anchored()
                     .position(state.position)
-                    .snap_to_window_with_margin(px(8.0))
+                    .snap_to_window_with_margin(px(8.0 * crate::gpui_shell::ui_scale::factor(cx)))
                     .anchor(Anchor::TopLeft)
                     .child(state.menu.clone()),
             )
@@ -314,8 +314,8 @@ impl NebulaWorkspace {
                     row = row.child(
                         div()
                             .id(("tab-color", slot))
-                            .size(px(20.0))
-                            .rounded(px(5.0))
+                            .size(ui(20.0))
+                            .rounded(ui(5.0))
                             .flex()
                             .items_center()
                             .justify_center()
@@ -326,7 +326,7 @@ impl NebulaWorkspace {
                             })
                             .when(color.is_none(), |swatch| {
                                 swatch
-                                    .text_size(px(11.0))
+                                    .text_size(ui(11.0))
                                     .text_color(cx.theme().primary_foreground)
                                     .child("A")
                             })

@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
-    Anchor, AppContext as _, ClipboardItem, Context, DismissEvent, Entity, Focusable as _,
+    Anchor, App, AppContext as _, ClipboardItem, Context, DismissEvent, Entity, Focusable as _,
     InteractiveElement as _, IntoElement as _, MouseButton, MouseDownEvent, ParentElement as _,
     Pixels, Point, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription,
     Window, anchored, deferred, div, px, uniform_list,
@@ -74,7 +74,7 @@ impl NebulaWorkspace {
     /// 单行：34px 行距里画一张 30px 高的水洗（旧壳 side_panel.rs:2712-2800）。
     fn render_file_tree_row(&self, visible_ix: usize, cx: &Context<Self>) -> gpui::AnyElement {
         let Some(row) = self.side_panel.file_rows().get(visible_ix).cloned() else {
-            return div().h(px(ROW_PITCH)).into_any_element();
+            return div().h(ui(ROW_PITCH)).into_any_element();
         };
         let theme = cx.theme();
         let muted = theme.muted_foreground;
@@ -141,20 +141,20 @@ impl NebulaWorkspace {
         // 外层只占行距（34px），内层那张 30px 的水洗由它垂直居中——旧壳
         // 就是这么分的：行距决定密度，水洗决定"被点中的那块"有多大。
         h_flex()
-            .h(px(ROW_PITCH))
+            .h(ui(ROW_PITCH))
             .w_full()
-            .px(px(ROW_WASH_INSET))
+            .px(ui(ROW_WASH_INSET))
             .child(
                 h_flex()
                 .id(SharedString::from(format!("file-tree-row-{visible_ix}")))
-                .h(px(ROW_WASH_H))
+                .h(ui(ROW_WASH_H))
                 .flex_1()
                 .min_w_0()
                 .items_center()
                 .pr_2()
-                .pl(px(8.0 + row.depth as f32 * 16.0))
+                .pl(ui(8.0 + row.depth as f32 * 16.0))
                 .gap_1()
-                .rounded(px(crate::display::UI_CORNER_RADIUS_LOGICAL))
+                .rounded(ui(crate::display::UI_CORNER_RADIUS_LOGICAL))
                 // 每行都带 1px 边（未选中时透明）：只在选中时加边会让行内文字
                 // 横跳 1px。
                 .border_1()
@@ -169,7 +169,7 @@ impl NebulaWorkspace {
                 })
                 .child(
                     div()
-                        .w(px(12.0))
+                        .w(ui(12.0))
                         .flex_shrink_0()
                         .font_family(symbol_family.clone())
                         .text_sm()
@@ -179,7 +179,7 @@ impl NebulaWorkspace {
                 .when(is_dir, |item| {
                     item.child(
                         div()
-                            .w(px(16.0))
+                            .w(ui(16.0))
                             .flex_shrink_0()
                             .font_family(symbol_family.clone())
                             .text_sm()
@@ -190,7 +190,7 @@ impl NebulaWorkspace {
                 .when_some(file_glyph, |item, glyph| {
                     item.child(
                         div()
-                            .w(px(16.0))
+                            .w(ui(16.0))
                             .flex_shrink_0()
                             .font_family(symbol_family.clone())
                             .text_sm()
@@ -210,7 +210,7 @@ impl NebulaWorkspace {
                 .when_some(path_hint.filter(|hint| !hint.is_empty()), |item, hint| {
                     item.child(
                         div()
-                            .max_w(px(108.0))
+                            .max_w(ui(108.0))
                             .flex_shrink_0()
                             .text_xs()
                             .text_color(muted)
@@ -353,9 +353,9 @@ impl NebulaWorkspace {
             .child(
                 h_flex()
                     .w_full()
-                    .h(px(control::MIN_HIT_TARGET))
+                    .h(ui(control::MIN_HIT_TARGET))
                     .flex_shrink_0()
-                    .rounded(px(radius::CONTROL))
+                    .rounded(ui(radius::CONTROL))
                     .border_1()
                     .border_color(if search_error { theme.danger } else { theme.border })
                     .bg(theme.muted)
@@ -368,14 +368,14 @@ impl NebulaWorkspace {
                                 .focus_bordered(false)
                                 .cleanable(true)
                                 .prefix(Icon::new(IconName::Search).xsmall().text_color(muted))
-                                .text_size(px(13.0)),
+                                .text_size(ui(13.0)),
                         ),
                     )
                     .child(
                         h_flex()
                             .flex_shrink_0()
                             .pr_1()
-                            .gap(px(2.0))
+                            .gap(ui(2.0))
                             .child(
                                 Button::new("file-search-match-case")
                                     .label("Aa")
@@ -425,8 +425,8 @@ impl NebulaWorkspace {
             .when_some(search_status, |search, status| {
                 search.child(
                     div()
-                        .h(px(18.0))
-                        .px(px(DRAWER_TEXT_INSET))
+                        .h(ui(18.0))
+                        .px(ui(DRAWER_TEXT_INSET))
                         .text_xs()
                         .text_color(if search_error { theme.danger } else { muted })
                         .child(status),
@@ -443,7 +443,7 @@ impl NebulaWorkspace {
 
         v_flex()
             .h_full()
-            .w(px(320.0))
+            .w(ui(320.0))
             .flex_shrink_0()
             .p_2()
             .gap_2()
@@ -451,8 +451,8 @@ impl NebulaWorkspace {
             .child(view_switch)
             .child(
                 h_flex()
-                    .h(px(30.0))
-                    .px(px(DRAWER_TEXT_INSET))
+                    .h(ui(30.0))
+                    .px(ui(DRAWER_TEXT_INSET))
                     .items_center()
                     .gap_1()
                     .child(
@@ -597,14 +597,14 @@ impl NebulaWorkspace {
                             .bottom_0()
                             // 组件库的 `Scrollbar::width()` 是 crate 私有的，值为
                             // 轨道 8px + 两侧 4px 内缩（scroll/scrollbar.rs:17）。
-                            .w(px(16.0))
+                            .w(ui(16.0))
                             .child(gpui_component::scroll::Scrollbar::vertical(&scroll_handle)),
                     )
                     .when_some(empty, |list, empty| {
                         list.child(
                             v_flex()
                                 .w_full()
-                                .px(px(DRAWER_TEXT_INSET + ROW_WASH_INSET))
+                                .px(ui(DRAWER_TEXT_INSET + ROW_WASH_INSET))
                                 .py_2()
                                 .gap_1()
                                 .child(div().text_xs().text_color(theme.foreground).child(empty.title))
@@ -711,13 +711,16 @@ impl NebulaWorkspace {
         cx.notify();
     }
 
-    pub(super) fn render_file_tree_context_menu(&self) -> Option<gpui::AnyElement> {
+    pub(super) fn render_file_tree_context_menu(
+        &self,
+        cx: &App,
+    ) -> Option<gpui::AnyElement> {
         let state = self.file_tree_menu.as_ref()?;
         Some(
             deferred(
                 anchored()
                     .position(state.position)
-                    .snap_to_window_with_margin(px(8.0))
+                    .snap_to_window_with_margin(px(8.0 * crate::gpui_shell::ui_scale::factor(cx)))
                     .anchor(Anchor::TopLeft)
                     .child(state.menu.clone()),
             )

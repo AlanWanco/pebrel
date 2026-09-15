@@ -32,6 +32,7 @@ pub use gpui_component::{
     v_flex,
 };
 
+pub(crate) use crate::gpui_shell::ui_scale::ui;
 pub use gpui_component::IndexPath;
 pub use gpui_component::WindowExt as _;
 
@@ -54,11 +55,18 @@ const CONFIRM_DIALOG_BOTTOM_PADDING: f32 = 20.0;
 const CONFIRM_DIALOG_BASE_HEIGHT: f32 = 130.0;
 const CONFIRM_DIALOG_BODY_LINE_HEIGHT: f32 = 24.0;
 
+fn ui_scale_for_window(window: &Window) -> f32 {
+    f32::from(window.rem_size()) / crate::gpui_shell::ui_scale::BASE_REM
+}
+
 fn modal_dialog_width(window: &Window) -> f32 {
-    CONFIRM_DIALOG_WIDTH.min((f32::from(window.viewport_size().width) - 32.0).max(240.0))
+    let scale = ui_scale_for_window(window);
+    CONFIRM_DIALOG_WIDTH
+        .min((f32::from(window.viewport_size().width) / scale - 32.0).max(240.0))
 }
 
 fn confirm_body_height(description: SharedString, window: &Window) -> f32 {
+    let scale = ui_scale_for_window(window);
     let available_width =
         (modal_dialog_width(window) - CONFIRM_DIALOG_HORIZONTAL_PADDING * 2.0).max(1.0);
     let text_style = window.text_style();
@@ -66,16 +74,17 @@ fn confirm_body_height(description: SharedString, window: &Window) -> f32 {
         .text_system()
         .shape_text(
             description.clone(),
-            px(16.0),
+            px(16.0 * scale),
             &[text_style.to_run(description.len())],
-            Some(px(available_width)),
+            Some(px(available_width * scale)),
             None,
         )
         .map(|lines| {
-            lines
+            (lines
                 .iter()
-                .map(|line| f32::from(line.size(px(CONFIRM_DIALOG_BODY_LINE_HEIGHT)).height))
+                .map(|line| f32::from(line.size(px(CONFIRM_DIALOG_BODY_LINE_HEIGHT * scale)).height))
                 .sum::<f32>()
+                / scale)
                 .max(CONFIRM_DIALOG_BODY_LINE_HEIGHT)
         })
         .unwrap_or_else(|error| {
@@ -88,15 +97,17 @@ fn confirm_body_height(description: SharedString, window: &Window) -> f32 {
 /// 使用 480px 内容宽度并垂直居中。这里集中恢复旧壳几何，同时保留窄窗口限幅。
 pub fn center_modal_dialog(dialog: Dialog, window: &Window, estimated_height: f32) -> Dialog {
     let viewport = window.viewport_size();
+    let scale = ui_scale_for_window(window);
     let width = modal_dialog_width(window);
-    let margin_top = ((f32::from(viewport.height) - estimated_height) * 0.5).max(16.0);
+    let viewport_height = f32::from(viewport.height) / scale;
+    let margin_top = ((viewport_height - estimated_height) * 0.5).max(16.0);
 
     dialog
-        .width(px(width))
-        .margin_top(px(margin_top))
-        .pt(px(CONFIRM_DIALOG_TOP_PADDING))
-        .pb(px(CONFIRM_DIALOG_BOTTOM_PADDING))
-        .px(px(CONFIRM_DIALOG_HORIZONTAL_PADDING))
+        .width(px(width * scale))
+        .margin_top(px(margin_top * scale))
+        .pt(px(CONFIRM_DIALOG_TOP_PADDING * scale))
+        .pb(px(CONFIRM_DIALOG_BOTTOM_PADDING * scale))
+        .px(px(CONFIRM_DIALOG_HORIZONTAL_PADDING * scale))
 }
 
 /// 构造与旧 GPUI 壳一致的确认框。显式 footer 是必要的：固定依赖版本的普通

@@ -340,18 +340,7 @@ impl NebulaWorkspace {
         }
         let Some((tab, meta)) = self.remove_tab_at(from) else { return };
         self.insert_tab_at(to, tab, meta);
-        self.active = if self.active == from {
-            to
-        } else {
-            let mut ix = self.active;
-            if ix > from {
-                ix -= 1;
-            }
-            if ix >= to {
-                ix += 1;
-            }
-            ix
-        };
+        self.active = active_index_after_reorder(self.active, from, to);
         self.focus_active(window, cx);
         cx.notify();
     }
@@ -361,6 +350,20 @@ impl NebulaWorkspace {
 pub(crate) struct DockTarget {
     pub(crate) pane: Option<u64>,
     pub(crate) nav: SplitNav,
+}
+
+fn active_index_after_reorder(active: usize, from: usize, to: usize) -> usize {
+    if active == from {
+        return to;
+    }
+    let mut index = active;
+    if index > from {
+        index -= 1;
+    }
+    if index >= to {
+        index += 1;
+    }
+    index
 }
 
 fn dock_target_at(
@@ -423,6 +426,43 @@ mod tests {
             Some(DockTarget { pane: None, nav: SplitNav::Right })
         );
         assert_eq!(dock_target_at(area, &panes, 1250.0, 600.0), None);
+    }
+
+    #[test]
+    fn tab_reorder_keeps_the_active_tab_identity() {
+        assert_eq!(active_index_after_reorder(1, 1, 3), 3, "moved active tab follows its tab");
+        assert_eq!(
+            active_index_after_reorder(3, 1, 3),
+            2,
+            "tab before the destination shifts left"
+        );
+        assert_eq!(
+            active_index_after_reorder(1, 3, 1),
+            2,
+            "tab after the destination shifts right"
+        );
+        assert_eq!(active_index_after_reorder(0, 3, 1), 0, "unaffected tab keeps its index");
+    }
+
+    #[test]
+    fn drag_slot_clamps_to_the_available_tab_range() {
+        let mut drag = TabDrag {
+            source: 2,
+            cross_window: None,
+            cross_window_target: None,
+            press_x: 0.0,
+            press_y: 0.0,
+            axis: TabDragAxis::Horizontal,
+            pitch: 100.0,
+            offset: -500.0,
+            active: true,
+            dock: None,
+        };
+        assert_eq!(NebulaWorkspace::drag_slot(&drag, 5), 0);
+        drag.offset = 249.0;
+        assert_eq!(NebulaWorkspace::drag_slot(&drag, 5), 4);
+        drag.offset = 49.0;
+        assert_eq!(NebulaWorkspace::drag_slot(&drag, 5), 2);
     }
 
     #[test]

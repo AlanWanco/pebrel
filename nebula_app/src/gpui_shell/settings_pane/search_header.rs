@@ -28,7 +28,7 @@ impl SettingsPane {
         let language = crate::gpui_shell::config::ui_language(cx);
         h_flex()
             .w_full()
-            .h(px(SETTINGS_HEADER_HEIGHT))
+            .h(ui(SETTINGS_HEADER_HEIGHT))
             .flex_shrink_0()
             .px_5()
             .items_center()

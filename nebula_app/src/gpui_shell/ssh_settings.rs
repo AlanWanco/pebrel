@@ -937,7 +937,7 @@ impl SettingsPane {
                 let picked = username.clone();
                 h_flex()
                     .id(SharedString::from(format!("ssh-username-row-{index}")))
-                    .h(px(34.0))
+                    .h(ui(34.0))
                     .w_full()
                     .px_2()
                     .items_center()
@@ -955,7 +955,7 @@ impl SettingsPane {
             .collect();
         let row_count = rows.len();
         let panel = v_flex()
-            .w(trigger.size.width.max(px(200.0)))
+            .w(trigger.size.width.max(px(200.0 * crate::gpui_shell::ui_scale::factor(cx))))
             .p_2()
             .rounded_lg()
             .border_1()
@@ -966,7 +966,7 @@ impl SettingsPane {
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .child(if rows.is_empty() {
                 div()
-                    .h(px(30.0))
+                    .h(ui(30.0))
                     .px_2()
                     .flex()
                     .items_center()
@@ -979,7 +979,7 @@ impl SettingsPane {
                     .into_any_element()
             } else {
                 v_flex()
-                    .h(px((row_count as f32 * 34.0).min(272.0)))
+                    .h(ui((row_count as f32 * 34.0).min(272.0)))
                     .overflow_y_scrollbar()
                     .children(rows)
                     .into_any_element()
@@ -989,8 +989,8 @@ impl SettingsPane {
                 anchored()
                     .anchor(gpui::Anchor::TopLeft)
                     .position(trigger.bottom_left())
-                    .offset(gpui::point(px(0.0), px(6.0)))
-                    .snap_to_window_with_margin(px(8.0))
+                    .offset(gpui::point(px(0.0), px(6.0 * crate::gpui_shell::ui_scale::factor(cx))))
+                    .snap_to_window_with_margin(px(8.0 * crate::gpui_shell::ui_scale::factor(cx)))
                     .child(panel),
             )
             .with_priority(3)
@@ -1010,18 +1010,20 @@ impl SettingsPane {
     ) -> gpui::AnyElement {
         const BASE_ICON_SIZE: f32 = 22.0;
 
+        let scale = crate::gpui_shell::ui_scale::factor(cx);
         let theme = cx.theme();
         let open = self.ssh_icon_picker_open;
         let pane = cx.entity().downgrade();
-        let target_ink_width = SSH_EDITOR_AVATAR_H * 0.46;
+        let target_ink_width = SSH_EDITOR_AVATAR_H * 0.46 * scale;
         let icon_size = BASE_ICON_SIZE
+            * scale
             * crate::display::ui::os_icons::scale_for(icon, BASE_ICON_SIZE * 0.6, target_ink_width);
         div()
             .id("ssh-icon-avatar")
             .relative()
-            .size(px(SSH_EDITOR_AVATAR_H))
+            .size(ui(SSH_EDITOR_AVATAR_H))
             .flex_shrink_0()
-            .rounded(px(10.0))
+            .rounded(ui(10.0))
             .border_1()
             .border_color(if open { theme.primary } else { theme.border })
             .bg(theme.group_box)
@@ -1048,9 +1050,9 @@ impl SettingsPane {
                 div()
                     .id("ssh-icon-avatar-caret")
                     .absolute()
-                    .right(px(-4.0))
-                    .bottom(px(-4.0))
-                    .size(px(15.0))
+                    .right(px(-4.0 * scale))
+                    .bottom(px(-4.0 * scale))
+                    .size(ui(15.0))
                     .rounded_full()
                     .border_1()
                     .border_color(theme.border)
@@ -1064,7 +1066,7 @@ impl SettingsPane {
                         cx.stop_propagation();
                         this.toggle_ssh_icon_picker(window, cx);
                     }))
-                    .child(Icon::new(IconName::ChevronDown).size(px(11.0)).text_color(theme.muted_foreground)),
+                    .child(Icon::new(IconName::ChevronDown).size(ui(11.0)).text_color(theme.muted_foreground)),
             )
             // 与字体目录同法：零绘制 canvas 捕获头像的真实窗口坐标，弹层
             // 据此锚定；滚动与 DPI 变化后依然贴着头像。
@@ -1123,6 +1125,7 @@ impl SettingsPane {
         const PICKER_ICON_INK_W: f32 = 16.0;
         const PICKER_ICON_BASE_SIZE: f32 = 15.0;
 
+        let scale = crate::gpui_shell::ui_scale::factor(cx);
         if !self.ssh_icon_picker_open {
             return None;
         }
@@ -1155,7 +1158,7 @@ impl SettingsPane {
             .enumerate()
             .map(|(ix, row)| match row {
                 PickerRow::Group(title) => div()
-                    .h(px(24.0))
+                    .h(ui(24.0))
                     .px_2()
                     .flex()
                     .items_center()
@@ -1171,6 +1174,7 @@ impl SettingsPane {
                         None => (resolve(None), language.pick("自动识别", "Auto detect"), None),
                     };
                     let icon_size = PICKER_ICON_BASE_SIZE
+                        * scale
                         * scale_for(icon, PICKER_ICON_BASE_SIZE * 0.6, PICKER_ICON_INK_W);
                     let selected = match id {
                         Some(id) => current.as_deref() == Some(id),
@@ -1179,7 +1183,7 @@ impl SettingsPane {
                     let picked = id.map(str::to_owned);
                     h_flex()
                         .id(SharedString::from(format!("ssh-icon-row-{ix}")))
-                        .h(px(30.0))
+                        .h(ui(30.0))
                         .w_full()
                         .px_2()
                         .gap_2()
@@ -1190,7 +1194,7 @@ impl SettingsPane {
                         .hover(|row| row.bg(hover_bg))
                         .child(
                             div()
-                                .w(px(PICKER_ICON_SLOT_W))
+                                .w(ui(PICKER_ICON_SLOT_W))
                                 .h_full()
                                 .flex_shrink_0()
                                 .flex()
@@ -1198,7 +1202,7 @@ impl SettingsPane {
                                 .justify_center()
                                 .child(
                                     div()
-                                        .w(px(PICKER_ICON_INK_W))
+                                        .w(ui(PICKER_ICON_INK_W))
                                         .font_family(font_chain.clone())
                                         .text_size(px(icon_size))
                                         .child(icon.glyph.to_string()),
@@ -1214,7 +1218,7 @@ impl SettingsPane {
             .collect();
 
         let panel = v_flex()
-            .w(px(240.0))
+            .w(ui(240.0))
             .p_2()
             .gap_2()
             .rounded_lg()
@@ -1227,7 +1231,7 @@ impl SettingsPane {
             .child(Input::new(&self.ssh_icon_filter_input).small())
             .child(if rows.is_empty() {
                 div()
-                    .h(px(30.0))
+                    .h(ui(30.0))
                     .px_2()
                     .flex()
                     .items_center()
@@ -1239,9 +1243,9 @@ impl SettingsPane {
                 // 滚动组件必须拿到确定高度；只设 max-height 时，它在自动高度
                 // 弹层中会按内容测量，滚动视口和滚动条都无法建立。
                 v_flex()
-                    .h(px(picker_content_h.min(260.0)))
+                    .h(ui(picker_content_h.min(260.0)))
                     .overflow_y_scrollbar()
-                    .child(v_flex().w_full().gap(px(1.0)).children(rows))
+                    .child(v_flex().w_full().gap(ui(1.0)).children(rows))
                     .into_any_element()
             });
 
@@ -1250,8 +1254,8 @@ impl SettingsPane {
                 anchored()
                     .anchor(gpui::Anchor::TopLeft)
                     .position(trigger.bottom_left())
-                    .offset(gpui::point(px(0.0), px(6.0)))
-                    .snap_to_window_with_margin(px(8.0))
+                    .offset(gpui::point(px(0.0), px(6.0 * crate::gpui_shell::ui_scale::factor(cx))))
+                    .snap_to_window_with_margin(px(8.0 * crate::gpui_shell::ui_scale::factor(cx)))
                     .child(panel),
             )
             // 弹层必须压在模态遮罩之上，否则鼠标到不了搜索框和候选行。

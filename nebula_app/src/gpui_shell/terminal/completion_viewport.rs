@@ -1,14 +1,32 @@
-#[derive(Default)]
 pub(super) struct CompletionViewport {
     pub offset: usize,
     pub hovered: Option<usize>,
     pub scrollbar_grab: Option<f32>,
+    pub(super) chrome_scale: f32,
     query: Option<String>,
     wheel_remainder: f32,
     pointer: Option<(f32, f32)>,
 }
 
+impl Default for CompletionViewport {
+    fn default() -> Self {
+        Self {
+            offset: 0,
+            hovered: None,
+            scrollbar_grab: None,
+            chrome_scale: 1.0,
+            query: None,
+            wheel_remainder: 0.0,
+            pointer: None,
+        }
+    }
+}
+
 impl CompletionViewport {
+    pub(super) fn new(chrome_scale: f32) -> Self {
+        Self { chrome_scale, ..Self::default() }
+    }
+
     pub fn clear(&mut self) {
         self.offset = 0;
         self.hovered = None;

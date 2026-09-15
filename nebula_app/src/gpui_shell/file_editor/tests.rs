@@ -1,15 +1,17 @@
 use super::*;
-use gpui::{TestAppContext, VisualTestContext};
-use gpui_component::Root;
+use gpui::{TestAppContext, VisualTestContext, px};
+use gpui_component::{Root, Theme};
 
 fn open(path: PathBuf, cx: &mut TestAppContext) -> (Entity<TextFileView>, VisualTestContext) {
     cx.update(|cx| {
         gpui_component::init(cx);
+        Theme::global_mut(cx).font_size = px(crate::gpui_shell::ui_scale::BASE_REM);
         super::super::math_view::register(cx);
         init(cx);
     });
     let mut file = None;
     let (_, window) = cx.add_window_view(|window, cx| {
+        window.set_rem_size(px(crate::gpui_shell::ui_scale::BASE_REM));
         let view = cx.new(|cx| TextFileView::new(path, window, cx));
         file = Some(view.clone());
         Root::new(view, window, cx)

@@ -50,6 +50,7 @@ pub struct Settings {
     /// 配置文件的基准字号，不含设置页/Ctrl+滚轮持久化的终端缩放。
     /// 启动窗口按它定形，和旧壳的 `window_size` 契约一致。
     pub base_font_size_px: f32,
+    pub ui_scale: nebula_settings::UiScale,
     /// 字体 cell 的物理像素偏移；旧壳 Windows 默认 y=4，必须在设备像素
     /// 域参与取整，才能在 125%/150% DPI 下保持同一行数。
     pub font_offset_x: f32,
@@ -104,6 +105,10 @@ fn resolve_ui_language(preference: nebula_settings::LanguagePref) -> UiLanguage 
 }
 
 impl Settings {
+    pub fn ui_font_size_px(&self) -> f32 {
+        self.base_font_size_px * self.ui_scale.factor()
+    }
+
     /// `theme`：**生效**主题（follow_system 折算后，见
     /// `theme::effective_theme_name`）。不在这里自行读 RuntimeSettings 的
     /// 原始主题，否则 chrome 层与终端 palette 会在跟随系统时分家。
@@ -165,6 +170,7 @@ impl Settings {
             font_bold_italic_family: secondary(&raw.font.bold_italic),
             font_size_px,
             base_font_size_px,
+            ui_scale: runtime.ui_scale,
             font_offset_x: f32::from(offset.x),
             font_offset_y: f32::from(offset.y),
             palette,

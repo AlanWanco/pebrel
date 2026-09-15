@@ -308,7 +308,7 @@ impl SettingsPane {
                 .small()
                 .flex_1()
                 .min_w_0()
-                .h(px(30.0))
+                .h(ui(30.0))
                 .px_1()
                 .toggled(editor.connection.proxy_mode == mode)
                 .when(editor.connection.proxy_mode == mode, |button| {
@@ -343,7 +343,7 @@ impl SettingsPane {
                 .small()
                 .flex_1()
                 .min_w_0()
-                .h(px(30.0))
+                .h(ui(30.0))
                 .px_1()
                 .toggled(editor.connection.jump_mode == mode)
                 .when(editor.connection.jump_mode == mode, |button| {
@@ -399,7 +399,7 @@ impl SettingsPane {
                 "仅覆盖这台主机，不改变全局网络设置。",
                 "Applies to this host without changing global network settings.",
             ), cx).mt_1())
-            .child(h_flex().mt_3().p(px(3.0)).gap(px(3.0)).rounded_lg().bg(theme.input).children(proxy_buttons))
+            .child(h_flex().mt_3().p(ui(3.0)).gap(ui(3.0)).rounded_lg().bg(theme.input).children(proxy_buttons))
             .when(custom_proxy, |body| {
                 body.child(
                     h_flex().mt_4().gap_3().items_start()
@@ -407,7 +407,7 @@ impl SettingsPane {
                             language.pick("代理地址", "Proxy host"),
                             editor_input(&self.ssh_proxy_host_input, language.pick("代理地址", "Proxy host"), window, cx),
                         )))
-                        .child(div().w(px(84.0)).flex_shrink_0().child(editor_field(
+                        .child(div().w(ui(84.0)).flex_shrink_0().child(editor_field(
                             language.pick("端口", "Port"),
                             editor_input(&self.ssh_proxy_port_input, language.pick("代理端口", "Proxy port"), window, cx),
                         ))),
@@ -456,7 +456,7 @@ impl SettingsPane {
             .child(
                 v_flex().mt_5().pt_5().border_t_1().border_color(theme.border)
                     .child(div().text_xs().font_medium().child(language.pick("SSH 跳板机", "SSH jump host")))
-                    .child(h_flex().mt_3().p(px(3.0)).gap(px(3.0)).rounded_lg().bg(theme.input).children(jump_buttons))
+                    .child(h_flex().mt_3().p(ui(3.0)).gap(ui(3.0)).rounded_lg().bg(theme.input).children(jump_buttons))
                     .when(editor.connection.jump_mode == SshHostJumpMode::Host, |section| {
                         section.child(
                             v_flex().mt_4().gap_2()
@@ -485,13 +485,13 @@ impl SettingsPane {
                                         ), cx));
                                     }
                                     section.child(
-                                        v_flex().h(px((choices.len() as f32 * 42.0).min(168.0)))
+                                        v_flex().h(ui((choices.len() as f32 * 42.0).min(168.0)))
                                             .overflow_y_scrollbar().rounded_md().border_1().border_color(theme.border)
                                             .child(v_flex().children(choices.into_iter().enumerate().map(|(index, (host, label))| {
                                                 let host = host.clone();
                                                 let selected = host == self.ssh_jump_host_input.read(cx).value().as_ref();
                                                 v_flex().id(SharedString::from(format!("ssh-jump-choice-{index}")))
-                                                    .w_full().h(px(42.0)).px_3().justify_center()
+                                                    .w_full().h(ui(42.0)).px_3().justify_center()
                                                     .cursor_pointer().hover(|row| row.bg(theme.list_hover))
                                                     .when(selected, |row| row.bg(theme.list_active))
                                                     .child(div().text_sm().truncate().child(label.clone()))

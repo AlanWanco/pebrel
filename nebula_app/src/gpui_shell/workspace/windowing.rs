@@ -32,6 +32,7 @@ use serde_json::json;
 use super::session_persistence::{SaveReason, SessionPersistence, combine_sessions};
 use super::{NebulaWorkspace, TabMeta, WorkspaceTab, dock_tree};
 use crate::gpui_shell::GpuiShellEvent;
+use crate::gpui_shell::ui_scale::ui;
 #[cfg(windows)]
 use crate::motion::{MotionClock, MotionPolicy, MotionRole, Tween};
 use crate::runtime_api::{
@@ -176,10 +177,10 @@ pub(crate) struct TabDragPreview {
 impl Render for TabDragPreview {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
-            .max_w(px(280.0))
+            .max_w(ui(280.0))
             .px_3()
             .py_2()
-            .rounded(px(6.0))
+            .rounded(ui(6.0))
             .border_1()
             .border_color(cx.theme().border)
             .bg(cx.theme().popover)
@@ -1363,6 +1364,11 @@ pub(crate) fn drop_tab_to_existing_window(
     }
 }
 
+fn active_index_after_detach(active: usize, removed: usize, remaining_len: usize) -> usize {
+    let shifted = if removed < active { active - 1 } else { active };
+    shifted.min(remaining_len.saturating_sub(1))
+}
+
 fn unregister(runtime_window_id: u64, cx: &mut App) {
     let registry = cx.global_mut::<WindowRegistry>();
     registry.entries.retain(|entry| entry.runtime_window_id != runtime_window_id);
@@ -1467,7 +1473,14 @@ impl NebulaWorkspace {
         let source = payload.source.clone();
         if source_became_empty {
             unregister(source_window_id, cx);
-            let _ = source_handle.update(cx, |_, source_window, _| source_window.remove_window());
+            // `remove_window` synchronously runs the source window's close
+            // callback. Defer it until this target entity update has returned;
+            // otherwise the callback's combined-session read sees the target
+            // workspace while GPUI is still mutating it.
+            cx.defer(move |cx| {
+                let _ =
+                    source_handle.update(cx, |_, source_window, _| source_window.remove_window());
+            });
         } else {
             let _ = source_handle.update(cx, move |_, source_window, cx| {
                 let _ = source.update(cx, |source, cx| {
@@ -1501,12 +1514,7 @@ impl NebulaWorkspace {
         self.tab_drag = None;
         self.tab_menu = None;
         self.tab_rename = None;
-        if ix < self.active {
-            self.active -= 1;
-        }
-        if !self.tabs.is_empty() {
-            self.active = self.active.min(self.tabs.len() - 1);
-        }
+        self.active = active_index_after_detach(self.active, ix, self.tabs.len());
         let source_became_empty = self.tabs.is_empty();
         Some(DetachedTerminalTab {
             tab,
@@ -1672,6 +1680,18 @@ mod tests {
     use super::*;
     use crate::ai_agents::AgentKind;
     use crate::runtime_api::{RuntimeKey, RuntimeKeyModifiers, RuntimeSplitDirection};
+
+    #[test]
+    fn detaching_a_tab_keeps_the_active_tab_identity_or_clamps_empty_windows() {
+        assert_eq!(active_index_after_detach(3, 1, 3), 2, "tabs after the source shift left");
+        assert_eq!(
+            active_index_after_detach(1, 1, 3),
+            1,
+            "active source is replaced by its next slot"
+        );
+        assert_eq!(active_index_after_detach(0, 0, 0), 0, "an empty source has no active index");
+        assert_eq!(active_index_after_detach(99, 2, 4), 3, "defensive clamp keeps the index valid");
+    }
 
     #[test]
     fn notification_target_routes_by_live_pane_not_original_window() {

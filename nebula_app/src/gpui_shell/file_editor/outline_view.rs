@@ -16,7 +16,7 @@ impl TextFileView {
             .overflow_y_scroll()
             .track_scroll(&scroll)
             .px_2()
-            .pr(px(18.0))
+            .pr(ui(18.0))
             .py_2()
             .when(self.outline.headings.is_empty(), |list| {
                 list.child(
@@ -32,8 +32,8 @@ impl TextFileView {
                     let copied = heading.label.clone();
                     let slot = || {
                         div()
-                            .w(px(20.0))
-                            .h(px(28.0))
+                            .w(ui(20.0))
+                            .h(ui(28.0))
                             .flex_shrink_0()
                             .flex()
                             .items_center()
@@ -50,7 +50,7 @@ impl TextFileView {
                                 } else {
                                     IconName::ChevronDown
                                 })
-                                .size(px(12.0)),
+                                .size(ui(12.0)),
                             )
                             .on_mouse_down(MouseButton::Left, |_, _, cx| {
                                 gpui_component::GlobalState::suppress_text_selection(cx);
@@ -68,12 +68,12 @@ impl TextFileView {
                     };
                     h_flex()
                         .id(("markdown-heading", index))
-                        .min_h(px(28.0))
+                        .min_h(ui(28.0))
                         .items_start()
-                        .pl(px(heading.indent as f32 * reader_presentation::OUTLINE_INDENT))
+                        .pl(ui(heading.indent as f32 * reader_presentation::OUTLINE_INDENT))
                         .pr_1()
-                        .rounded(px(3.0))
-                        .text_size(px(reader_presentation::CHROME_SIZE))
+                        .rounded(ui(3.0))
+                        .text_size(ui(reader_presentation::CHROME_SIZE))
                         .cursor_pointer()
                         .debug_selector(move || format!("outline-row-{index}"))
                         .text_color(cx.theme().muted_foreground)
@@ -117,8 +117,8 @@ impl TextFileView {
         v_flex()
             .id("markdown-outline")
             .relative()
-            .w(px(reader_presentation::clamp_details_width(self.details_width)))
-            .min_w(px(reader_presentation::DETAILS_MIN_WIDTH))
+            .w(ui(reader_presentation::clamp_details_width(self.details_width)))
+            .min_w(ui(reader_presentation::DETAILS_MIN_WIDTH))
             .max_w(gpui::relative(0.42))
             .h_full()
             .flex_shrink_0()
@@ -133,7 +133,7 @@ impl TextFileView {
                         .top_0()
                         .right_0()
                         .bottom_0()
-                        .w(px(16.0))
+                        .w(ui(16.0))
                         .debug_selector(|| "markdown-outline-scrollbar".to_owned())
                         .on_hover(cx.listener(|view, hovered: &bool, _, cx| {
                             view.outline_scrollbar_hovered = *hovered;

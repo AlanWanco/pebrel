@@ -753,6 +753,7 @@ impl Element for TerminalElement {
                     }
                 }
                 if !popup_items.is_empty() {
+                    let chrome_scale = self.view.read(cx).completion_viewport.chrome_scale;
                     paint_completion_popup(
                         window,
                         cx,
@@ -767,6 +768,7 @@ impl Element for TerminalElement {
                         &colors,
                         &font,
                         font_size,
+                        chrome_scale,
                     );
                 }
             }
@@ -946,6 +948,7 @@ fn paint_link_preview(
     font_size: Pixels,
 ) {
     let preview = crate::text_preview::single_line_label(preview);
+    let chrome_scale = crate::gpui_shell::ui_scale::factor(cx);
     let line =
         if anchor_row + 1 < layout.rows { anchor_row + 1 } else { anchor_row.saturating_sub(1) };
     let label_size = px(font_size.as_f32() * 0.85);
@@ -963,7 +966,7 @@ fn paint_link_preview(
         &[run],
         None,
     );
-    let pad = px(8.0);
+    let pad = px(8.0 * chrome_scale);
     let bubble_w = shaped.width + pad * 2.0;
     let bubble_h = layout.line_height * 0.85 + pad;
     let max_x = (bounds.origin.x + bounds.size.width - bubble_w).max(bounds.origin.x);
@@ -971,9 +974,12 @@ fn paint_link_preview(
     let y =
         bounds.origin.y + layout.line_height * line as f32 + (layout.line_height - bubble_h) * 0.5;
     let bubble = Bounds::new(point(x, y), size(bubble_w, bubble_h));
-    window.paint_quad(fill(bubble, cx.theme().popover).corner_radii(px(6.0)));
     window.paint_quad(
-        outline(bubble, cx.theme().border, gpui::BorderStyle::Solid).corner_radii(px(6.0)),
+        fill(bubble, cx.theme().popover).corner_radii(px(6.0 * chrome_scale)),
+    );
+    window.paint_quad(
+        outline(bubble, cx.theme().border, gpui::BorderStyle::Solid)
+            .corner_radii(px(6.0 * chrome_scale)),
     );
     let _ = shaped.paint(
         point(x + pad, y + (bubble_h - layout.line_height * 0.85) * 0.5),
@@ -1153,6 +1159,7 @@ pub(super) struct CompletionPopupLayout {
     pub row_height: Pixels,
     pub offset: usize,
     pub rows: usize,
+    scale: f32,
     pub label_width: usize,
     pub selected: Option<usize>,
 }
@@ -1167,7 +1174,7 @@ impl CompletionPopupLayout {
 
     pub(super) fn panel_bounds(self, origin: gpui::Point<Pixels>) -> Bounds<Pixels> {
         let content = self.content_bounds(origin);
-        let pad = px(COMPLETION_PANEL_PAD);
+        let pad = px(COMPLETION_PANEL_PAD * self.scale);
         Bounds::new(
             point(content.origin.x - pad, content.origin.y - pad),
             size(content.size.width + pad * 2.0, content.size.height + pad * 2.0),
@@ -1191,13 +1198,14 @@ impl CompletionPopupLayout {
             return None;
         }
         let content = self.content_bounds(origin);
-        let track_height = content.size.height - px(4.0);
+        let track_height = content.size.height - px(4.0 * self.scale);
         let track = Bounds::new(
-            point(content.right() + px(1.0), content.origin.y + px(2.0)),
-            size(px(2.0), track_height),
+            point(content.right() + px(1.0 * self.scale), content.origin.y + px(2.0 * self.scale)),
+            size(px(2.0 * self.scale), track_height),
         );
-        let thumb_height =
-            (track_height * (self.rows as f32 / count as f32)).max(px(14.0)).min(track_height);
+        let thumb_height = (track_height * (self.rows as f32 / count as f32))
+            .max(px(14.0 * self.scale))
+            .min(track_height);
         let progress = self.offset.min(count - self.rows) as f32 / (count - self.rows) as f32;
         let thumb = Bounds::new(
             point(track.origin.x, track.origin.y + (track_height - thumb_height) * progress),
@@ -1218,6 +1226,7 @@ pub(super) fn completion_popup_layout(
     columns: usize,
     cell_width: Pixels,
     line_height: Pixels,
+    scale: f32,
 ) -> Option<CompletionPopupLayout> {
     if columns < 12 || screen_lines < 2 || items.is_empty() {
         return None;
@@ -1225,19 +1234,24 @@ pub(super) fn completion_popup_layout(
 
     let cell_width = cell_width.as_f32();
     let line_height = line_height.as_f32();
+    let scale = scale.max(0.01);
     if cell_width <= 0.0 || line_height <= 0.0 {
         return None;
     }
 
     let viewport_width = cell_width * columns as f32;
     let viewport_height = line_height * screen_lines as f32;
-    let panel_width = COMPLETION_PANEL_WIDTH.min(viewport_width);
-    let content_width = panel_width - COMPLETION_PANEL_PAD * 2.0;
-    let fixed_columns = COMPLETION_ROW_LEFT_PAD
+    let panel_width = (COMPLETION_PANEL_WIDTH * scale).min(viewport_width);
+    let panel_pad = COMPLETION_PANEL_PAD * scale;
+    let panel_gap = COMPLETION_PANEL_GAP * scale;
+    let row_height = COMPLETION_ROW_HEIGHT * scale;
+    let content_width = panel_width - panel_pad * 2.0;
+    let fixed_columns = (COMPLETION_ROW_LEFT_PAD
         + COMPLETION_ICON_WIDTH
         + COMPLETION_COLUMN_GAP * 2.0
         + COMPLETION_TAG_WIDTH
-        + COMPLETION_ROW_RIGHT_PAD;
+        + COMPLETION_ROW_RIGHT_PAD)
+        * scale;
     let label_width = ((content_width - fixed_columns) / cell_width).floor() as isize;
     if label_width <= 0 {
         return None;
@@ -1247,10 +1261,10 @@ pub(super) fn completion_popup_layout(
     let cursor_col = cursor_col.min(columns - 1);
     let cursor_top = line_height * cursor_row as f32;
     let cursor_bottom = cursor_top + line_height;
-    let below_space = (viewport_height - cursor_bottom - COMPLETION_PANEL_GAP).max(0.0);
-    let above_space = (cursor_top - COMPLETION_PANEL_GAP).max(0.0);
+    let below_space = (viewport_height - cursor_bottom - panel_gap).max(0.0);
+    let above_space = (cursor_top - panel_gap).max(0.0);
     let rows_that_fit = |space: f32| {
-        ((space - COMPLETION_PANEL_PAD * 2.0).max(0.0) / COMPLETION_ROW_HEIGHT).floor() as usize
+        ((space - panel_pad * 2.0).max(0.0) / row_height).floor() as usize
     };
     let below = rows_that_fit(below_space);
     let above = rows_that_fit(above_space);
@@ -1261,28 +1275,29 @@ pub(super) fn completion_popup_layout(
         return None;
     }
 
-    let panel_height = COMPLETION_ROW_HEIGHT * rows as f32 + COMPLETION_PANEL_PAD * 2.0;
+    let panel_height = row_height * rows as f32 + panel_pad * 2.0;
     let panel_y = if place_below {
-        cursor_bottom + COMPLETION_PANEL_GAP
+        cursor_bottom + panel_gap
     } else {
-        (cursor_top - COMPLETION_PANEL_GAP - panel_height).max(0.0)
+        (cursor_top - panel_gap - panel_height).max(0.0)
     };
 
     // 光标处优先对齐列表内容；若 520px 面板越过右边界，整块向左滑，
     // 而不是压缩图标/标签列，窄窗里只牺牲中间文字宽度。
-    let desired_panel_x = cell_width * cursor_col as f32 - COMPLETION_PANEL_PAD;
+    let desired_panel_x = cell_width * cursor_col as f32 - panel_pad;
     let max_panel_x = (viewport_width - panel_width).max(0.0);
     let panel_x = desired_panel_x.clamp(0.0, max_panel_x);
 
     let selected = selected.filter(|index| *index < items.len());
     let offset = offset.min(items.len().saturating_sub(rows));
     Some(CompletionPopupLayout {
-        content_x: px(panel_x + COMPLETION_PANEL_PAD),
-        content_y: px(panel_y + COMPLETION_PANEL_PAD),
+        content_x: px(panel_x + panel_pad),
+        content_y: px(panel_y + panel_pad),
         content_width: px(content_width),
-        row_height: px(COMPLETION_ROW_HEIGHT),
+        row_height: px(row_height),
         offset,
         rows,
+        scale,
         label_width: label_width as usize,
         selected,
     })
@@ -1320,14 +1335,17 @@ fn paint_completion_icon(
     kind: CompletionVisualKind,
     bounds: Bounds<Pixels>,
     color: Hsla,
+    chrome_scale: f32,
 ) {
-    let scale = COMPLETION_ICON_SIZE / 24.0;
+    let icon_size = COMPLETION_ICON_SIZE * chrome_scale;
+    let scale = icon_size / 24.0;
     let origin = point(
-        bounds.origin.x + (bounds.size.width - px(COMPLETION_ICON_SIZE)) * 0.5,
-        bounds.origin.y + (bounds.size.height - px(COMPLETION_ICON_SIZE)) * 0.5,
+        bounds.origin.x + (bounds.size.width - px(icon_size)) * 0.5,
+        bounds.origin.y + (bounds.size.height - px(icon_size)) * 0.5,
     );
+    let stroke = 1.35 * chrome_scale;
     let at = |x, y| completion_icon_point(origin, scale, x, y);
-    let mut path = PathBuilder::stroke(px(1.35));
+    let mut path = PathBuilder::stroke(px(stroke));
 
     match kind {
         CompletionVisualKind::History => {
@@ -1432,6 +1450,7 @@ fn paint_completion_popup(
     colors: &crate::gpui_shell::theme::CompletionColors,
     font: &gpui::Font,
     font_size: Pixels,
+    scale: f32,
 ) {
     let Some(popup) = completion_popup_layout(
         items,
@@ -1443,27 +1462,28 @@ fn paint_completion_popup(
         layout.cols,
         layout.cell_width,
         layout.line_height,
+        scale,
     ) else {
         return;
     };
     let visible = &items[popup.offset..(popup.offset + popup.rows).min(items.len())];
     let panel_bounds = popup.panel_bounds(bounds.origin);
-    let panel_radius = px(6.0);
+    let panel_radius = px(6.0 * scale);
     window.paint_drop_shadows(
         panel_bounds,
         panel_radius.into(),
         &[
             gpui::BoxShadow {
                 color: colors.panel_shadow,
-                offset: point(px(0.0), px(20.0)),
-                blur_radius: px(45.0),
+                offset: point(px(0.0), px(20.0 * scale)),
+                blur_radius: px(45.0 * scale),
                 spread_radius: px(0.0),
                 inset: false,
             },
             gpui::BoxShadow {
                 color: colors.panel_shadow.opacity(0.62),
-                offset: point(px(0.0), px(4.0)),
-                blur_radius: px(12.0),
+                offset: point(px(0.0), px(4.0 * scale)),
+                blur_radius: px(12.0 * scale),
                 spread_radius: px(0.0),
                 inset: false,
             },
@@ -1481,7 +1501,7 @@ fn paint_completion_popup(
         let is_hovered = Some(popup.offset + row) == hovered;
         let visual_kind = completion_visual_kind(item);
         let semantic = completion_kind_color(colors, visual_kind);
-        let row_radius = if is_selected || is_hovered { px(4.0) } else { px(0.0) };
+        let row_radius = if is_selected || is_hovered { px(4.0 * scale) } else { px(0.0) };
         let background = if is_selected {
             colors.selected_bg
         } else if is_hovered {
@@ -1492,20 +1512,29 @@ fn paint_completion_popup(
         window.paint_quad(fill(row_bounds, background).corner_radii(row_radius));
         if is_selected {
             window.paint_quad(fill(
-                Bounds::new(row_bounds.origin, size(px(2.0), row_bounds.size.height)),
+                Bounds::new(
+                    row_bounds.origin,
+                    size(px(2.0 * scale), row_bounds.size.height),
+                ),
                 semantic,
             ));
         }
 
         let icon_slot = Bounds::new(
-            point(row_bounds.origin.x + px(COMPLETION_ROW_LEFT_PAD), row_bounds.origin.y),
-            size(px(COMPLETION_ICON_WIDTH), row_bounds.size.height),
+            point(
+                row_bounds.origin.x + px(COMPLETION_ROW_LEFT_PAD * scale),
+                row_bounds.origin.y,
+            ),
+            size(px(COMPLETION_ICON_WIDTH * scale), row_bounds.size.height),
         );
-        paint_completion_icon(window, visual_kind, icon_slot, semantic);
+        paint_completion_icon(window, visual_kind, icon_slot, semantic, scale);
 
         let label_origin = point(
             row_bounds.origin.x
-                + px(COMPLETION_ROW_LEFT_PAD + COMPLETION_ICON_WIDTH + COMPLETION_COLUMN_GAP),
+                + px(
+                    (COMPLETION_ROW_LEFT_PAD + COMPLETION_ICON_WIDTH + COMPLETION_COLUMN_GAP)
+                        * scale,
+                ),
             row_bounds.origin.y,
         );
         let (matched, remainder) = completion_label_parts(item);
@@ -1538,7 +1567,8 @@ fn paint_completion_popup(
         let tag_font_size = font_size * 0.75;
         let tag_cell_width = layout.cell_width * 0.75;
         let tag_cells = completion_cells(tag);
-        let tag_right = row_bounds.origin.x + row_bounds.size.width - px(COMPLETION_ROW_RIGHT_PAD);
+        let tag_right =
+            row_bounds.origin.x + row_bounds.size.width - px(COMPLETION_ROW_RIGHT_PAD * scale);
         let tag_origin = point(tag_right - tag_cell_width * tag_cells, row_bounds.origin.y);
         grid_text(
             window,
@@ -1555,8 +1585,12 @@ fn paint_completion_popup(
     }
 
     if let Some((track, thumb)) = popup.scrollbar_bounds(bounds.origin, items.len()) {
-        window.paint_quad(fill(track, colors.scroll_track).corner_radii(px(1.0)));
-        window.paint_quad(fill(thumb, colors.scroll_thumb).corner_radii(px(1.0)));
+        window.paint_quad(
+            fill(track, colors.scroll_track).corner_radii(px(1.0 * scale)),
+        );
+        window.paint_quad(
+            fill(thumb, colors.scroll_thumb).corner_radii(px(1.0 * scale)),
+        );
     }
 }
 
@@ -1772,6 +1806,7 @@ mod tests {
             80,
             gpui::px(8.0),
             gpui::px(21.0),
+            1.0,
         )
         .expect("短命令的精确候选也必须形成可见面板");
         assert_eq!(popup.rows, 1);
@@ -1788,7 +1823,18 @@ mod tests {
         }];
 
         let popup =
-            completion_popup_layout(&items, None, 0, 2, 7, 24, 80, gpui::px(8.0), gpui::px(21.0))
+            completion_popup_layout(
+                &items,
+                None,
+                0,
+                2,
+                7,
+                24,
+                80,
+                gpui::px(8.0),
+                gpui::px(21.0),
+                1.0,
+            )
                 .expect("空选中态仍应显示候选面板");
         assert_eq!(popup.selected, None);
         assert_eq!(popup.offset, 0);
@@ -1815,6 +1861,7 @@ mod tests {
                 80,
                 gpui::px(8.0),
                 gpui::px(21.0),
+                1.0,
             )
             .unwrap();
             assert_eq!(popup.offset, 10);
@@ -1825,6 +1872,48 @@ mod tests {
             assert!(thumb.origin.y >= track.origin.y);
             assert!(thumb.bottom() <= track.bottom());
         }
+    }
+
+    #[test]
+    fn popup_fixed_chrome_scales_without_changing_terminal_cells() {
+        let items = [NebulaCompletionItem {
+            replace_chars: 0,
+            label: "command".to_owned(),
+            insert: "command".to_owned(),
+            kind: NebulaCompletionKind::Command,
+        }];
+        let base = completion_popup_layout(
+            &items,
+            Some(0),
+            0,
+            2,
+            7,
+            24,
+            160,
+            gpui::px(8.0),
+            gpui::px(21.0),
+            1.0,
+        )
+        .unwrap();
+        let large = completion_popup_layout(
+            &items,
+            Some(0),
+            0,
+            2,
+            7,
+            24,
+            160,
+            gpui::px(8.0),
+            gpui::px(21.0),
+            2.0,
+        )
+        .unwrap();
+        assert_eq!(base.row_height, gpui::px(36.0));
+        assert_eq!(large.row_height, gpui::px(72.0));
+        assert_eq!(large.panel_bounds(gpui::point(gpui::px(0.0), gpui::px(0.0))).size.height,
+            base.panel_bounds(gpui::point(gpui::px(0.0), gpui::px(0.0))).size.height * 2.0);
+        assert_eq!(base.content_width, gpui::px(512.0));
+        assert_eq!(large.content_width, gpui::px(1024.0));
     }
 
     #[test]
@@ -1848,6 +1937,7 @@ mod tests {
             80,
             gpui::px(8.0),
             line_height,
+            1.0,
         )
         .expect("底部空间不足时仍应在光标上方显示候选");
         let cursor_top = line_height * cursor_row;

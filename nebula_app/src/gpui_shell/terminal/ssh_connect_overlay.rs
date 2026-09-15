@@ -133,16 +133,17 @@ pub(super) fn rail_canvas(
     let accent = theme.link;
     let hairline = theme.border;
     let panel = theme.popover;
+    let scale = crate::gpui_shell::ui_scale::factor(cx);
     let state = state.clone();
 
     canvas(
         move |_, _, _| {},
         move |bounds, _, window, _| {
             let w = f32::from(bounds.size.width);
-            let node_d = 10.0_f32;
+            let node_d = 10.0_f32 * scale;
             // 当前节点外圈比本体再大 7px；把首尾中心一并内缩，确保
             // canvas 即使启用内容蒙版也不会把两端 halo 裁成半圆。
-            let halo_pad = 7.0_f32;
+            let halo_pad = 7.0_f32 * scale;
             let x0 = node_d * 0.5 + halo_pad;
             let x1 = (w - node_d * 0.5 - halo_pad).max(x0 + 1.0);
             let ox = f32::from(bounds.origin.x);
@@ -166,7 +167,7 @@ pub(super) fn rail_canvas(
             };
 
             // 底轨
-            let rail_h = 2.0;
+            let rail_h = 2.0 * scale;
             quad(x0, cy - rail_h * 0.5, x1 - x0, rail_h, rail_h * 0.5, hairline);
 
             let node_x = |i: usize| x0 + (x1 - x0) * i as f32 / 3.0;
@@ -219,13 +220,13 @@ pub(super) fn rail_canvas(
                         }
                         let color =
                             lerp_hsla(brand_l, brand_r, ((x - x0) / span).clamp(0.0, 1.0));
-                        let cr = if k == 0 { 1.55 } else { 1.3 * fade + 0.2 };
+                        let cr = (if k == 0 { 1.55 } else { 1.3 * fade + 0.2 }) * scale;
                         let mut col = color;
                         col.a = alpha * if k == 0 { 1.0 } else { 0.78 };
                         if !light {
                             // GPUI 没有旧壳 `UiQuad::glow` 的软边 primitive；缩小近似盘面，
                             // 避免轨道中段被一串大圆斑连成粗流。
-                            let rad = if k == 0 { 3.4 } else { 2.6 * fade + 0.8 };
+                            let rad = (if k == 0 { 3.4 } else { 2.6 * fade + 0.8 }) * scale;
                             let mut g = color;
                             // GPUI 用普通 quad 模拟旧壳的软 glow，降低 alpha
                             // 才不会把粒子画成一串高亮斑块。
@@ -254,12 +255,20 @@ pub(super) fn rail_canvas(
                         // 当前阶段节点显得像一枚持续发亮的按钮。
                         let mut glow = accent;
                         glow.a = 0.45;
-                        quad(x - 3.0, y - 3.0, d + 6.0, d + 6.0, (d + 6.0) * 0.5, glow);
+                        let glow_pad = 3.0 * scale;
+                        quad(
+                            x - glow_pad,
+                            y - glow_pad,
+                            d + glow_pad * 2.0,
+                            d + glow_pad * 2.0,
+                            (d + glow_pad * 2.0) * 0.5,
+                            glow,
+                        );
                     }
                     quad(x, y, d, d, d * 0.5, accent);
                 } else {
                     quad(x, y, d, d, d * 0.5, hairline);
-                    let inset = 1.5;
+                    let inset = 1.5 * scale;
                     quad(
                         x + inset,
                         y + inset,
@@ -274,7 +283,7 @@ pub(super) fn rail_canvas(
     )
     // 节点本体 10px；最外层节点 halo 向两侧各溢出 7px。给足 24px，
     // 否则 GPUI canvas 会把刚恢复的光晕上下裁平。
-    .h(px(24.0))
+    .h(ui(24.0))
     .w_full()
     .into_any_element()
 }
@@ -291,10 +300,11 @@ pub(super) fn overlay(
     let theme = cx.theme();
     let lang = language();
     // chrome 文本锚定配置字号（旧壳 ui_font 合同），不跟终端缩放。
+    let scale = crate::gpui_shell::ui_scale::factor(cx);
     let ui_px = cx
         .try_global::<crate::gpui_shell::config::Settings>()
-        .map(|settings| settings.base_font_size_px)
-        .unwrap_or(15.0);
+        .map(|settings| settings.ui_font_size_px())
+        .unwrap_or(15.0 * scale);
     let chrome_family = theme.mono_font_family.clone();
     let log_family: SharedString = crate::font_install::REQUIRED_FONT_FAMILY.into();
     let ink_strong = theme.sidebar_accent_foreground;
@@ -329,8 +339,8 @@ pub(super) fn overlay(
                     .corner_radii(px(r.max(0.0))),
                 );
             };
-            let (bw, bh, gap) = (18.0f32, 7.5f32, 3.0f32);
-            let (stroke, r) = (1.4f32, 2.0f32);
+            let (bw, bh, gap) = (18.0f32 * scale, 7.5f32 * scale, 3.0f32 * scale);
+            let (stroke, r) = (1.4f32 * scale, 2.0f32 * scale);
             for row in [-1.0f32, 1.0] {
                 let by = cyp + row * (bh + gap) * 0.5 - bh * 0.5;
                 let bx = cxp - bw * 0.5;
@@ -343,12 +353,19 @@ pub(super) fn overlay(
                     (r - stroke).max(0.0),
                     rack_panel,
                 );
-                let d = 2.4;
-                quad(bx + stroke + 2.2, by + bh * 0.5 - d * 0.5, d, d, d * 0.5, rack_ink);
+                let d = 2.4 * scale;
+                quad(
+                    bx + stroke + 2.2 * scale,
+                    by + bh * 0.5 - d * 0.5,
+                    d,
+                    d,
+                    d * 0.5,
+                    rack_ink,
+                );
             }
         },
     )
-    .size(px(24.0))
+    .size(ui(24.0))
     .into_any_element();
 
     let name: SharedString = ssh_connect::short_name(state.destination()).into();
@@ -362,13 +379,13 @@ pub(super) fn overlay(
             .text_color(ink_dim);
     let logs_button = h_flex()
         .id("ssh-connect-logs")
-        .h(px(30.0))
-        .w(px(68.0))
-        .px(px(12.0))
+        .h(ui(30.0))
+        .w(ui(68.0))
+        .px(ui(12.0))
         .items_center()
         .justify_between()
-        .gap(px(4.0))
-        .rounded(px(6.0))
+        .gap(ui(4.0))
+        .rounded(ui(6.0))
         .border_1()
         .border_color(hairline)
         .bg(card_bg)
@@ -394,12 +411,12 @@ pub(super) fn overlay(
         )
         .child(logs_chevron);
     let identity = h_flex()
-        .gap(px(16.0))
+        .gap(ui(16.0))
         .items_center()
         .child(
             div()
-                .size(px(40.0))
-                .rounded(px(6.0))
+                .size(ui(40.0))
+                .rounded(ui(6.0))
                 .border_1()
                 .border_color(hairline)
                 .bg(card_bg)
@@ -412,7 +429,7 @@ pub(super) fn overlay(
             v_flex()
                 .flex_1()
                 .min_w_0()
-                .gap(px(2.0))
+                .gap(ui(2.0))
                 .child(
                     div()
                         .font_family(chrome_family.clone())
@@ -441,7 +458,7 @@ pub(super) fn overlay(
     let active = state.stage_index();
     let caption_h = ui_px * 0.75;
     let rail_block =
-        v_flex().w_full().gap(px(8.0)).mt(px(24.0)).child(rail_canvas(state, cx, &theme)).child(
+        v_flex().w_full().gap(ui(8.0)).mt(ui(24.0)).child(rail_canvas(state, cx, &theme)).child(
             div().relative().h(px(caption_h)).children(
                 labels
                     .iter()
@@ -464,8 +481,8 @@ pub(super) fn overlay(
                         match i {
                             // 节点中心是 12px / width-12px，旧壳首尾标签从
                             // 节点本体边缘（中心 ±5px）起止，因此各留 7px。
-                            0 => div().absolute().left(px(7.0)).child(text).into_any_element(),
-                            3 => div().absolute().right(px(7.0)).child(text).into_any_element(),
+                            0 => div().absolute().left(px(7.0 * scale)).child(text).into_any_element(),
+                            3 => div().absolute().right(px(7.0 * scale)).child(text).into_any_element(),
                             // 中间节点精确位于 width/3+4px 与 2*width/3-4px。
                             // 140px 槽以该点为中心，标签与节点共享同一套几何。
                             _ => div()
@@ -474,8 +491,8 @@ pub(super) fn overlay(
                                 .w(px(0.0))
                                 .child(
                                     div()
-                                        .w(px(140.0))
-                                        .ml(px(if i == 1 { -66.0 } else { -74.0 }))
+                                        .w(ui(140.0))
+                                        .ml(ui(if i == 1 { -66.0 } else { -74.0 }))
                                         .flex()
                                         .justify_center()
                                         .child(text),
@@ -495,7 +512,7 @@ pub(super) fn overlay(
     };
     let status_row = h_flex()
         .w_full()
-        .mt(px(24.0))
+        .mt(ui(24.0))
         .justify_between()
         .child(
             div()
@@ -517,7 +534,7 @@ pub(super) fn overlay(
     // ── 失败详情（两行，超出收省略号）──
     let per_line = 44usize;
     let detail = state.failure().map(|reason| {
-        v_flex().mt(px(8.0)).gap(px(ui_px * 0.28)).children(
+        v_flex().mt(ui(8.0)).gap(px(ui_px * 0.28)).children(
             ssh_connect::wrap(reason, per_line)
                 .into_iter()
                 .take(2)
@@ -538,13 +555,13 @@ pub(super) fn overlay(
         let logs = state.logs();
         let start = logs.len().saturating_sub(6);
         v_flex()
-            .mt(px(24.0))
-            .rounded(px(6.0))
+            .mt(ui(24.0))
+            .rounded(ui(6.0))
             .border_1()
             .border_color(hairline)
             .bg(card_bg)
-            .p(px(12.0))
-            .gap(px(2.0))
+            .p(ui(12.0))
+            .gap(ui(2.0))
             .children(
                 logs[start..]
                     .iter()
@@ -589,8 +606,8 @@ pub(super) fn overlay(
     let retry_destination = state.destination().to_owned();
     let buttons = h_flex()
         .w_full()
-        .mt(px(24.0))
-        .gap(px(12.0))
+        .mt(ui(24.0))
+        .gap(ui(12.0))
         .justify_end()
         .when(failed, |buttons| {
             buttons.child(
@@ -636,13 +653,13 @@ pub(super) fn overlay(
                 .flex()
                 .items_center()
                 .justify_center()
-                .p(px(24.0))
+                .p(ui(24.0))
                 .child(
                     v_flex()
-                        .w(px(600.0))
+                        .w(ui(600.0))
                         .max_w(gpui::relative(1.0))
-                        .p(px(24.0))
-                        .rounded(px(8.0))
+                        .p(ui(24.0))
+                        .rounded(ui(8.0))
                         .border_1()
                         .border_color(hairline)
                         .bg(panel)
@@ -651,8 +668,8 @@ pub(super) fn overlay(
                         .shadow(vec![
                             gpui::BoxShadow {
                                 color: elevation,
-                                offset: point(px(0.0), px(7.0)),
-                                blur_radius: px(20.0),
+                                offset: point(px(0.0), px(7.0 * scale)),
+                                blur_radius: px(20.0 * scale),
                                 spread_radius: px(0.0),
                                 inset: false,
                             },

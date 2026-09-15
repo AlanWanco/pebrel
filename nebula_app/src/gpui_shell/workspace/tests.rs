@@ -36,7 +36,8 @@ fn settings_only_fold_the_sidebar_in_sidebar_tab_mode() {
 #[cfg(feature = "gpui-test-support")]
 mod title_bar_panel_control_tests {
     use super::*;
-    use gpui::{Modifiers, TestAppContext, point};
+    use gpui::{Modifiers, TestAppContext, point, px};
+    use gpui_component::Theme;
 
     #[derive(Default)]
     struct TitleBarPanelControlProbe {
@@ -108,15 +109,21 @@ mod title_bar_panel_control_tests {
 
     #[gpui::test]
     fn top_tab_action_buttons_share_the_tab_vertical_center(cx: &mut TestAppContext) {
-        cx.update(gpui_component::init);
-        let (_, cx) = cx.add_window_view(|_, _| TopTabGeometryProbe);
+        cx.update(|cx| {
+            gpui_component::init(cx);
+            Theme::global_mut(cx).font_size = px(crate::gpui_shell::ui_scale::BASE_REM);
+        });
+        let (_, cx) = cx.add_window_view(|window, _| {
+            window.set_rem_size(px(crate::gpui_shell::ui_scale::BASE_REM));
+            TopTabGeometryProbe
+        });
         let tab = cx.debug_bounds("top-tab-geometry-probe").expect("tab bounds");
         let new_tab = cx.debug_bounds("top-new-tab-geometry-probe").expect("new-tab bounds");
         let menu = cx.debug_bounds("top-tabs-menu-geometry-probe").expect("menu bounds");
 
         assert_eq!(f32::from(tab.size.height), 34.0);
-        assert_eq!(f32::from(new_tab.size.height), 32.0);
-        assert_eq!(f32::from(menu.size.height), 32.0);
+        assert_eq!(f32::from(new_tab.size.height), 28.0);
+        assert_eq!(f32::from(menu.size.height), 28.0);
         assert_eq!(vertical_center(new_tab), vertical_center(tab));
         assert_eq!(vertical_center(menu), vertical_center(tab));
     }
@@ -500,6 +507,18 @@ fn split_tree_lifecycle_matches_pane_contract() {
     // 不存在的叶子不产生副作用。
     let mut single = SplitTree::leaf(9u64);
     assert_eq!(single.remove_leaf(4), RemoveOutcome::NotFound);
+}
+
+#[test]
+fn closing_either_nested_pane_collapses_only_its_parent_branch() {
+    let mut tree = SplitTree::leaf(1u64);
+    assert!(tree.split_leaf(1, 2, SplitDirection::LeftRight, 0.5));
+    assert!(tree.split_leaf(2, 3, SplitDirection::TopBottom, 0.5));
+
+    assert_eq!(tree.remove_leaf(3), RemoveOutcome::Collapsed(2));
+    assert_eq!(tree.leaves(), vec![1, 2]);
+    assert_eq!(tree.remove_leaf(1), RemoveOutcome::Collapsed(2));
+    assert_eq!(tree.leaves(), vec![2]);
 }
 
 #[test]

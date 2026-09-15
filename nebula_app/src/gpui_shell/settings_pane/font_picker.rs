@@ -196,16 +196,16 @@ impl SettingsPane {
         let control = div()
             .id("font-family-input-shell")
             .relative()
-            .w(px(SETTINGS_SELECT_WIDTH))
+            .w(ui(SETTINGS_SELECT_WIDTH))
             .min_w_0()
-            .h(px(32.0))
-            .when(self.active_section == 1, |control| control.w_full().h(px(36.0)))
+            .h(ui(32.0))
+            .when(self.active_section == 1, |control| control.w_full().h(ui(36.0)))
             .flex_shrink_0()
             .overflow_hidden()
             .child(
                 Input::new(&self.font_family_input)
                     .w_full()
-                    .when(self.active_section == 1, |input| input.h(px(36.0)))
+                    .when(self.active_section == 1, |input| input.h(ui(36.0)))
                     .cleanable(false)
                     .suffix(Button::new("font-picker-chevron")
                             .debug_selector(|| "font-picker-chevron".to_owned()).ghost().xsmall()
@@ -305,8 +305,8 @@ impl SettingsPane {
         let badge = |text: &'static str, color: Hsla| {
             div()
                 .flex_shrink_0()
-                .px(px(5.0))
-                .py(px(1.0))
+                .px(ui(5.0))
+                .py(ui(1.0))
                 .rounded_sm()
                 .text_xs()
                 .text_color(color)
@@ -324,7 +324,7 @@ impl SettingsPane {
                 let tooltip_name = display_name.clone();
                 h_flex()
                     .id(SharedString::from(format!("font-chain-row-{index}")))
-                    .h(px(38.0))
+                    .h(ui(38.0))
                     .w_full()
                     .min_w_0()
                     .px_1()
@@ -334,7 +334,7 @@ impl SettingsPane {
                     .bg(selected_bg)
                     .child(
                         div()
-                            .w(px(16.0))
+                            .w(ui(16.0))
                             .flex_shrink_0()
                             .text_xs()
                             .text_color(muted)
@@ -400,7 +400,7 @@ impl SettingsPane {
                     families.iter().any(|family| family.eq_ignore_ascii_case(&entry.name));
                 h_flex()
                     .id(SharedString::from(format!("font-available-row-{index}")))
-                    .h(px(38.0))
+                    .h(ui(38.0))
                     .w_full()
                     .min_w_0()
                     .px_2()
@@ -491,7 +491,7 @@ impl SettingsPane {
                         // gpui-component 的纵向滚动条以 16px 绝对定位覆盖在
                         // 内容右侧，不会自动挤出布局空间。这里预留同宽安全区，
                         // 避免排序操作与候选行落进滚动条命中区而发生误触。
-                        .pr(px(16.0))
+                        .pr(ui(16.0))
                         .gap_1()
                         .child(
                             div()
@@ -534,10 +534,11 @@ impl SettingsPane {
     ) -> gpui::Div {
         let row = self.font_picker_row(cx);
         let trigger_bounds = self.font_picker_trigger_bounds;
+        let scale = crate::gpui_shell::ui_scale::factor(cx);
         let panel_width = trigger_bounds
             .as_ref()
             .map(|bounds| bounds.size.width)
-            .unwrap_or(px(SETTINGS_SELECT_WIDTH));
+            .unwrap_or(px(SETTINGS_SELECT_WIDTH * scale));
         let list_height = trigger_bounds
             .as_ref()
             .map(|bounds| {
@@ -545,16 +546,16 @@ impl SettingsPane {
                 let trigger_bottom = f32::from(bounds.origin.y + bounds.size.height);
                 let available_below = (viewport_height
                     - trigger_bottom
-                    - FONT_PICKER_OFFSET_Y
-                    - FONT_PICKER_WINDOW_MARGIN)
+                    - FONT_PICKER_OFFSET_Y * scale
+                    - FONT_PICKER_WINDOW_MARGIN * scale)
                     .max(0.0);
 
                 // 头部保持稳定，只压缩候选区。弹层因此不会再因超出窗口
                 // 而被整体吸附到输入框上方，候选区仍有明确高度承接滚轮。
-                px((available_below - FONT_PICKER_PANEL_CHROME_HEIGHT)
-                    .clamp(0.0, FONT_PICKER_LIST_PREFERRED_HEIGHT))
+                px((available_below - FONT_PICKER_PANEL_CHROME_HEIGHT * scale)
+                    .clamp(0.0, FONT_PICKER_LIST_PREFERRED_HEIGHT * scale))
             })
-            .unwrap_or(px(FONT_PICKER_LIST_PREFERRED_HEIGHT));
+            .unwrap_or(px(FONT_PICKER_LIST_PREFERRED_HEIGHT * scale));
         let panel =
             self.font_picker_open.then(|| self.font_picker_panel(panel_width, list_height, cx));
 
@@ -566,8 +567,8 @@ impl SettingsPane {
                         anchored()
                             .anchor(gpui::Anchor::TopRight)
                             .position(trigger_bounds.bottom_right())
-                            .offset(gpui::point(px(0.0), px(FONT_PICKER_OFFSET_Y)))
-                            .snap_to_window_with_margin(px(FONT_PICKER_WINDOW_MARGIN))
+                            .offset(gpui::point(px(0.0), px(FONT_PICKER_OFFSET_Y * scale)))
+                            .snap_to_window_with_margin(px(FONT_PICKER_WINDOW_MARGIN * scale))
                             .child(panel),
                     )
                     .with_priority(2),

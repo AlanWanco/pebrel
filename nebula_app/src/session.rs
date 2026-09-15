@@ -109,6 +109,9 @@ pub enum LayoutSession {
         /// 该 pane 前台的 AI CLI 对话，冷恢复据此自动接续。
         #[serde(default, skip_serializing_if = "Option::is_none")]
         agent: Option<AgentSession>,
+        /// Optional pane title; older v4 readers ignore it, missing means automatic.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        custom_name: Option<String>,
     },
     Split {
         axis: SplitAxis,
@@ -119,6 +122,11 @@ pub enum LayoutSession {
 }
 
 impl LayoutSession {
+    /// A pane using its automatic title (also the legacy shell's default).
+    pub fn unnamed_pane(cwd: String, agent: Option<AgentSession>) -> Self {
+        Self::Pane { cwd, agent, custom_name: None }
+    }
+
     /// Number of panes (leaves) in this tree.
     pub fn pane_count(&self) -> usize {
         match self {
@@ -418,6 +426,7 @@ mod tests {
             ratio_permille: 618,
             first: Box::new(LayoutSession::Pane {
                 cwd: "D:/work".into(),
+                custom_name: Some("Backend 后端".into()),
                 agent: Some(AgentSession {
                     source: "claude".into(),
                     session_id: Some("0199a213-c2a4-7cf5-8f6b-d746fbb6e86c".into()),
@@ -426,8 +435,8 @@ mod tests {
             second: Box::new(LayoutSession::Split {
                 axis: SplitAxis::TopBottom,
                 ratio_permille: 500,
-                first: Box::new(LayoutSession::Pane { cwd: "D:/logs".into(), agent: None }),
-                second: Box::new(LayoutSession::Pane { cwd: String::new(), agent: None }),
+                first: Box::new(LayoutSession::unnamed_pane("D:/logs".into(), None)),
+                second: Box::new(LayoutSession::unnamed_pane(String::new(), None)),
             }),
         });
         tab.active_pane = 2;
@@ -443,19 +452,33 @@ mod tests {
     /// 旧 v4 文件照常解析（缺省 None），两个方向都不需要升版。
     #[test]
     fn pane_agent_field_is_additive_on_v4() {
-        let json = r#"{"version":4,"boot_attempts":0,"active_tab":0,"tabs":[{"cwd":"D:/w","layout":{"kind":"pane","cwd":"D:/w"}}]}"#;
-        let session = parse(json).expect("v4 without agent must parse");
-        assert_eq!(
-            session.tabs[0].layout,
-            Some(LayoutSession::Pane { cwd: "D:/w".into(), agent: None })
-        );
+        let json = r#"{"version":4,"boot_attempts":0,"active_tab":0,"tabs":[{"cwd":"D:/w","launch":{"kind":"profile","name":"PowerShell","command":"pwsh","args":[],"cwd":null},"layout":{"kind":"pane","cwd":"D:/w"}}]}"#;
+        let session = parse(json).expect("v4 without agent or pane name must parse");
+        assert_eq!(session.tabs[0].layout, Some(LayoutSession::unnamed_pane("D:/w".into(), None)));
+        assert!(matches!(
+            session.tabs[0].launch,
+            Some(LaunchSession::Profile { shell_id: None, .. })
+        ));
 
         let with_agent = LayoutSession::Pane {
             cwd: "D:/w".into(),
+            custom_name: None,
             agent: Some(AgentSession { source: "codex".into(), session_id: Some("abc-1".into()) }),
         };
         let json = serde_json::to_string(&with_agent).unwrap();
         assert_eq!(serde_json::from_str::<LayoutSession>(&json).unwrap(), with_agent);
+    }
+
+    #[test]
+    fn malformed_v4_shapes_are_rejected_without_a_partial_restore() {
+        let malformed = [
+            r#"{"version":4,"boot_attempts":0,"active_tab":0,"tabs":[{"cwd":"D:/w","layout":{"kind":"split","axis":"left_right","ratio_permille":500,"first":{"kind":"pane","cwd":"D:/w"}}}]}"#,
+            r#"{"version":4,"boot_attempts":0,"active_tab":0,"tabs":[{"cwd":"D:/w","launch":{"kind":"unknown"}}]}"#,
+            r#"{"version":5,"boot_attempts":0,"active_tab":0,"tabs":[{"cwd":"D:/w"}]}"#,
+        ];
+        for json in malformed {
+            assert!(parse(json).is_none(), "malformed session must not enter restore: {json}");
+        }
     }
 
     /// resume 命令是要敲进用户 shell 的字节：形状必须与手动恢复面板一致，
@@ -495,12 +518,12 @@ mod tests {
         let tree = LayoutSession::Split {
             axis: SplitAxis::LeftRight,
             ratio_permille: 500,
-            first: Box::new(LayoutSession::Pane { cwd: "a".into(), agent: None }),
+            first: Box::new(LayoutSession::unnamed_pane("a".into(), None)),
             second: Box::new(LayoutSession::Split {
                 axis: SplitAxis::TopBottom,
                 ratio_permille: 500,
-                first: Box::new(LayoutSession::Pane { cwd: "b".into(), agent: None }),
-                second: Box::new(LayoutSession::Pane { cwd: "c".into(), agent: None }),
+                first: Box::new(LayoutSession::unnamed_pane("b".into(), None)),
+                second: Box::new(LayoutSession::unnamed_pane("c".into(), None)),
             }),
         };
         let leaves = tree.leaves();
@@ -526,6 +549,7 @@ mod tests {
                 let mut tab = TabSession::single("/home/user/project".into(), None, None);
                 tab.layout = Some(LayoutSession::Pane {
                     cwd: "/home/user/project".into(),
+                    custom_name: None,
                     agent: Some(AgentSession {
                         source: "codex".into(),
                         session_id: Some((*id).into()),

@@ -33,7 +33,7 @@ use std::sync::Arc;
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
     App, Context, ExternalPaths, InteractiveElement as _, IntoElement as _, ParentElement as _,
-    SharedString, StatefulInteractiveElement as _, Styled as _, Window, div, px, uniform_list,
+    SharedString, StatefulInteractiveElement as _, Styled as _, Window, div, uniform_list,
 };
 
 use crate::gpui_shell::prelude::*;
@@ -472,7 +472,7 @@ impl NebulaWorkspace {
 
         v_flex()
             .h_full()
-            .w(px(320.0))
+            .w(ui(320.0))
             .flex_shrink_0()
             .p_2()
             .gap_2()
@@ -488,14 +488,14 @@ impl NebulaWorkspace {
                 this.drop_upload_paths(vec![file.local_path.clone()], None, window, cx);
             }))
             .child(view_switch)
-            .child(div().px(px(TEXT_INSET)).text_xs().text_color(muted)
+            .child(div().px(ui(TEXT_INSET)).text_xs().text_color(muted)
                 .child(workspace_ui_language().text(if crate::platform::file_drag::supported() {
                     crate::i18n::Message::TransferDragHint
                 } else { crate::i18n::Message::TransferUploadHint })))
             // 主机名单独一行：远端浏览器最危险的误操作是"以为在另一台机器上"，
             // 所以目的地必须一直在视野里，而不是只在标题栏或 tab 上。
             .child(
-                h_flex().px(px(TEXT_INSET)).items_center().gap_1().child(
+                h_flex().px(ui(TEXT_INSET)).items_center().gap_1().child(
                     div()
                         .flex_1()
                         .min_w_0()
@@ -508,8 +508,8 @@ impl NebulaWorkspace {
             )
             .child(
                 h_flex()
-                    .h(px(30.0))
-                    .px(px(TEXT_INSET))
+                    .h(ui(30.0))
+                    .px(ui(TEXT_INSET))
                     .items_center()
                     .gap_1()
                     .child(
@@ -544,8 +544,8 @@ impl NebulaWorkspace {
             )
             .child(
                 h_flex()
-                    .h(px(30.0))
-                    .px(px(TEXT_INSET))
+                    .h(ui(30.0))
+                    .px(ui(TEXT_INSET))
                     .items_center()
                     .gap_1()
                     .child(
@@ -610,7 +610,7 @@ impl NebulaWorkspace {
             .when_some(notice, |panel, text| {
                 panel.child(
                     div()
-                        .px(px(TEXT_INSET))
+                        .px(ui(TEXT_INSET))
                         .text_xs()
                         .text_color(muted)
                         .whitespace_normal()
@@ -653,7 +653,7 @@ impl NebulaWorkspace {
             snapshot.destination == self.remote_browser.destination
                 && matches!(snapshot.phase, SftpPhase::Working | SftpPhase::Error)
         }) else {
-            return div().h(px(STATUS_HEIGHT)).w_full().flex_shrink_0().into_any_element();
+            return div().h(ui(STATUS_HEIGHT)).w_full().flex_shrink_0().into_any_element();
         };
 
         let theme = cx.theme();
@@ -676,14 +676,14 @@ impl NebulaWorkspace {
         let percent = progress.as_ref().map(|progress| progress.fraction() * 100.0).unwrap_or(0.0);
 
         v_flex()
-            .h(px(STATUS_HEIGHT))
+            .h(ui(STATUS_HEIGHT))
             .w_full()
             .flex_shrink_0()
-            .px(px(TEXT_INSET))
+            .px(ui(TEXT_INSET))
             .gap_1()
             .child(
                 h_flex()
-                    .h(px(22.0))
+                    .h(ui(22.0))
                     .items_center()
                     .gap_1()
                     .child(
@@ -744,30 +744,30 @@ impl NebulaWorkspace {
         let highlight = theme.accent.opacity(0.18);
 
         h_flex()
-            .h(px(ROW_PITCH))
+            .h(ui(ROW_PITCH))
             .w_full()
-            .px(px(ROW_WASH_INSET))
+            .px(ui(ROW_WASH_INSET))
             .child(
                 h_flex()
                     .id(SharedString::from(format!("remote-row-{}", row.path)))
-                    .h(px(ROW_WASH_H))
+                    .h(ui(ROW_WASH_H))
                     .flex_1()
                     .min_w_0()
                     .items_center()
                     .pr_2()
-                    .pl(px(8.0))
+                    .pl(ui(8.0))
                     .gap_1()
-                    .rounded(px(crate::display::UI_CORNER_RADIUS_LOGICAL))
+                    .rounded(ui(crate::display::UI_CORNER_RADIUS_LOGICAL))
                     .border_1()
                     .border_color(gpui::transparent_black())
                     .when(selected, |row| {
                         row.bg(theme.tab_active).border_color(theme.ring.opacity(0.16))
                     })
                     .hover(|row| row.bg(theme.list_hover))
-                    .child(div().w(px(12.0)).flex_shrink_0())
+                    .child(div().w(ui(12.0)).flex_shrink_0())
                     .child(
                         div()
-                            .w(px(16.0))
+                            .w(ui(16.0))
                             .font_family(symbol_family)
                             .text_color(ink)
                             .flex_shrink_0()

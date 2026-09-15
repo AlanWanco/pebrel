@@ -6,6 +6,9 @@
     "en_us": "English"
   },
   "settings": {
+    "ui_scale_save_failed": "无法保存界面缩放：{error}",
+    "ui_scale": "界面整体缩放",
+    "ui_scale_hint": "在系统显示缩放基础上放大界面文字、控件和菜单；终端字号单独设置。",
     "sidebar": {
       "application": "应用",
       "appearance": "外观",
@@ -131,6 +134,10 @@
       "http_status": "服务返回 HTTP {status}",
       "start_failed": "无法启动供应商测试：{error}"
     }
+  },
+  "pane": {
+    "rename_title": "重命名分屏",
+    "rename_hint": "仅修改当前分屏的标题。清空名称可恢复自动标题。"
   },
   "common": {
     "settings": "设置",

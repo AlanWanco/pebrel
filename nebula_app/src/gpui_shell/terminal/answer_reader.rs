@@ -8,7 +8,7 @@ use gpui::{
     AnyElement, App, AppContext as _, ClipboardItem, Context, Entity, EventEmitter, FocusHandle,
     InteractiveElement as _, IntoElement, KeyDownEvent, ObjectFit, ParentElement as _, Render,
     RenderImage, SharedString, StatefulInteractiveElement as _, Styled as _, StyledImage as _,
-    WeakEntity, Window, div, img, px,
+    WeakEntity, Window, div, img,
 };
 use gpui_component::text::{
     MarkdownExtensions, MarkdownNode, TextView, TextViewState, TextViewStyle, markdown_ast,
@@ -298,7 +298,7 @@ fn render_image(reader: &WeakEntity<AnswerReader>, index: usize, cx: &mut App) -
                     div()
                         .id(("answer-image", index))
                         .w_full()
-                        .h(px(320.0))
+                        .h(ui(320.0))
                         .cursor_pointer()
                         .child(img(image).size_full().object_fit(ObjectFit::Contain))
                         .on_click(move |_, _, cx| {
@@ -377,7 +377,7 @@ impl Render for AnswerReader {
             .on_key_down(cx.listener(Self::on_key_down))
             .child(
                 h_flex()
-                    .h(px(32.0))
+                    .h(ui(32.0))
                     .flex_shrink_0()
                     .px_2()
                     .gap_2()

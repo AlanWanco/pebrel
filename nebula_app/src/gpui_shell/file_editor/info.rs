@@ -43,12 +43,12 @@ impl TextFileView {
         }
         let section = |title, rows: Vec<(Message, String)>| {
             v_flex()
-                .gap(px(4.0))
-                .mt(px(24.0))
+                .gap(ui(4.0))
+                .mt(ui(24.0))
                 .child(
                     div()
-                        .mb(px(10.0))
-                        .text_size(px(design::SECONDARY_SIZE))
+                        .mb(ui(10.0))
+                        .text_size(ui(design::SECONDARY_SIZE))
                         .text_color(muted)
                         .child(language.text(title)),
                 )
@@ -57,8 +57,8 @@ impl TextFileView {
                         .w_full()
                         .items_start()
                         .gap_2()
-                        .py(px(5.0))
-                        .text_size(px(design::SECONDARY_SIZE))
+                        .py(ui(5.0))
+                        .text_size(ui(design::SECONDARY_SIZE))
                         .child(div().flex_shrink_0().text_color(muted).child(language.text(label)))
                         .child(div().flex_1().min_w_0().text_right().child(value))
                 }))
@@ -68,22 +68,22 @@ impl TextFileView {
         let reveal = self.path.clone();
         let external = self.path.clone();
         let action = |id: &'static str, icon: IconName, label: Message| {
-            Button::new(id).ghost().w_full().h(px(design::ACTION_HEIGHT)).px(px(6.0)).child(
+            Button::new(id).ghost().w_full().h(ui(design::ACTION_HEIGHT)).px(ui(6.0)).child(
                 h_flex()
                     .debug_selector(move || id.to_owned())
                     .w_full()
                     .h_full()
-                    .gap(px(10.0))
-                    .text_size(px(design::SECONDARY_SIZE))
+                    .gap(ui(10.0))
+                    .text_size(ui(design::SECONDARY_SIZE))
                     .text_color(muted)
-                    .child(Icon::new(icon).size(px(design::ICON_SIZE)))
+                    .child(Icon::new(icon).size(ui(design::ICON_SIZE)))
                     .child(language.text(label)),
             )
         };
         let actions = v_flex()
-            .gap(px(3.0))
-            .mt(px(24.0))
-            .pt(px(14.0))
+            .gap(ui(3.0))
+            .mt(ui(24.0))
+            .pt(ui(14.0))
             .border_t_1()
             .border_color(cx.theme().border)
             .child(action("info-copy-path", IconName::Copy, Message::EditorCopyPath).on_click(
@@ -115,26 +115,26 @@ impl TextFileView {
             .id("file-info-body")
             .flex_1()
             .min_h_0()
-            .px(px(design::PANEL_PADDING))
-            .py(px(22.0))
+            .px(ui(design::PANEL_PADDING))
+            .py(ui(22.0))
             .overflow_y_scroll()
             .child(
                 h_flex()
-                    .gap(px(10.0))
+                    .gap(ui(10.0))
                     .items_center()
                     .child(
                         div()
-                            .w(px(32.0))
-                            .h(px(38.0))
+                            .w(ui(32.0))
+                            .h(ui(38.0))
                             .flex_shrink_0()
-                            .rounded(px(5.0))
+                            .rounded(ui(5.0))
                             .border_1()
                             .border_color(cx.theme().border)
                             .bg(cx.theme().muted)
                             .flex()
                             .items_center()
                             .justify_center()
-                            .text_size(px(10.0))
+                            .text_size(ui(10.0))
                             .font_semibold()
                             .text_color(muted)
                             .child(kind.clone()),
@@ -142,16 +142,16 @@ impl TextFileView {
                     .child(
                         v_flex()
                             .min_w_0()
-                            .gap(px(3.0))
+                            .gap(ui(3.0))
                             .child(
                                 div()
-                                    .text_size(px(design::CHROME_SIZE))
+                                    .text_size(ui(design::CHROME_SIZE))
                                     .font_semibold()
                                     .child(self.title.clone()),
                             )
                             .child(
                                 div()
-                                    .text_size(px(design::SECONDARY_SIZE))
+                                    .text_size(ui(design::SECONDARY_SIZE))
                                     .text_color(muted)
                                     .child(if self.markdown {
                                         language.text(Message::EditorMarkdownDocument).to_owned()
@@ -163,8 +163,8 @@ impl TextFileView {
             )
             .child(
                 div()
-                    .mt(px(12.0))
-                    .text_size(px(design::SECONDARY_SIZE))
+                    .mt(ui(12.0))
+                    .text_size(ui(design::SECONDARY_SIZE))
                     .line_height(gpui::relative(1.7))
                     .text_color(muted)
                     .child(self.source.display()),
@@ -175,8 +175,8 @@ impl TextFileView {
         v_flex()
             .id("file-info-panel")
             .relative()
-            .w(px(design::clamp_details_width(self.details_width)))
-            .min_w(px(design::DETAILS_MIN_WIDTH))
+            .w(ui(design::clamp_details_width(self.details_width)))
+            .min_w(ui(design::DETAILS_MIN_WIDTH))
             .max_w(gpui::relative(0.42))
             .h_full()
             .flex_shrink_0()

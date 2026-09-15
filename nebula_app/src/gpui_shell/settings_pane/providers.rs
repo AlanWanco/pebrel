@@ -201,7 +201,7 @@ impl SettingsPane {
             let kind = provider.kind.label();
             h_flex()
                 .id(SharedString::from(format!("provider-row-{}", provider.id)))
-                .h(px(34.0))
+                .h(ui(34.0))
                 .w_full()
                 .px_2()
                 .gap_2()
@@ -213,7 +213,7 @@ impl SettingsPane {
                 .child(div().flex_1().min_w_0().truncate().child(name))
                 .child(
                     div()
-                        .max_w(px(78.0))
+                        .max_w(ui(78.0))
                         .text_xs()
                         .text_color(theme.muted_foreground)
                         .truncate()
@@ -263,19 +263,19 @@ impl SettingsPane {
                 .child(self.row(
                     language.pick("名称", "Name"),
                     "",
-                    div().w(px(330.0)).child(Input::new(&self.provider_inputs[0])),
+                    div().w(ui(330.0)).child(Input::new(&self.provider_inputs[0])),
                     cx,
                 ))
                 .child(self.row(
                     language.pick("备注", "Note"),
                     "",
-                    div().w(px(330.0)).child(Input::new(&self.provider_inputs[1])),
+                    div().w(ui(330.0)).child(Input::new(&self.provider_inputs[1])),
                     cx,
                 ))
                 .child(self.row(
                     language.pick("官方网站", "Official website"),
                     "",
-                    div().w(px(330.0)).child(Input::new(&self.provider_inputs[2])),
+                    div().w(ui(330.0)).child(Input::new(&self.provider_inputs[2])),
                     cx,
                 ))
                 .child(self.row(
@@ -284,7 +284,7 @@ impl SettingsPane {
                         "供应商的 API 根地址，多数以 `/v1` 结尾。这里填错不会在保存时报错，而是等到第一次对话请求才失败。",
                         "The provider's API base URL, usually ending in `/v1`. An invalid address is detected by the first conversation request, not when these settings are saved.",
                     ),
-                    div().w(px(330.0)).child(Input::new(&self.provider_inputs[3])),
+                    div().w(ui(330.0)).child(Input::new(&self.provider_inputs[3])),
                     cx,
                 ))
                 .child(self.row(
@@ -293,7 +293,7 @@ impl SettingsPane {
                         "新会话默认用的模型名，按供应商文档里的写法逐字填——名字对不上时同样是发起请求那一刻才报错。",
                         "The model name used for new conversations. Enter it exactly as documented by the provider; an invalid name is detected when a request is sent.",
                     ),
-                    div().w(px(330.0)).child(Input::new(&self.provider_inputs[4])),
+                    div().w(ui(330.0)).child(Input::new(&self.provider_inputs[4])),
                     cx,
                 ))
                 .child(
@@ -406,9 +406,9 @@ impl SettingsPane {
                     .gap_4()
                     .child(
                         v_flex()
-                            .w(px(210.0))
+                            .w(ui(210.0))
                             .flex_shrink_0()
-                            .h(px(420.0))
+                            .h(ui(420.0))
                             .gap_1()
                             .overflow_y_scrollbar()
                             .children(provider_rows)

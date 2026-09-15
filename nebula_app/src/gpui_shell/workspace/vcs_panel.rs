@@ -132,6 +132,7 @@ impl NebulaWorkspace {
                         lane_spacing,
                         [theme.primary, theme.success, lane_purple, theme.warning],
                         theme.popover,
+                        crate::gpui_shell::ui_scale::factor(cx),
                     );
                     let refs = git_ref_labels(&commit.decorations)
                         .into_iter()
@@ -143,16 +144,16 @@ impl NebulaWorkspace {
                                 GitRefKind::Tag => theme.warning,
                             };
                             div()
-                                .h(px(15.0))
-                                .max_w(px(72.0))
+                                .h(ui(15.0))
+                                .max_w(ui(72.0))
                                 .flex_shrink_0()
-                                .px(px(4.0))
-                                .rounded(px(4.0))
+                                .px(ui(4.0))
+                                .rounded(ui(4.0))
                                 .border_1()
                                 .border_color(color.opacity(0.38))
                                 .bg(color.opacity(0.12))
                                 .truncate()
-                                .text_size(px(9.5))
+                                .text_size(ui(9.5))
                                 .text_color(color)
                                 .child(git_ref.label)
                                 .into_any_element()
@@ -168,7 +169,7 @@ impl NebulaWorkspace {
                         h_flex()
                             .id(SharedString::from(format!("git-history-{index}")))
                             .w_full()
-                            .h(px(46.0))
+                            .h(ui(46.0))
                             .px_2()
                             .items_start()
                             .hover(|row| row.bg(hover))
@@ -181,7 +182,7 @@ impl NebulaWorkspace {
                                     .justify_center()
                                     .gap_1()
                                     .child(
-                                        h_flex().min_w_0().gap(px(4.0)).children(refs).child(
+                                        h_flex().min_w_0().gap(ui(4.0)).children(refs).child(
                                             div()
                                                 .min_w_0()
                                                 .truncate()
@@ -259,7 +260,7 @@ impl NebulaWorkspace {
                     }
                     rows.push(
                         h_flex()
-                            .h(px(26.0))
+                            .h(ui(26.0))
                             .px_2()
                             .items_center()
                             .text_xs()
@@ -314,7 +315,7 @@ impl NebulaWorkspace {
                                     "git-tree-row-{section_id}-{index}-{relative_path}"
                                 )))
                                 .group(row_group.clone())
-                                .h(px(30.0))
+                                .h(ui(30.0))
                                 .w_full()
                                 .px_2()
                                 .gap_2()
@@ -324,7 +325,7 @@ impl NebulaWorkspace {
                                 .hover(|row| row.bg(hover))
                                 .child(
                                     div()
-                                        .w(px(14.0))
+                                        .w(ui(14.0))
                                         .flex_shrink_0()
                                         .font_family(symbol.clone())
                                         .text_sm()
@@ -552,7 +553,7 @@ impl NebulaWorkspace {
         use crate::display::side_panel::{GitPanelView, VcsKind};
         let summary = git.as_ref().map(|info| {
             h_flex()
-                .h(px(30.0))
+                .h(ui(30.0))
                 .items_center()
                 .gap_2()
                 .child(div().font_family(symbol).text_sm().text_color(muted).child("\u{ea68}"))
@@ -647,9 +648,9 @@ impl NebulaWorkspace {
             .filter(|info| info.vcs == VcsKind::Git && git_view == GitPanelView::History)
             .map(|info| {
                 h_flex()
-                    .h(px(30.0))
+                    .h(ui(30.0))
                     .flex_shrink_0()
-                    .px(px(6.0))
+                    .px(ui(6.0))
                     .items_center()
                     .child(
                         div()
@@ -912,7 +913,7 @@ impl NebulaWorkspace {
 
         v_flex()
             .h_full()
-            .w(px(320.0))
+            .w(ui(320.0))
             .flex_shrink_0()
             .p_2()
             .gap_2()
@@ -1252,8 +1253,14 @@ fn git_lane_layout(rows: &[GitGraphRow]) -> (f32, f32) {
     (width, spacing)
 }
 
-fn paint_git_lane_line(window: &mut Window, color: gpui::Hsla, from: (f32, f32), to: (f32, f32)) {
-    let mut path = gpui::PathBuilder::stroke(px(2.0));
+fn paint_git_lane_line(
+    window: &mut Window,
+    color: gpui::Hsla,
+    from: (f32, f32),
+    to: (f32, f32),
+    scale: f32,
+) {
+    let mut path = gpui::PathBuilder::stroke(px(2.0 * scale));
     path.move_to(gpui::point(px(from.0), px(from.1)));
     path.line_to(gpui::point(px(to.0), px(to.1)));
     if let Ok(path) = path.build() {
@@ -1266,13 +1273,14 @@ fn paint_git_lane_connection(
     color: gpui::Hsla,
     from: (f32, f32),
     to: (f32, f32),
+    scale: f32,
 ) {
-    if (from.0 - to.0).abs() < 0.5 {
-        paint_git_lane_line(window, color, from, to);
+    if (from.0 - to.0).abs() < 0.5 * scale {
+        paint_git_lane_line(window, color, from, to, scale);
         return;
     }
     let middle = ((from.0 + to.0) * 0.5, (from.1 + to.1) * 0.5);
-    let mut path = gpui::PathBuilder::stroke(px(2.0));
+    let mut path = gpui::PathBuilder::stroke(px(2.0 * scale));
     path.move_to(gpui::point(px(from.0), px(from.1)));
     path.curve_to(gpui::point(px(middle.0), px(middle.1)), gpui::point(px(from.0), px(middle.1)));
     path.curve_to(gpui::point(px(to.0), px(to.1)), gpui::point(px(to.0), px(middle.1)));
@@ -1288,10 +1296,11 @@ fn git_lane_canvas(
     lane_spacing: f32,
     colors: [gpui::Hsla; 4],
     surface: gpui::Hsla,
+    scale: f32,
 ) -> gpui::AnyElement {
     div()
         .relative()
-        .w(px(width))
+        .w(px(width * scale))
         .h_full()
         .flex_shrink_0()
         .overflow_hidden()
@@ -1306,7 +1315,9 @@ fn git_lane_canvas(
                     let top = origin_y;
                     let middle_y = origin_y + height * 0.5;
                     let bottom = origin_y + height;
-                    let lane_x = |lane: usize| origin_x + 10.0 + lane as f32 * lane_spacing;
+                    let lane_x = |lane: usize| {
+                        origin_x + 10.0 * scale + lane as f32 * lane_spacing * scale
+                    };
                     let lane_color = |lane: usize| colors[lane % colors.len()];
 
                     // 先画线路、最后画节点，让多条曲线的交汇点保持干净。
@@ -1326,13 +1337,14 @@ fn git_lane_canvas(
                             lane_color(edge.color),
                             (from_x, from_y),
                             (to_x, to_y),
+                            scale,
                         );
                     }
 
                     let x = lane_x(graph.node_lane);
                     if x < right {
                         let color = lane_color(graph.node_color);
-                        let radius = if graph.merge_commit { 5.0 } else { 4.0 };
+                        let radius = if graph.merge_commit { 5.0 } else { 4.0 } * scale;
                         window.paint_quad(
                             gpui::fill(
                                 gpui::Bounds::new(
@@ -1344,7 +1356,7 @@ fn git_lane_canvas(
                             .corner_radii(px(radius)),
                         );
                         if graph.merge_commit {
-                            let inner = 2.5;
+                            let inner = 2.5 * scale;
                             window.paint_quad(
                                 gpui::fill(
                                     gpui::Bounds::new(

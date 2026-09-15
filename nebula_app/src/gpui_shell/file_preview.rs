@@ -1,8 +1,9 @@
 //! A file tooltip owns its background request; closing it discards the result.
 
+use crate::gpui_shell::ui_scale::ui;
 use crate::i18n::Message;
 use gpui::prelude::*;
-use gpui::{Context, Image, ImageFormat, IntoElement, ObjectFit, Render, Window, div, img, px};
+use gpui::{Context, Image, ImageFormat, IntoElement, ObjectFit, Render, Window, div, img};
 use gpui_component::ActiveTheme;
 use std::{path::PathBuf, sync::Arc};
 
@@ -53,7 +54,7 @@ impl Render for FilePreview {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let language = super::config::ui_language(cx);
         div()
-            .w(px(300.0))
+            .w(ui(300.0))
             .p_3()
             .flex()
             .flex_col()
@@ -69,10 +70,10 @@ impl Render for FilePreview {
                 ),
             )
             .when_some(self.image.clone(), |root, image| {
-                root.child(img(image).w_full().h(px(220.0)).object_fit(ObjectFit::Contain))
+                root.child(img(image).w_full().h(ui(220.0)).object_fit(ObjectFit::Contain))
             })
             .when(self.image.is_none(), |root| {
-                root.child(div().h(px(60.0)).text_xs().child(language.text(if self.failed {
+                root.child(div().h(ui(60.0)).text_xs().child(language.text(if self.failed {
                     Message::FilesPreviewUnavailable
                 } else {
                     Message::FilesPreviewLoading

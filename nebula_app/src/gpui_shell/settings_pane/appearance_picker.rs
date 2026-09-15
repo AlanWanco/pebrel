@@ -269,7 +269,7 @@ impl SettingsPane {
             .aria_toggled(if selected { Toggled::True } else { Toggled::False })
             .w(px(width))
             .flex_shrink_0()
-            .rounded(px(8.0))
+            .rounded(ui(8.0))
             .border_1()
             .border_color(if selected || focus.is_focused(window) {
                 colors.primary
@@ -303,9 +303,9 @@ impl SettingsPane {
         };
         let count = picker.draft.choices(picker.filter).len();
         h_flex()
-            .mx(px(if compact { 19.0 } else { 27.0 }))
-            .pb(px(15.0))
-            .gap(px(4.0))
+            .mx(ui(if compact { 19.0 } else { 27.0 }))
+            .pb(ui(15.0))
+            .gap(ui(4.0))
             .border_b_1()
             .border_color(colors.line)
             .flex_shrink_0()
@@ -314,10 +314,10 @@ impl SettingsPane {
                 Button::new(("appearance-filter", index))
                     .label(language.pick(chinese, english))
                     .ghost()
-                    .h(px(27.0))
-                    .px(px(if compact { 7.0 } else { 10.0 }))
-                    .text_size(px(11.0))
-                    .rounded(px(5.0))
+                    .h(ui(27.0))
+                    .px(ui(if compact { 7.0 } else { 10.0 }))
+                    .text_size(ui(11.0))
+                    .rounded(px(5.0 * crate::gpui_shell::ui_scale::factor(cx)))
                     .text_color(if selected { colors.ink } else { colors.secondary })
                     .when(selected, |button| button.bg(colors.selected).font_semibold())
                     .on_click(cx.listener(move |this, _, _, cx| {
@@ -329,7 +329,7 @@ impl SettingsPane {
             }))
             .when(!compact, |filters| {
                 filters.child(
-                    div().flex_1().text_right().text_size(px(10.5)).text_color(colors.muted).child(
+                    div().flex_1().text_right().text_size(ui(10.5)).text_color(colors.muted).child(
                         format!(
                             "{count} {}",
                             if picker.draft.is_theme() {
@@ -355,10 +355,12 @@ impl SettingsPane {
         let language = crate::gpui_shell::config::ui_language(cx);
         let colors = AppearanceColors::current(cx);
         let viewport = window.viewport_size();
-        let compact = f32::from(viewport.width) <= 720.0;
-        let padding = if compact { 19.0 } else { 27.0 };
-        let width = (f32::from(viewport.width) - if compact { 24.0 } else { 40.0 }).min(770.0);
-        let height = f32::from(viewport.height) - 48.0;
+        let scale = crate::gpui_shell::ui_scale::factor(cx);
+        let compact = f32::from(viewport.width) <= 720.0 * scale;
+        let padding = (if compact { 19.0 } else { 27.0 }) * scale;
+        let width = (f32::from(viewport.width) - (if compact { 24.0 } else { 40.0 }) * scale)
+            .min(770.0 * scale);
+        let height = f32::from(viewport.height) - 48.0 * scale;
         let title = if draft.is_theme() {
             language.pick("选择主题", "Choose theme")
         } else {
@@ -396,7 +398,7 @@ impl SettingsPane {
             .w(px(width.max(1.0)))
             .max_h(px(height.max(1.0)))
             .flex_shrink_0()
-            .rounded(px(14.0))
+            .rounded(ui(14.0))
             .border_1()
             .border_color(colors.control)
             .bg(colors.surface)
@@ -408,8 +410,8 @@ impl SettingsPane {
             .child(
                 h_flex()
                     .px(px(padding))
-                    .pt(px(25.0))
-                    .pb(px(21.0))
+                    .pt(ui(25.0))
+                    .pb(ui(21.0))
                     .gap_4()
                     .items_start()
                     .flex_shrink_0()
@@ -417,11 +419,11 @@ impl SettingsPane {
                         v_flex()
                             .flex_1()
                             .min_w_0()
-                            .gap(px(5.0))
-                            .child(div().text_size(px(19.0)).font_semibold().child(title))
+                            .gap(ui(5.0))
+                            .child(div().text_size(ui(19.0)).font_semibold().child(title))
                             .child(
                                 div()
-                                    .text_size(px(11.5))
+                                    .text_size(ui(11.5))
                                     .text_color(colors.secondary)
                                     .child(subtitle),
                             ),
@@ -430,7 +432,7 @@ impl SettingsPane {
                         Button::new("close-appearance-picker")
                             .icon(IconName::Close)
                             .ghost()
-                            .size(px(28.0))
+                            .size(ui(28.0))
                             .text_color(colors.secondary)
                             .tooltip(language.pick("关闭", "Close"))
                             .on_click(cx.listener(|this, _, window, cx| {
@@ -446,8 +448,8 @@ impl SettingsPane {
                     .flex_shrink(1.0)
                     .overflow_y_scroll()
                     .px(px(padding))
-                    .pt(px(21.0))
-                    .pb(px(24.0))
+                    .pt(ui(21.0))
+                    .pb(ui(24.0))
                     .child(body),
             )
             .when_some(error, |dialog, error| {
@@ -455,7 +457,7 @@ impl SettingsPane {
                     div()
                         .px(px(padding))
                         .pb_2()
-                        .text_size(px(11.0))
+                        .text_size(ui(11.0))
                         .text_color(cx.theme().danger)
                         .child(error),
                 )
@@ -463,8 +465,8 @@ impl SettingsPane {
             .child(
                 h_flex()
                     .px(px(padding))
-                    .py(px(17.0))
-                    .gap(px(9.0))
+                    .py(ui(17.0))
+                    .gap(ui(9.0))
                     .justify_between()
                     .flex_shrink_0()
                     .border_t_1()
@@ -472,8 +474,8 @@ impl SettingsPane {
                     .child(
                         h_flex()
                             .min_w_0()
-                            .gap(px(7.0))
-                            .text_size(px(if compact { 10.0 } else { 11.0 }))
+                            .gap(ui(7.0))
+                            .text_size(ui(if compact { 10.0 } else { 11.0 }))
                             .child(
                                 div()
                                     .text_color(colors.secondary)
@@ -483,15 +485,15 @@ impl SettingsPane {
                     )
                     .child(
                         h_flex()
-                            .gap(px(8.0))
+                            .gap(ui(8.0))
                             .flex_shrink_0()
                             .child(
                                 Button::new("cancel-appearance-picker")
                                     .label(language.pick("取消", "Cancel"))
-                                    .h(px(33.0))
-                                    .px(px(if compact { 11.0 } else { 16.0 }))
-                                    .text_size(px(12.0))
-                                    .rounded(px(6.0))
+                                    .h(ui(33.0))
+                                    .px(ui(if compact { 11.0 } else { 16.0 }))
+                                    .text_size(ui(12.0))
+                                    .rounded(px(6.0 * crate::gpui_shell::ui_scale::factor(cx)))
                                     .bg(colors.surface)
                                     .border_color(colors.control)
                                     .text_color(colors.ink)
@@ -502,10 +504,10 @@ impl SettingsPane {
                             .child(
                                 Button::new("apply-appearance-picker")
                                     .label(apply_label)
-                                    .h(px(33.0))
-                                    .px(px(if compact { 11.0 } else { 16.0 }))
-                                    .text_size(px(12.0))
-                                    .rounded(px(6.0))
+                                    .h(ui(33.0))
+                                    .px(ui(if compact { 11.0 } else { 16.0 }))
+                                    .text_size(ui(12.0))
+                                    .rounded(px(6.0 * crate::gpui_shell::ui_scale::factor(cx)))
                                     .bg(colors.primary)
                                     .border_color(colors.primary)
                                     .text_color(colors.on_primary)

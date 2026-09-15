@@ -125,7 +125,7 @@ impl SettingsPane {
 
         v_flex()
             .w_full()
-            .gap(px(GROUP_GAP))
+            .gap(ui(GROUP_GAP))
             .child(terminal)
             .child(cursor)
             .child(interface)

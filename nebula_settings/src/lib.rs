@@ -20,6 +20,8 @@ pub use app_icon::{AppIconName, AppIconPalette};
 mod language;
 mod quick_terminal;
 mod themes;
+mod ui_scale;
+pub use ui_scale::UiScale;
 pub use language::{LanguageInfo, LanguagePref};
 pub use quick_terminal::{QuickTerminalMode, QuickTerminalSize};
 pub use themes::{FreshPalette, ReviewedPalette};
@@ -944,6 +946,8 @@ pub struct RuntimeSettings {
     /// **逻辑像素**（旧壳写盘语义：设置页 spinner 与 Ctrl+滚轮缩放持久化时
     /// 已除以 scale factor）。`None` = 跟随 nebula.toml 的 `font.size`（pt）。
     pub font_size_px: Option<f32>,
+    /// Additional application UI scaling; never used as an OS DPI override.
+    pub ui_scale: UiScale,
     pub cursor_shape: Option<CursorShapeName>,
     pub cursor_blink: Option<bool>,
     pub copy_on_select: bool,
@@ -1082,6 +1086,7 @@ impl RuntimeSettings {
             follow_system_theme: raw.bool_on("follow_system_theme").unwrap_or(false),
             font_family: raw.value("font_family").map(str::to_owned),
             font_size_px: raw.f32("font_size").map(|size| size.clamp(4.0, 96.0)),
+            ui_scale: raw.value("ui_scale").and_then(UiScale::from_settings).unwrap_or_default(),
             cursor_shape: raw.value("cursor_shape").and_then(CursorShapeName::from_settings),
             cursor_blink: raw.bool_on("cursor_blink"),
             copy_on_select: raw.bool_on("copy_on_select").unwrap_or(false),

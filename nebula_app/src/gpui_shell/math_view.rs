@@ -15,6 +15,7 @@
 
 mod source_fallback;
 use source_fallback::SourceFallback;
+use crate::gpui_shell::ui_scale::ui;
 
 use std::cell::{Cell, RefCell};
 use std::collections::hash_map::DefaultHasher;
@@ -488,7 +489,7 @@ impl Render for MathFormulaView {
                     .active(cx.theme().list_active),
             )
             .compact()
-            .size(px(28.0))
+            .size(ui(28.0))
             .icon(if latex_copied { IconName::Check } else { IconName::Copy })
             .tooltip(language.text(Message::EditorCopyMathLatex))
             .on_click(move |_, window, cx| {
@@ -515,7 +516,7 @@ impl Render for MathFormulaView {
                     .active(cx.theme().list_active),
             )
             .compact()
-            .size(px(28.0))
+            .size(ui(28.0))
             .icon(if image_pending {
                 IconName::Loader
             } else if image_copied {
@@ -546,15 +547,15 @@ impl Render for MathFormulaView {
             .child(
                 h_flex()
                     .absolute()
-                    .top(px(-4.0))
+                    .top(ui(-4.0))
                     .right(px(0.0))
                     .invisible()
                     .when(latex_copied || image_copied || image_pending, |actions| {
                         actions.visible()
                     })
                     .group_hover(group, |actions| actions.visible())
-                    .gap(px(2.0))
-                    .p(px(2.0))
+                    .gap(ui(2.0))
+                    .p(ui(2.0))
                     .rounded(cx.theme().radius)
                     .border_1()
                     .border_color(cx.theme().border)

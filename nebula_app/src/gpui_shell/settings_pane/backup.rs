@@ -398,7 +398,7 @@ impl SettingsPane {
             self.row(
                 label,
                 "",
-                div().w(px(300.0)).children(input.map(|input| Input::new(&input))),
+                div().w(ui(300.0)).children(input.map(|input| Input::new(&input))),
                 cx,
             )
         });
@@ -433,7 +433,7 @@ impl SettingsPane {
                         } else {
                             language.pick("未设置", "Not set")
                         }))
-                        .child(div().w(px(220.0)).child(Input::new(&self.backup_secret_input)))
+                        .child(div().w(ui(220.0)).child(Input::new(&self.backup_secret_input)))
                         .child(
                             NebulaButton::new("bk-store-secret")
                                 .label(language.pick("保存凭据", "Save credential"))
@@ -494,7 +494,7 @@ impl SettingsPane {
             .child(self.row(
                 language.pick("备份密码", "Backup password"),
                 language.pick("导出时用它加密整个包，恢复时要一模一样的一串。密码不落盘、也无从找回——忘了这份备份就打不开了。", "This password encrypts the entire export and the exact same value is required to restore it. It is neither persisted nor recoverable; losing it makes the backup unreadable."),
-                div().w(px(300.0)).child(Input::new(&self.backup_pass_input)),
+                div().w(ui(300.0)).child(Input::new(&self.backup_pass_input)),
                 cx,
             ))
             .child(
@@ -522,7 +522,7 @@ impl SettingsPane {
                     ),
             );
 
-        v_flex().w_full().gap(px(GROUP_GAP)).child(local_group).child(remote_group).when_some(
+        v_flex().w_full().gap(ui(GROUP_GAP)).child(local_group).child(remote_group).when_some(
             self.backup_status.clone(),
             |page, status| {
                 let error = status.is_error();

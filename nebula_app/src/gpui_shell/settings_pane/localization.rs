@@ -7,6 +7,9 @@ pub(super) fn localized_select_labels(
     values: &[&'static str],
     language: crate::display::UiLanguage,
 ) -> Vec<SharedString> {
+    if key == "ui_scale" {
+        return values.iter().map(|value| SharedString::from(format!("{value}%"))).collect();
+    }
     let labels: Vec<&'static str> = match key {
         "language" => nebula_settings::LanguagePref::ALL
             .iter()

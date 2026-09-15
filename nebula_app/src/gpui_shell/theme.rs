@@ -240,11 +240,24 @@ impl PaneCardStyle {
         }
     }
 
-    /// 当前生效的卡几何。
+    /// 当前生效的卡几何，仍以配置文件的设计单位返回。
     pub fn current(cx: &App) -> Self {
         cx.try_global::<crate::gpui_shell::config::Settings>()
             .map(|settings| settings.card)
             .unwrap_or_default()
+    }
+
+    /// 当前生效的卡几何换算到窗口的实际布局单位。卡缝和圆角属于 chrome，
+    /// 应随界面缩放；divider 是物理发丝线，保持单像素合同。
+    pub fn scaled_current(cx: &App) -> Self {
+        let mut card = Self::current(cx);
+        let scale = crate::gpui_shell::ui_scale::factor(cx);
+        card.radius *= scale;
+        card.margin.left *= scale;
+        card.margin.right *= scale;
+        card.margin.top *= scale;
+        card.margin.bottom *= scale;
+        card
     }
 }
 
@@ -257,7 +270,7 @@ pub fn card_divider_color(cx: &App) -> Hsla {
 /// 终端卡圆角。默认值的权威在 `nebula_settings::DEFAULT_PANE_CARD_RADIUS`，
 /// 旧壳的 `UI_SHELL_RADIUS_LOGICAL` 引用同一个常量——两壳必须同径。
 pub fn card_radius(cx: &App) -> Pixels {
-    px(PaneCardStyle::current(cx).radius)
+    px(PaneCardStyle::scaled_current(cx).radius)
 }
 
 /// 卡投影。浅色主题压得更浅——同一组 alpha 落在浅底上会显脏而不是显深度。
@@ -266,10 +279,11 @@ pub fn card_radius(cx: &App) -> Pixels {
 /// 阴影朝一侧甩的违和感。
 pub fn card_shadow(cx: &App) -> gpui::BoxShadow {
     let is_light = chrome_theme_resolved(cx).palette().is_light;
+    let scale = crate::gpui_shell::ui_scale::factor(cx);
     gpui::BoxShadow {
         color: hsla(0.0, 0.0, 0.0, if is_light { 0.10 } else { 0.28 }),
-        offset: point(px(0.0), px(6.0)),
-        blur_radius: px(18.0),
+        offset: point(px(0.0), px(6.0 * scale)),
+        blur_radius: px(18.0 * scale),
         spread_radius: px(0.0),
         inset: false,
     }
@@ -340,7 +354,10 @@ pub fn paint_shell_around_card(
     paint(window, x, card_y, left, card_h);
     paint(window, x + width - right, card_y, right, card_h);
 
-    let radius = PaneCardStyle::current(cx).radius.min(card_w * 0.5).min(card_h * 0.5);
+    let radius = (PaneCardStyle::current(cx).radius
+        * crate::gpui_shell::ui_scale::factor(cx))
+        .min(card_w * 0.5)
+        .min(card_h * 0.5);
     if radius <= 0.0 {
         return;
     }
@@ -547,6 +564,7 @@ fn soften(c: crate::display::color::Rgb, keep: f32) -> crate::display::color::Rg
 }
 
 fn apply_skin_tokens(chrome: NebulaTheme, cx: &mut App) {
+    let scale = crate::gpui_shell::ui_scale::factor(cx);
     let sk = chrome.skin();
     let transparent = hsla(0.0, 0.0, 0.0, 0.0);
     let theme = Theme::global_mut(cx);
@@ -666,8 +684,8 @@ fn apply_skin_tokens(chrome: NebulaTheme, cx: &mut App) {
 
     // 字号与圆角：控件 pill 档 = 旧壳 UI_CORNER_RADIUS_LOGICAL(8)；浮层
     // 12，低于终端卡的 14——三档呼应旧壳的圆角层级。
-    theme.font_size = px(14.0);
-    theme.mono_font_size = px(13.0);
+    theme.font_size = px(crate::gpui_shell::ui_scale::BASE_REM * scale);
+    theme.mono_font_size = px(13.0 * scale);
 
     // 整壳的兜底字体（fork `root.rs` 用 `theme.font_family` 给根容器）。上游
     // 默认 `.SystemUIFont` 在 Windows 上没落到 UI 字体，中文最终回落进终端等
@@ -685,8 +703,8 @@ fn apply_skin_tokens(chrome: NebulaTheme, cx: &mut App) {
         // 随终端主字体变化，进而破坏 chrome 的既定间距。
         theme.mono_font_family = crate::font_install::REQUIRED_FONT_FAMILY.into();
     }
-    theme.radius = px(crate::display::UI_CORNER_RADIUS_LOGICAL);
-    theme.radius_lg = px(12.0);
+    theme.radius = px(crate::display::UI_CORNER_RADIUS_LOGICAL * scale);
+    theme.radius_lg = px(12.0 * scale);
 
     // 1.16 的 Button、Slider、Switch 等背景统一读取 ThemeTokens。Nebula 的
     // Skin 是纯色权威来源，因此在所有 ThemeColor 覆写完成后一次性解析，避免

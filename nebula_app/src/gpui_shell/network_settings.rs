@@ -6,7 +6,7 @@
 //! 读的是落盘后的 `SshProxyConfig::load_global`。
 
 use gpui::prelude::FluentBuilder as _;
-use gpui::{Context, IntoElement, ParentElement as _, SharedString, Styled as _, div, px};
+use gpui::{Context, IntoElement, ParentElement as _, SharedString, Styled as _, div};
 use gpui_component::input::InputEvent;
 use nebula_settings::ProxyModeName;
 
@@ -156,7 +156,7 @@ impl SettingsPane {
         let language = crate::gpui_shell::config::ui_language(cx);
         self.group(language.tr("settings.network.title"), cx)
             .child(self.proxy_test_banner(cx))
-            .child(div().h(px(PROXY_TEST_GAP)).w_full().flex_shrink_0())
+            .child(div().h(ui(PROXY_TEST_GAP)).w_full().flex_shrink_0())
             .child(self.proxy_mode_row(cx))
             .when(custom, |page| page.child(self.proxy_address_row(cx)))
             .child(self.switch_row(
@@ -192,21 +192,21 @@ impl SettingsPane {
         };
         h_flex()
             .w_full()
-            .h(px(PROXY_TEST_BANNER_H))
+            .h(ui(PROXY_TEST_BANNER_H))
             .flex_shrink_0()
             .items_center()
-            .pl(px(14.0))
-            .pr(px(12.0))
+            .pl(ui(14.0))
+            .pr(ui(12.0))
             .gap_3()
-            .rounded(px(crate::display::ui::tokens::radius::OVERLAY))
+            .rounded(ui(crate::display::ui::tokens::radius::OVERLAY))
             .border_1()
             .border_color(theme.border)
             .bg(theme.muted)
             .child(div().flex_1().min_w_0().text_color(status_color).child(status))
             .child(
                 div()
-                    .w(px(PROXY_TEST_BUTTON_W))
-                    .min_w(px(PROXY_TEST_BUTTON_MIN_W))
+                    .w(ui(PROXY_TEST_BUTTON_W))
+                    .min_w(ui(PROXY_TEST_BUTTON_MIN_W))
                     .flex_shrink_0()
                     .child(
                         NebulaButton::new("proxy-test-network")
@@ -225,7 +225,7 @@ impl SettingsPane {
             language.tr("settings.network.mode.label"),
             "",
             div()
-                .w(px(PROXY_MODE_SELECT_W))
+                .w(ui(PROXY_MODE_SELECT_W))
                 .text_color(cx.theme().link)
                 .children(select.map(|state| Select::new(&state))),
             cx,
@@ -239,13 +239,13 @@ impl SettingsPane {
             "",
             h_flex()
                 .flex_1()
-                .min_w(px(PROXY_PROTOCOL_SELECT_W + PROXY_MANUAL_GAP + 80.0))
-                .max_w(px(360.0))
+                .min_w(ui(PROXY_PROTOCOL_SELECT_W + PROXY_MANUAL_GAP + 80.0))
+                .max_w(ui(360.0))
                 .items_center()
-                .gap(px(PROXY_MANUAL_GAP))
+                .gap(ui(PROXY_MANUAL_GAP))
                 .child(
                     div()
-                        .w(px(PROXY_PROTOCOL_SELECT_W))
+                        .w(ui(PROXY_PROTOCOL_SELECT_W))
                         .flex_shrink_0()
                         .text_color(cx.theme().link)
                         .child(Select::new(&self.proxy_protocol_select)),

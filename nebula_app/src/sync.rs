@@ -36,6 +36,7 @@ const SYNC_KEYS: &[&str] = &[
     "theme",
     "app_icon",
     "follow_system_theme",
+    "ui_scale",
     "ghost",
     "accept",
     "font_size",

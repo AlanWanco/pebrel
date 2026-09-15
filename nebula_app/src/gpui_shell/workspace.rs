@@ -56,6 +56,7 @@ mod key_actions;
 mod notifications;
 mod palette;
 mod pane_header;
+mod pane_rename;
 mod quick_jump;
 mod quick_terminal;
 mod recipes;
@@ -144,7 +145,8 @@ fn sidebar_resize_offset_for(divider: f32, gutter: f32) -> f32 {
 
 fn sidebar_resize_visual_offset(cx: &App) -> f32 {
     let card = crate::gpui_shell::theme::PaneCardStyle::current(cx);
-    sidebar_resize_offset_for(card.divider, card.margin.left)
+    let scale = crate::gpui_shell::ui_scale::factor(cx);
+    sidebar_resize_offset_for(card.divider, card.margin.left * scale)
 }
 
 /// 标题栏里的文件树 / Git 工具必须同时挡住原生拖窗命中和父级拖拽起手。
@@ -319,6 +321,8 @@ fn bind_macos_command_keys(cx: &mut App) {
 /// （AI hook 的 `NEBULA_PANE_ID` 同源），全工作区唯一、终生不复用。
 struct TerminalPane {
     id: u64,
+    /// User title travels with this pane, independently of tab metadata.
+    custom_name: Option<String>,
     view: Entity<TerminalView>,
     _subscription: Subscription,
 }
@@ -877,6 +881,7 @@ pub struct NebulaWorkspace {
     tabs_scroll: usize,
     /// 列表视口（逻辑 px），由 canvas 回写；0 表示尚未量到。
     tabs_viewport_h: f32,
+    tabs_ui_scale: f32,
     tabs_list_width: f32,
     tabs_list_origin: gpui::Point<gpui::Pixels>,
     tabs_scroll_grab: Option<f32>,
@@ -1144,7 +1149,8 @@ impl NebulaWorkspace {
         let file_tree_search_subscription =
             cx.subscribe_in(&file_tree_search_input, window, Self::on_file_tree_search_event);
         let sidebar_logo_target_px =
-            (TAB_LABEL_ICON_SIZE * window.scale_factor()).round().max(1.0) as u32;
+            (TAB_LABEL_ICON_SIZE * window.scale_factor() * crate::gpui_shell::ui_scale::factor(cx))
+                .round().max(1.0) as u32;
         let mut this = Self {
             tabs: Vec::new(),
             tab_meta: Vec::new(),
@@ -1170,6 +1176,7 @@ impl NebulaWorkspace {
             tabs_fold_seq: 0,
             tabs_scroll: 0,
             tabs_viewport_h: 0.0,
+            tabs_ui_scale: crate::gpui_shell::ui_scale::factor(cx),
             tabs_list_width: 0.0,
             tabs_list_origin: gpui::point(px(0.0), px(0.0)),
             tabs_scroll_grab: None,
@@ -1296,8 +1303,9 @@ impl NebulaWorkspace {
         let (startup_cell_w, startup_line_h) = TerminalView::startup_cell_metrics(window, cx);
         // 标签栏位置只改变 chrome 内部布局，不能改变产品的默认外窗几何。
         // 顶栏模式仍保留与侧栏模式相同的横向预算，让两种模式启动时宽高一致。
-        let chrome_w = sidebar_width + 16.0 + 24.0 + 2.0;
-        let chrome_h = 34.0 + 16.0 + 16.0 + 2.0;
+        let scale = crate::gpui_shell::ui_scale::factor(cx);
+        let chrome_w = (sidebar_width + 16.0 + 24.0 + 2.0) * scale;
+        let chrome_h = (34.0 + 16.0 + 16.0 + 2.0) * scale;
         let (w, h) = if fit_window_to_default_grid {
             let mut w = f32::from(TerminalView::DEFAULT_GRID_COLUMNS) * f32::from(startup_cell_w)
                 + chrome_w;
@@ -1497,7 +1505,7 @@ impl NebulaWorkspace {
         if let Some(command) = command {
             view.update(cx, |view, cx| view.run_command(command, cx));
         }
-        TerminalPane { id: pane_id, view, _subscription: subscription }
+        TerminalPane { id: pane_id, custom_name: None, view, _subscription: subscription }
     }
 
     /// 现网格（聚焦终端）或开窗反推的目标网格：让新 pane 的 PTY 出生即
@@ -1978,192 +1986,6 @@ impl NebulaWorkspace {
             self.mark_structural_resize(active, cx);
             cx.notify();
         }
-    }
-
-    /// 启动恢复：断路器跳闸就隔离现场并走干净路径；恢复成功弹一条
-    /// 自动消失的提示（崩溃现场多一句来源说明）。返回是否恢复出了 tab。
-    fn try_restore_session(
-        &mut self,
-        resume_ai: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        use crate::display::ToastKind;
-
-        let Some(mut session) = crate::session::load() else { return false };
-        if !crate::session::should_restore(&session) {
-            if !session.tabs.is_empty() {
-                // 连续几次启动都没活到第一次自动保存：把「一恢复就崩」的
-                // 现场挪去隔离文件（唯一的诊断材料），本次干净启动。
-                if let Some(path) = crate::session::quarantine() {
-                    crate::gpui_shell::toast::banner(
-                        window,
-                        cx,
-                        ToastKind::Warning,
-                        format!("连续多次启动未完成恢复，已跳过；现场保存在 {}", path.display()),
-                    );
-                }
-            }
-            return false;
-        }
-        let crashed = crate::session::was_crash(&session);
-        crate::session::mark_boot_attempt(&mut session);
-        let mut restored = 0usize;
-        for tab in &session.tabs {
-            if self.restore_tab(tab, resume_ai, window, cx) {
-                restored += 1;
-            }
-        }
-        if restored == 0 {
-            return false;
-        }
-        self.active = session.active_tab.min(self.tabs.len().saturating_sub(1));
-        self.focus_active(window, cx);
-        let text = if crashed {
-            format!("上次未正常退出，已恢复 {restored} 个标签")
-        } else {
-            format!("已恢复 {restored} 个标签")
-        };
-        crate::gpui_shell::toast::toast(window, cx, ToastKind::Success, text);
-        cx.notify();
-        true
-    }
-
-    /// 恢复一个 Terminal tab：DFS 逐叶 spawn（消失目录回退默认 cwd、AI 会话
-    /// 以安全 resume 命令接续、SSH launch 只作用于首 pane——launch 描述的
-    /// 是「首 pane 怎么启动」，旧壳同义），再按持久化树的形状重建分屏树。
-    fn restore_tab(
-        &mut self,
-        tab: &crate::session::TabSession,
-        resume_ai: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        use crate::session::{LaunchSession, LayoutSession};
-
-        let layout =
-            tab.layout.clone().unwrap_or(LayoutSession::Pane { cwd: tab.cwd.clone(), agent: None });
-        // v1-v3 / 早期 GPUI 快照没有 launch，按共享 schema 回退 Default；
-        // v4 的 Shell/Profile/Ssh 必须原样用于首 Pane，不能再次读取当前默认。
-        let saved_launch = tab.launch.clone().unwrap_or(LaunchSession::Default);
-        let grid = self.initial_grid;
-        let mut panes: Vec<TerminalPane> = Vec::new();
-        for (index, leaf) in layout.leaves().into_iter().enumerate() {
-            let LayoutSession::Pane { cwd, agent } = leaf else { continue };
-            let launch = if index == 0 {
-                Self::terminal_launch_from_session(&saved_launch, crate::session::valid_dir(cwd))
-            } else {
-                // 共享 v4 与旧壳只把 Tab 的 launch 赋给首 Pane；其它叶子没有
-                // 独立启动身份，保持既有 Default 恢复语义。
-                crate::gpui_shell::terminal::view::TerminalLaunch::Local {
-                    cwd: crate::session::valid_dir(cwd),
-                    shell: None,
-                    shell_name: None,
-                }
-            };
-            let command = restored_agent_command(resume_ai, agent.as_ref());
-            let pane = self.new_pane(grid, launch, command, window, cx);
-            // 冷恢复已经知道这段对话的 hook 身份：种回 view，右键「分叉
-            // AI 会话」不必再等下一条带 session_id 的 hook。
-            if let Some((source, session_id)) = agent
-                .as_ref()
-                .and_then(|agent| Some((agent.source.clone(), agent.session_id.clone()?)))
-            {
-                pane.view.update(cx, |view, cx| view.seed_ai_session(source, session_id, cx));
-            }
-            panes.push(pane);
-        }
-        if panes.is_empty() {
-            return false;
-        }
-        let mut ids = panes.iter().map(|pane| pane.id).collect::<Vec<_>>().into_iter();
-        let (tree, _) = crate::gpui_shell::session_restore::tree_from_layout(&layout, &mut || {
-            ids.next().unwrap_or(0)
-        });
-        let focused =
-            panes.get(tab.active_pane).or_else(|| panes.first()).map(|pane| pane.id).unwrap_or(0);
-        // 恢复期保持文件里的既有次序，不套「新标签插入位置」策略。
-        // 重命名与色标随会话一起回来（旧壳同合同）。
-        let at = self.tabs.len();
-        self.insert_tab_at(
-            at,
-            WorkspaceTab::Terminal { panes, tree, focused, zoomed: false, broadcast: false },
-            TabMeta {
-                custom_name: tab.custom_name.clone(),
-                color: tab.color,
-                shell_tag: Self::launch_shell_tag(&saved_launch),
-                launch: Some(saved_launch),
-                has_bell: false,
-            },
-        );
-        true
-    }
-
-    /// 当前工作区 → 共享 v4 快照。设置/文档/图片 tab 不进会话（旧壳同
-    /// 合同）；AI 会话身份优先取 hook 直报的精确 id，退而取可解析的前台
-    /// 程序名（claude 无 id 恢复成 `--continue`，安全判定在 schema 层）。
-    pub(crate) fn snapshot_session(&self, cx: &App) -> crate::session::Session {
-        use crate::session::{AgentSession, LaunchSession, Session, TabSession};
-
-        let mut tabs = Vec::new();
-        let mut active_out = 0usize;
-        for (ix, tab) in self.tabs.iter().enumerate() {
-            let WorkspaceTab::Terminal { panes, tree, focused, .. } = tab else { continue };
-            if ix == self.active {
-                active_out = tabs.len();
-            }
-            let leaf_data = |id: u64| -> (String, Option<AgentSession>) {
-                let Some(pane) = panes.iter().find(|pane| pane.id == id) else {
-                    return (String::new(), None);
-                };
-                let view = pane.view.read(cx);
-                let agent = view
-                    .ai_session
-                    .as_ref()
-                    .map(|identity| AgentSession {
-                        source: identity.source.clone(),
-                        session_id: Some(identity.session_id.clone()),
-                    })
-                    .or_else(|| {
-                        view.running_program
-                            .as_deref()
-                            .filter(|program| crate::ai_agents::AgentKind::parse(program).is_some())
-                            .map(|program| AgentSession {
-                                source: program.to_owned(),
-                                session_id: None,
-                            })
-                    });
-                (view.cwd.clone(), agent)
-            };
-            let layout = crate::gpui_shell::session_restore::layout_from_tree(tree, &leaf_data);
-            let cwd = panes
-                .iter()
-                .find(|pane| pane.id == *focused)
-                .map(|pane| pane.view.read(cx).cwd.clone())
-                .unwrap_or_default();
-            let meta = self.meta(ix);
-            let first_leaf = tree.first_leaf();
-            let launch = meta.launch.clone().unwrap_or_else(|| {
-                // 兼容本次修复前已经在内存中的 Tab：SSH 仍可从首 Pane 取回；
-                // 旧本地 Tab 已经没有身份信息，只能诚实落为 Default。
-                panes
-                    .iter()
-                    .find(|pane| pane.id == first_leaf)
-                    .and_then(|pane| pane.view.read(cx).ssh_destination.clone())
-                    .map(|host| LaunchSession::Ssh { host })
-                    .unwrap_or(LaunchSession::Default)
-            });
-            let active_pane = tree.leaves().iter().position(|id| id == focused).unwrap_or(0);
-            tabs.push(TabSession {
-                cwd,
-                custom_name: meta.custom_name,
-                color: meta.color,
-                launch: Some(launch),
-                layout: Some(layout),
-                active_pane,
-            });
-        }
-        Session::new(active_out, tabs)
     }
 
     /// Open Settings as a window-level page while preserving the active tab.
@@ -3193,6 +3015,7 @@ impl NebulaWorkspace {
             return div().into_any_element();
         }
         let open = self.side_panel.open;
+        let scale = crate::gpui_shell::ui_scale::factor(cx);
         // 路由每帧都做，而且必须在挑渲染分支之前：聚焦 pane 可能刚从本地切到
         // 远端（或反过来），这一帧就该画对。
         let remote = self.side_panel.open && self.route_remote_browser(window, cx);
@@ -3228,14 +3051,16 @@ impl NebulaWorkspace {
                     .relative()
                     .h_full()
                     .flex_shrink_0()
-                    .pb(px(crate::gpui_shell::theme::PaneCardStyle::current(cx).margin.bottom))
+                    .pb(px(
+                        crate::gpui_shell::theme::PaneCardStyle::scaled_current(cx).margin.bottom,
+                    ))
                     .child(panel)
                     .with_animation(
                         ("side-panel-push", open as usize),
                         Animation::new(Duration::from_millis(240)).with_easing(ease_out_quint()),
                         move |band, t| {
                             let progress = if open { t } else { 1.0 - t };
-                            band.left(px(SIDE_PANEL_SLOT_W * (1.0 - progress)))
+                            band.left(px(SIDE_PANEL_SLOT_W * scale * (1.0 - progress)))
                         },
                     ),
             )
@@ -3244,7 +3069,7 @@ impl NebulaWorkspace {
                 Animation::new(Duration::from_millis(240)).with_easing(ease_out_quint()),
                 move |slot, t| {
                     let progress = if open { t } else { 1.0 - t };
-                    slot.w(px(SIDE_PANEL_SLOT_W * progress))
+                    slot.w(px(SIDE_PANEL_SLOT_W * scale * progress))
                 },
             )
             .into_any_element()
@@ -3846,6 +3671,7 @@ impl NebulaWorkspace {
 
 impl Render for NebulaWorkspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.sync_tabs_scale(cx);
         if window.is_window_active() {
             windowing::mark_active(self.runtime_window_id, cx);
         }
@@ -3854,11 +3680,12 @@ impl Render for NebulaWorkspace {
         }
         // 终端卡几何取一次，布局与壳色带共用同一个实例——两处各取一次也算
         // 「各写一份」，主题在这一帧中途换掉就会出现半旧半新的卡缝。
-        let card_style = crate::gpui_shell::theme::PaneCardStyle::current(cx);
+        let card_style = crate::gpui_shell::theme::PaneCardStyle::scaled_current(cx);
         let titlebar_background = self.titlebar_background.clone();
         let draw_file_divider = self.side_panel.open;
         let sidebar_logo_target_px =
-            (TAB_LABEL_ICON_SIZE * window.scale_factor()).round().max(1.0) as u32;
+            (TAB_LABEL_ICON_SIZE * window.scale_factor() * crate::gpui_shell::ui_scale::factor(cx))
+                .round().max(1.0) as u32;
         if sidebar_logo_target_px != self.sidebar_logo_target_px {
             // GPUI 窗口可跨不同 DPI 的显示器；原纹理只在整数物理像素尺寸
             // 变化时重建，普通 render 不重复解码 PNG。
@@ -4128,9 +3955,14 @@ impl Render for NebulaWorkspace {
                                             .bottom_0()
                                             .left(px(
                                                 sidebar_resize_visual_offset(cx)
-                                                    - SIDEBAR_RESIZE_HANDLE_WIDTH * 0.5,
+                                                    - SIDEBAR_RESIZE_HANDLE_WIDTH
+                                                        * crate::gpui_shell::ui_scale::factor(cx)
+                                                        * 0.5,
                                             ))
-                                            .w(px(SIDEBAR_RESIZE_HANDLE_WIDTH))
+                                            .w(px(
+                                                SIDEBAR_RESIZE_HANDLE_WIDTH
+                                                    * crate::gpui_shell::ui_scale::factor(cx),
+                                            ))
                                             .cursor_col_resize()
                                             .on_mouse_down(
                                                 MouseButton::Left,
@@ -4168,7 +4000,7 @@ impl Render for NebulaWorkspace {
                                         // 若按四边对称推算，卡的上两个圆角外侧会漏
                                         // 覆盖，浅色主题下直接露出一道顶部白缝。
                                         let card =
-                                            crate::gpui_shell::theme::PaneCardStyle::current(cx);
+                                            crate::gpui_shell::theme::PaneCardStyle::scaled_current(cx);
                                         crate::gpui_shell::theme::paint_shell_around_card(
                                             bounds,
                                             card.margin,
@@ -4282,8 +4114,10 @@ impl Render for NebulaWorkspace {
                         .on_mouse_move(cx.listener(|this, event: &gpui::MouseMoveEvent, _, cx| {
                             // 分界跟着指针走：换算用的偏移必须与热区同源，
                             // 否则抓住线之后线会甩在指针后面。
-                            let width = (f32::from(event.position.x)
+                            let scale = crate::gpui_shell::ui_scale::factor(cx);
+                            let width = ((f32::from(event.position.x)
                                 - sidebar_resize_visual_offset(cx))
+                                / scale.max(0.01))
                                 .clamp(
                                     nebula_settings::MIN_SIDEBAR_WIDTH,
                                     nebula_settings::MAX_SIDEBAR_WIDTH,
@@ -4340,11 +4174,11 @@ impl Render for NebulaWorkspace {
             .when(self.command_manager_open, |root| {
                 root.child(self.render_command_manager(window, cx))
             })
-            .when_some(self.render_file_tree_context_menu(), |root, menu| {
+            .when_some(self.render_file_tree_context_menu(cx), |root, menu| {
                 root.child(menu)
             })
-            .when_some(self.render_tab_context_menu(), |root, menu| root.child(menu))
-            .when_some(self.render_selection_context_menu(), |root, menu| {
+            .when_some(self.render_tab_context_menu(cx), |root, menu| root.child(menu))
+            .when_some(self.render_selection_context_menu(cx), |root, menu| {
                 root.child(menu)
             })
             // 组件库的模态/通知层不会自己上屏：`Root::render` 只画宿主视图，

@@ -144,7 +144,8 @@ fn cached_semantic_statuses_render_in_the_current_language() {
 #[cfg(feature = "gpui-test-support")]
 mod shell_row_geometry {
     use super::*;
-    use gpui::TestAppContext;
+    use gpui::{px, TestAppContext};
+    use gpui_component::Theme;
 
     struct ShellRowProbe {
         rows: Vec<(&'static str, ShellSelectItem)>,
@@ -167,7 +168,13 @@ mod shell_row_geometry {
 
     #[gpui::test]
     fn every_row_shares_one_icon_slot_height(cx: &mut TestAppContext) {
-        cx.update(gpui_component::init);
+        cx.update(|cx| {
+            gpui_component::init(cx);
+            // `ui(24.0)` is a design pixel resolved through the product's
+            // 14px root REM.  TestAppContext starts with the component
+            // library's 16px default, so establish the same root explicitly.
+            Theme::global_mut(cx).font_size = px(crate::gpui_shell::ui_scale::BASE_REM);
+        });
         let rows = vec![
             (
                 "shell-probe-import",
@@ -179,7 +186,10 @@ mod shell_row_geometry {
             ),
             ("shell-probe-glyph", ShellSelectItem::new("zsh".to_owned(), "Zsh".to_owned(), 1.0)),
         ];
-        let (_, cx) = cx.add_window_view(|_, _| ShellRowProbe { rows });
+        let (_, cx) = cx.add_window_view(|window, _| {
+            window.set_rem_size(px(crate::gpui_shell::ui_scale::BASE_REM));
+            ShellRowProbe { rows }
+        });
         let heights: Vec<f32> = ["shell-probe-import", "shell-probe-brand", "shell-probe-glyph"]
             .iter()
             .map(|selector| {

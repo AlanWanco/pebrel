@@ -13,7 +13,7 @@ impl SettingsPane {
         h_flex()
             .id(id)
             .w_full()
-            .h(px(48.0))
+            .h(ui(48.0))
             .flex_shrink_0()
             .px_1()
             .gap_3()
@@ -35,7 +35,7 @@ impl SettingsPane {
     ) -> gpui::Div {
         h_flex()
             .w_full()
-            .h(px(48.0))
+            .h(ui(48.0))
             .flex_shrink_0()
             .items_center()
             .justify_between()
@@ -86,7 +86,7 @@ impl SettingsPane {
 
         let status_badge = h_flex()
             .min_w_0()
-            .max_w(px(360.0))
+            .max_w(ui(360.0))
             .gap_1()
             .items_center()
             .text_size(px(base_px * 0.82))
@@ -99,20 +99,21 @@ impl SettingsPane {
             h_flex()
                 .w_full()
                 .items_center()
-                .gap(px(24.0))
-                .pb(px(64.0))
+                .gap(ui(24.0))
+                .pb(ui(64.0))
                 .when_some(
                     crate::app_icon::preview(
                         crate::app_icon::selected(),
-                        (96.0 * window.scale_factor()).round() as u32,
+                        (96.0 * crate::gpui_shell::ui_scale::factor(cx) * window.scale_factor())
+                            .round() as u32,
                     ),
-                    |row, logo| row.child(img(logo).size(px(96.0)).flex_shrink_0()),
+                    |row, logo| row.child(img(logo).size(ui(96.0)).flex_shrink_0()),
                 )
                 .child(
                     v_flex()
                         .flex_1()
                         .min_w_0()
-                        .gap(px(7.0))
+                        .gap(ui(7.0))
                         .child(
                             div()
                                 .text_size(px(base_px * 2.15))
@@ -128,7 +129,7 @@ impl SettingsPane {
                         ))
                         .child(
                             h_flex()
-                                .mt(px(12.0))
+                                .mt(ui(12.0))
                                 .items_center()
                                 .gap_4()
                                 .child(
@@ -166,7 +167,7 @@ impl SettingsPane {
             .into();
         let section_title = |title: &'static str| {
             div()
-                .h(px(30.0))
+                .h(ui(30.0))
                 .text_size(px(base_px * 0.85))
                 .font_weight(gpui::FontWeight::SEMIBOLD)
                 .text_color(muted)
@@ -174,7 +175,7 @@ impl SettingsPane {
         };
         let update_column = v_flex()
             .flex_1()
-            .min_w(px(280.0))
+            .min_w(ui(280.0))
             .child(section_title(language.pick("版本与更新", "Version and updates")))
             .child(Self::about_value_row(
                 language.pick("自动检查更新", "Automatically check for updates"),
@@ -193,7 +194,7 @@ impl SettingsPane {
             ));
         let actions = v_flex()
             .flex_1()
-            .min_w(px(280.0))
+            .min_w(ui(280.0))
             .child(section_title(language.pick("项目与支持", "Project and support")))
             .child(Self::about_action_row(
                 "about-report-issue",
@@ -222,7 +223,7 @@ impl SettingsPane {
                 .w_full()
                 .flex_wrap()
                 .items_start()
-                .gap(px(64.0))
+                .gap(ui(64.0))
                 .child(update_column)
                 .child(actions),
         )

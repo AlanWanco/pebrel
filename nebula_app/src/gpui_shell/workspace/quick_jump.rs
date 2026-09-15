@@ -79,7 +79,7 @@ fn tab_rows(
         let WorkspaceTab::Terminal { panes, focused, .. } = tab else { continue };
         for pane in panes {
             let view = pane.view.read(cx);
-            let pane_title = view.tab_label();
+            let pane_title = pane.custom_name.clone().unwrap_or_else(|| view.tab_label());
             let location = view
                 .ssh_destination
                 .clone()

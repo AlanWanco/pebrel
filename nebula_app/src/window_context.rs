@@ -1861,7 +1861,7 @@ impl WindowContext {
     ) -> session::LayoutSession {
         match layout {
             Layout::Leaf(id) => {
-                session::LayoutSession::Pane { cwd: pane_cwd(*id), agent: pane_agent(*id) }
+                session::LayoutSession::unnamed_pane(pane_cwd(*id), pane_agent(*id))
             },
             Layout::Split { direction, ratio, first, second, .. } => {
                 session::LayoutSession::Split {

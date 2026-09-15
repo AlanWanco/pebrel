@@ -4,18 +4,20 @@ use super::*;
 use std::time::Duration;
 
 use gpui::{Modifiers, TestAppContext, VisualTestContext, point, px};
-use gpui_component::Root;
+use gpui_component::{Root, Theme};
 
 use crate::gpui_shell::copy_feedback::{COPY_FEEDBACK_TTL, CopyFeedback};
 
 fn open(path: PathBuf, cx: &mut TestAppContext) -> (Entity<TextFileView>, VisualTestContext) {
     cx.update(|cx| {
         gpui_component::init(cx);
+        Theme::global_mut(cx).font_size = px(crate::gpui_shell::ui_scale::BASE_REM);
         super::super::math_view::register(cx);
         init(cx);
     });
     let mut file = None;
     let (_, window) = cx.add_window_view(|window, cx| {
+        window.set_rem_size(px(crate::gpui_shell::ui_scale::BASE_REM));
         let view = cx.new(|cx| TextFileView::new(path, window, cx));
         file = Some(view.clone());
         Root::new(view, window, cx)

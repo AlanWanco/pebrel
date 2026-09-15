@@ -295,7 +295,7 @@ impl NebulaWorkspace {
                             div().text_sm().font_semibold().child(language.pick("命令", "Command")),
                         )
                         .child(
-                            div().w_full().h(px(150.0)).child(
+                            div().w_full().h(ui(150.0)).child(
                                 Input::new(&command)
                                     .w_full()
                                     .font_family(cx.theme().mono_font_family.clone()),
@@ -508,10 +508,12 @@ impl NebulaWorkspace {
         let mono_family = theme.mono_font_family.clone();
         let language = crate::gpui_shell::config::ui_language(cx);
         let viewport = window.viewport_size();
-        let panel_width =
-            PANEL_MAX_WIDTH.min((f32::from(viewport.width) - PANEL_MARGIN * 2.0).max(0.0));
+        let scale = crate::gpui_shell::ui_scale::factor(cx);
+        let viewport_width = f32::from(viewport.width) / scale;
+        let viewport_height = f32::from(viewport.height) / scale;
+        let panel_width = PANEL_MAX_WIDTH.min((viewport_width - PANEL_MARGIN * 2.0).max(0.0));
         let available_height =
-            (f32::from(viewport.height) - WINDOW_TITLE_BAR_HEIGHT - PANEL_MARGIN * 2.0).max(0.0);
+            (viewport_height - WINDOW_TITLE_BAR_HEIGHT - PANEL_MARGIN * 2.0).max(0.0);
 
         let commands = self.filtered_saved_commands(cx);
         if self.command_manager_selected >= commands.len() {
@@ -564,13 +566,13 @@ impl NebulaWorkspace {
                     .id(SharedString::from(format!("saved-command-row-{index}")))
                     .group(hover_group.clone())
                     .w_full()
-                    .h(px(ROW_HEIGHT))
+                    .h(ui(ROW_HEIGHT))
                     .flex_shrink_0()
                     .items_center()
-                    .gap(px(space::XS))
+                    .gap(ui(space::XS))
                     .px_2()
-                    .when(list_scrollable, |row| row.pr(px(18.0)))
-                    .rounded(px(radius::CONTROL))
+                    .when(list_scrollable, |row| row.pr(ui(18.0)))
+                    .rounded(ui(radius::CONTROL))
                     .cursor_pointer()
                     .when(selected, |row| row.bg(selected_bg))
                     .when(!selected, |row| {
@@ -596,7 +598,7 @@ impl NebulaWorkspace {
                         v_flex()
                             .flex_1()
                             .min_w_0()
-                            .gap(px(space::XXS))
+                            .gap(ui(space::XXS))
                             .child(
                                 h_flex()
                                     .w_full()
@@ -615,11 +617,11 @@ impl NebulaWorkspace {
                                     .child(
                                         div()
                                             .flex_shrink_0()
-                                            .rounded(px(radius::CHIP))
+                                            .rounded(ui(radius::CHIP))
                                             .border_1()
                                             .border_color(border)
                                             .px_1()
-                                            .text_size(px(10.0))
+                                            .text_size(ui(10.0))
                                             .text_color(if selected { accent } else { muted })
                                             .child(mode_label),
                                     ),
@@ -630,7 +632,7 @@ impl NebulaWorkspace {
                                     .min_w_0()
                                     .truncate()
                                     .font_family(mono_family.clone())
-                                    .text_size(px(11.0))
+                                    .text_size(ui(11.0))
                                     .text_color(muted)
                                     .child(preview),
                             ),
@@ -706,9 +708,9 @@ impl NebulaWorkspace {
 
         let search_box = h_flex()
             .w_full()
-            .h(px(control::MIN_HIT_TARGET))
+            .h(ui(control::MIN_HIT_TARGET))
             .flex_shrink_0()
-            .rounded(px(radius::CONTROL))
+            .rounded(ui(radius::CONTROL))
             .border_1()
             .border_color(border)
             .bg(surface_bg)
@@ -720,7 +722,7 @@ impl NebulaWorkspace {
                     .focus_bordered(false)
                     .cleanable(true)
                     .prefix(Icon::new(IconName::Search).xsmall().text_color(muted))
-                    .text_size(px(13.0)),
+                    .text_size(ui(13.0)),
             );
 
         let list_content = if rows.is_empty() {
@@ -730,7 +732,7 @@ impl NebulaWorkspace {
                 .justify_center()
                 .gap_2()
                 .text_color(muted)
-                .child(command_manager_icon().with_size(px(28.0)))
+                .child(command_manager_icon().with_size(px(28.0 * scale)))
                 .child(
                     div()
                         .text_sm()
@@ -792,11 +794,11 @@ impl NebulaWorkspace {
             .child(
                 v_flex()
                     .absolute()
-                    .top(px(WINDOW_TITLE_BAR_HEIGHT + PANEL_MARGIN))
-                    .right(px(PANEL_MARGIN))
-                    .w(px(panel_width))
-                    .h(px(panel_height))
-                    .rounded(px(radius::OVERLAY))
+                    .top(px((WINDOW_TITLE_BAR_HEIGHT + PANEL_MARGIN) * scale))
+                    .right(px(PANEL_MARGIN * scale))
+                    .w(ui(panel_width))
+                    .h(ui(panel_height))
+                    .rounded(ui(radius::OVERLAY))
                     .border_1()
                     .border_color(border)
                     .bg(panel_bg)
@@ -813,7 +815,7 @@ impl NebulaWorkspace {
                         h_flex()
                             .id("saved-command-add")
                             .w_full()
-                            .h(px(PANEL_FOOTER_HEIGHT))
+                            .h(ui(PANEL_FOOTER_HEIGHT))
                             .flex_shrink_0()
                             .items_center()
                             .gap_2()

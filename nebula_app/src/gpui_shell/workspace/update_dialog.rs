@@ -33,8 +33,8 @@ pub(crate) fn show_update_notification(
         .title(title)
         .autohide(false)
         .w_auto()
-        .min_w(px(300.0))
-        .max_w(px(440.0))
+        .min_w(px(300.0 * crate::gpui_shell::ui_scale::factor(cx)))
+        .max_w(px(440.0 * crate::gpui_shell::ui_scale::factor(cx)))
         .action(move |_, _, cx| {
             let result = action_result.clone();
             Button::new("view-nebula-update").label(action_label.clone()).primary().on_click(
@@ -150,8 +150,8 @@ fn show_download_outcome_notification(
         .title(title)
         .autohide(false)
         .w_auto()
-        .min_w(px(320.0))
-        .max_w(px(460.0))
+        .min_w(px(320.0 * crate::gpui_shell::ui_scale::factor(cx)))
+        .max_w(px(460.0 * crate::gpui_shell::ui_scale::factor(cx)))
         .action(move |_, _, cx| {
             let result = action_result.clone();
             Button::new("open-downloaded-nebula-update").label(action.clone()).primary().on_click(

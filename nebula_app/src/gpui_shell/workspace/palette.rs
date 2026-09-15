@@ -93,13 +93,13 @@ impl NebulaWorkspace {
                 previous_group = Some(item.group.clone());
                 rows.push(
                     h_flex()
-                        .h(px(PALETTE_GROUP_HEADER_HEIGHT))
+                        .h(ui(PALETTE_GROUP_HEADER_HEIGHT))
                         .flex_shrink_0()
                         .px_3()
                         .when(results_scrollable, |header| {
-                            header.pr(px(PALETTE_SCROLLBAR_CONTENT_GUTTER))
+                            header.pr(ui(PALETTE_SCROLLBAR_CONTENT_GUTTER))
                         })
-                        .gap(px(space::XS))
+                        .gap(ui(space::XS))
                         .items_center()
                         .child(
                             div()
@@ -117,7 +117,7 @@ impl NebulaWorkspace {
             let icon_content = if let Some(image) = item.icon.clone() {
                 Some(
                     gpui::StyledImage::object_fit(
-                        img(image).size(px(PALETTE_ICON_PX)),
+                        img(image).size(ui(PALETTE_ICON_PX)),
                         gpui::ObjectFit::Contain,
                     )
                     .into_any_element(),
@@ -136,12 +136,12 @@ impl NebulaWorkspace {
                 };
                 Some(
                     div()
-                        .size(px(PALETTE_ICON_PX))
+                        .size(ui(PALETTE_ICON_PX))
                         .flex()
                         .items_center()
                         .justify_center()
                         .font_family(crate::font_install::REQUIRED_FONT_FAMILY)
-                        .text_size(px(glyph_px))
+                        .text_size(ui(glyph_px))
                         .text_color(foreground)
                         .child(glyph.to_string())
                         .into_any_element(),
@@ -149,7 +149,7 @@ impl NebulaWorkspace {
             } else {
                 item.icon_path.clone().map(|path| {
                     div()
-                        .size(px(PALETTE_ICON_PX))
+                        .size(ui(PALETTE_ICON_PX))
                         .flex()
                         .items_center()
                         .justify_center()
@@ -159,7 +159,7 @@ impl NebulaWorkspace {
             };
             let icon_slot = has_icon_rail.then(|| {
                 let slot = div()
-                    .size(px(PALETTE_ICON_PX))
+                    .size(ui(PALETTE_ICON_PX))
                     .flex_shrink_0()
                     .flex()
                     .items_center()
@@ -176,10 +176,10 @@ impl NebulaWorkspace {
                 match item.hint_style {
                     WorkspacePaletteHintStyle::Metadata => Some(
                         div()
-                            .max_w(px(PALETTE_METADATA_MAX_WIDTH))
+                            .max_w(ui(PALETTE_METADATA_MAX_WIDTH))
                             .min_w_0()
                             .truncate()
-                            .text_size(px(12.0))
+                            .text_size(ui(12.0))
                             .text_color(muted)
                             .child(item.hint.clone())
                             .into_any_element(),
@@ -191,23 +191,23 @@ impl NebulaWorkspace {
                             .filter(|key| !key.is_empty())
                             .map(|key| {
                                 h_flex()
-                                    .h(px(crate::display::ui::keycap::KEY_H))
-                                    .px(px(space::S / 2.0))
+                                    .h(ui(crate::display::ui::keycap::KEY_H))
+                                    .px(ui(space::S / 2.0))
                                     .items_center()
-                                    .rounded(px(radius::CHIP))
+                                    .rounded(ui(radius::CHIP))
                                     .border_1()
                                     .border_color(border)
                                     .bg(surface_bg)
                                     .font_family(mono_family.clone())
-                                    .text_size(px(11.0))
+                                    .text_size(ui(11.0))
                                     .text_color(muted)
                                     .child(key.to_owned())
                             })
                             .collect::<Vec<_>>();
                         Some(
                             h_flex()
-                                .max_w(px(PALETTE_METADATA_MAX_WIDTH))
-                                .gap(px(space::XXS))
+                                .max_w(ui(PALETTE_METADATA_MAX_WIDTH))
+                                .gap(ui(space::XXS))
                                 .children(keycaps)
                                 .into_any_element(),
                         )
@@ -222,14 +222,14 @@ impl NebulaWorkspace {
             let row_content = h_flex()
                 .id(SharedString::from(format!("command-palette-row-{ix}")))
                 .group(hover_group.clone())
-                .h(px(PALETTE_ROW_HEIGHT))
+                .h(ui(PALETTE_ROW_HEIGHT))
                 .flex_shrink_0()
                 .w_full()
                 .px_2()
-                .when(results_scrollable, |row| row.pr(px(PALETTE_SCROLLBAR_CONTENT_GUTTER)))
-                .gap(px(space::XS))
+                .when(results_scrollable, |row| row.pr(ui(PALETTE_SCROLLBAR_CONTENT_GUTTER)))
+                .gap(ui(space::XS))
                 .items_center()
-                .rounded(px(radius::CONTROL))
+                .rounded(ui(radius::CONTROL))
                 .cursor_pointer()
                 .tooltip(move |window, cx| {
                     gpui_component::tooltip::Tooltip::new(row_tooltip.clone()).build(window, cx)
@@ -301,12 +301,12 @@ impl NebulaWorkspace {
                     .size_full()
                     .items_center()
                     .justify_center()
-                    .gap(px(space::XS))
+                    .gap(ui(space::XS))
                     .text_color(muted)
                     .child(Icon::new(IconName::Search).small())
                     .child(
                         div()
-                            .text_size(px(12.0))
+                            .text_size(ui(12.0))
                             .child(language.pick("没有匹配结果", "No matching results")),
                     )
                     .into_any_element(),
@@ -317,9 +317,9 @@ impl NebulaWorkspace {
         // 输入本身，避免再用整行分隔线把面板切成多层容器。
         let search_box = h_flex()
             .w_full()
-            .h(px(control::MIN_HIT_TARGET))
+            .h(ui(control::MIN_HIT_TARGET))
             .flex_shrink_0()
-            .rounded(px(radius::CONTROL))
+            .rounded(ui(radius::CONTROL))
             .border_1()
             .border_color(border)
             .bg(surface_bg)
@@ -331,7 +331,7 @@ impl NebulaWorkspace {
                     .focus_bordered(false)
                     .cleanable(true)
                     .prefix(Icon::new(IconName::Search).xsmall().text_color(muted))
-                    .text_size(px(13.0)),
+                    .text_size(ui(13.0)),
             );
 
         let filter_bar = palette_filters.map(|(selected_filter, counts)| {
@@ -341,17 +341,17 @@ impl NebulaWorkspace {
                     let selected = selected_filter == filter;
                     h_flex()
                         .id(SharedString::from(format!("workspace-palette-filter-{filter:?}")))
-                        .h(px(26.0))
+                        .h(ui(26.0))
                         .px_2()
-                        .gap(px(space::XXS))
+                        .gap(ui(space::XXS))
                         .items_center()
                         .cursor_pointer()
-                        .rounded(px(radius::CONTROL))
+                        .rounded(ui(radius::CONTROL))
                         .when(selected, |chip| chip.bg(selected_bg))
                         .when(!selected, |chip| chip.hover(|chip| chip.bg(hover_bg)))
                         .child(
                             div()
-                                .text_size(px(12.0))
+                                .text_size(ui(12.0))
                                 .text_color(if selected { accent } else { foreground })
                                 .when(selected, |label| label.font_weight(FontWeight::MEDIUM))
                                 .child(filter.label(language)),
@@ -359,7 +359,7 @@ impl NebulaWorkspace {
                         .child(
                             div()
                                 .font_family(mono_family.clone())
-                                .text_size(px(11.0))
+                                .text_size(ui(11.0))
                                 .text_color(if selected { accent } else { muted })
                                 .child(count.to_string()),
                         )
@@ -369,7 +369,7 @@ impl NebulaWorkspace {
                 })
                 .collect::<Vec<_>>();
             h_flex()
-                .h(px(PALETTE_FILTER_BAR_HEIGHT))
+                .h(ui(PALETTE_FILTER_BAR_HEIGHT))
                 .flex_shrink_0()
                 .w_full()
                 .px_1()
@@ -383,13 +383,13 @@ impl NebulaWorkspace {
         let result_list = v_flex()
             .id("workspace-palette-results-scroll")
             .size_full()
-            .gap(px(PALETTE_ROW_GAP))
+            .gap(ui(PALETTE_ROW_GAP))
             .overflow_y_scroll()
             .track_scroll(&scroll_handle)
             .children(rows);
         let results = div()
             .relative()
-            .h(px(results_height))
+            .h(ui(results_height))
             .flex_shrink_0()
             .min_h_0()
             .overflow_hidden()
@@ -435,16 +435,16 @@ impl NebulaWorkspace {
             }))
             .child(
                 v_flex()
-                    .w(px(PALETTE_PANEL_WIDTH))
-                    .h(px(PALETTE_PANEL_HEIGHT))
+                    .w(ui(PALETTE_PANEL_WIDTH))
+                    .h(ui(PALETTE_PANEL_HEIGHT))
                     .max_h_full()
-                    .rounded(px(radius::OVERLAY))
+                    .rounded(ui(radius::OVERLAY))
                     .border_1()
                     .border_color(border)
                     .bg(panel_bg)
                     .shadow_lg()
-                    .p(px(space::XS))
-                    .gap(px(space::XS))
+                    .p(ui(space::XS))
+                    .gap(ui(space::XS))
                     .overflow_hidden()
                     .occlude()
                     .on_mouse_down(

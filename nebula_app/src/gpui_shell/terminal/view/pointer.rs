@@ -16,7 +16,9 @@ impl TerminalView {
         if track_h <= 1.0 {
             return None;
         }
-        let min_thumb = SCROLLBAR_MIN_THUMB.min(track_h);
+        let chrome_scale = self.completion_viewport.chrome_scale.max(0.01);
+        let scrollbar_w = SCROLLBAR_W * chrome_scale;
+        let min_thumb = (SCROLLBAR_MIN_THUMB * chrome_scale).min(track_h);
         let thumb_h = (track_h * screen as f32 / total as f32).clamp(min_thumb, track_h);
         // 视口顶端之上还剩多少行历史：0 = 拉到最顶，history = 贴着底部。
         let above = (history - display_offset) as f32;
@@ -25,8 +27,8 @@ impl TerminalView {
         // 浮在网格右缘（overlay 风格：不占列宽、不画轨道）。
         let grid_right = self.origin.x.as_f32() + self.cell_width.as_f32() * self.cols as f32;
         Some(Bounds::new(
-            point(px(grid_right - SCROLLBAR_W), px(thumb_y)),
-            gpui::size(px(SCROLLBAR_W), px(thumb_h)),
+            point(px(grid_right - scrollbar_w), px(thumb_y)),
+            gpui::size(px(scrollbar_w), px(thumb_h)),
         ))
     }
 
@@ -48,9 +50,12 @@ impl TerminalView {
         history: usize,
     ) -> Option<f32> {
         let thumb = self.scrollbar_thumb(display_offset, history)?;
+        let chrome_scale = self.completion_viewport.chrome_scale.max(0.01);
+        let scrollbar_w = SCROLLBAR_W * chrome_scale;
+        let slop = SCROLLBAR_SLOP * chrome_scale;
         let x = position.x.as_f32();
         let thumb_x = thumb.origin.x.as_f32();
-        if x < thumb_x - SCROLLBAR_SLOP || x > thumb_x + SCROLLBAR_W + SCROLLBAR_SLOP {
+        if x < thumb_x - slop || x > thumb_x + scrollbar_w + slop {
             return None;
         }
         let track_top = self.origin.y.as_f32();
@@ -214,6 +219,7 @@ impl TerminalView {
             self.cols,
             self.cell_width,
             self.line_height,
+            self.completion_viewport.chrome_scale,
         )
     }
 
@@ -239,7 +245,7 @@ impl TerminalView {
             popup.scrollbar_bounds(self.origin, self.suggest.completion_items.len())?;
         let content = popup.content_bounds(self.origin);
         if position.x < content.right()
-            || position.x >= content.right() + px(5.0)
+            || position.x >= content.right() + px(5.0 * self.completion_viewport.chrome_scale)
             || position.y < track.origin.y
             || position.y >= track.bottom()
         {

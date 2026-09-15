@@ -306,3 +306,36 @@ unrelated feature's growth. Remote approval/enforcement is not implied by this l
   Native compilation and UI results must be reported separately.
 - **Revisit condition:** Add separate system-notification or per-agent controls
   only when requested, rather than expanding the meaning of this persisted key.
+
+## ADR-0010 — Persistent pane names and independent GPUI chrome scale
+
+- **Status:** Implemented in the working tree, 2026-09-15; focused validation passed,
+  with native UI inspection and normal repository review pending.
+- **Context:** A split pane needs a user-owned label that survives session and recipe
+  restore without changing the tab identity, PTY, or process title. GPUI chrome also
+  needs a product scale independent of monitor DPI and terminal grid typography.
+- **Decision:** Store an optional trimmed `custom_name` on `TerminalPane` and the
+  existing v4 `LayoutSession::Pane` extension. Submit rename operations by stable
+  pane ID, not tree position; blank names clear the override and restore the
+  computed program/host/cwd title. Keep old v4 files valid when the field is absent.
+  Persist `ui_scale` as a bounded shared setting with the values 75, 100, 125, 150,
+  175 and 200 percent. Resolve fixed GPUI chrome dimensions through GPUI REMs and
+  update the root theme when the setting changes; leave `Window::set_scale_factor`,
+  system DPI, terminal font size, grid metrics, measured pointer coordinates and
+  physical hairlines unchanged.
+- **Boundaries:** Pane names are presentation metadata only; they do not rename tabs,
+  alter shell commands, or identify a pane by array index. Recipes save and restore
+  the same optional field. REM conversion applies to fixed chrome, while measured
+  bounds and canvas coordinates explicitly remain in logical pixels and are scaled
+  only where a custom drawing API requires a visual size.
+- **Alternatives rejected:** Mutating the tab label or PTY title would conflate scopes;
+  upgrading the session schema would needlessly invalidate v4 files; changing the
+  OS/window scale or terminal font would affect unrelated applications or terminal
+  cell counts; a blanket pixel multiplier would corrupt measured geometry.
+- **Validation:** Focused settings, pane rename, session/recipe and GPUI scale tests,
+  a locked product `cargo check`, architecture check and diff whitespace check are
+  required evidence. Native geometry, accessibility hit-target and cross-window
+  drag inspection remain separate acceptance evidence.
+- **Revisit condition:** Add pane-name synchronization only with an explicit shared
+  workspace contract. Revisit the scale boundary if the GPUI fork exposes a stable
+  root-scale API that preserves terminal and measured-coordinate contracts.

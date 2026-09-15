@@ -50,6 +50,7 @@ mod reset;
 mod search_header;
 mod setting_help;
 mod theme_picker;
+mod ui_scale;
 
 mod initialization;
 mod keymap;
@@ -381,9 +382,9 @@ impl SettingsPane {
     /// 旧壳合同（display/mod.rs `ui_font_px`）：chrome 排版锚定**配置字号**
     /// （nebula.toml `font.size`，默认 11.25pt = 15px），终端的持久化缩放
     /// （设置 spinner / Ctrl+滚轮写入的 `font_size=`）只影响终端网格，
-    /// 不得放大侧栏与设置文字。
+    /// 不得放大侧栏与设置文字；界面缩放仅乘独立的 ui_scale。
     fn font_size_px(&self, cx: &App) -> f32 {
-        cx.global::<crate::gpui_shell::config::Settings>().base_font_size_px
+        cx.global::<crate::gpui_shell::config::Settings>().ui_font_size_px()
     }
 
     /// 终端字号（预览与「终端字号」步进行显示的值）。
@@ -551,7 +552,7 @@ impl SettingsPane {
         let current = crate::platform::shell::effective_shell_id(self.runtime.shell.as_deref());
         let (items, selected) = shell_select_items(
             &current,
-            window.scale_factor().max(0.5),
+            window.scale_factor().max(0.5) * crate::gpui_shell::ui_scale::factor(cx),
             crate::gpui_shell::config::ui_language(cx),
         );
         self.shell_select.update(cx, |state, cx| {
@@ -605,7 +606,8 @@ impl SettingsPane {
         // sk.accent）。闭框/背景都不带文字色，包一层就能继承下去；右侧
         // chevron 在组件内自带 muted，不会被染色。
         let control = div()
-            .w(px(SETTINGS_SELECT_WIDTH))
+            .debug_selector(move || format!("settings-select-{key}"))
+            .w(ui(SETTINGS_SELECT_WIDTH))
             .text_color(cx.theme().link)
             .children(select.map(|state| Select::new(&state)));
         self.maybe_marked(key, label, desc, control, cx)
@@ -617,7 +619,7 @@ impl SettingsPane {
             language.pick("默认 Shell", "Default shell"),
             help("shell", language),
             div()
-                .w(px(SETTINGS_SELECT_WIDTH))
+                .w(ui(SETTINGS_SELECT_WIDTH))
                 .font_family(cx.theme().mono_font_family.clone())
                 .text_color(cx.theme().link)
                 .child(Select::new(&self.shell_select)),
@@ -679,6 +681,7 @@ impl SettingsPane {
             "tabs_position" => pick!(tabs_position),
             "tab_reveal" => pick!(tab_reveal),
             "density" => pick!(density),
+            "ui_scale" => pick!(ui_scale),
             "new_tab_position" => pick!(new_tab_position),
             "windowing_behavior" => pick!(windowing_behavior),
             "cell_width_mode" => pick!(cell_width_mode),
@@ -776,7 +779,7 @@ impl SettingsPane {
                     div()
                         .id("startup-directory")
                         .min_w_0()
-                        .max_w(px(280.0))
+                        .max_w(ui(280.0))
                         .truncate()
                         .cursor_pointer()
                         .text_color(color)
@@ -854,7 +857,7 @@ impl SettingsPane {
             h_flex()
                 .gap_2()
                 .items_center()
-                .child(div().w(px(280.0)).child(Input::new(input)))
+                .child(div().w(ui(280.0)).child(Input::new(input)))
                 .child(
                     NebulaButton::new(SharedString::from(format!("save-{key}")))
                         .label(crate::gpui_shell::config::ui_language(cx).pick("保存", "Save"))
@@ -881,12 +884,12 @@ impl SettingsPane {
             label,
             desc,
             h_flex()
-                .w(px(220.0))
+                .w(ui(220.0))
                 .items_center()
                 .gap_3()
                 .child(div().flex_1().min_w_0().child(Slider::new(state)))
                 .child(div()
-                        .w(px(48.0))
+                        .w(ui(48.0))
                         .flex_shrink_0()
                         // 固定数值列宽，百分比位数变化时轨道不会左右跳动。
                         .child(display)),
@@ -948,7 +951,7 @@ impl SettingsPane {
                 .when_some(path_label, |row, name| {
                     row.child(
                         div()
-                            .max_w(px(180.0))
+                            .max_w(ui(180.0))
                             .min_w_0()
                             .truncate()
                             .text_color(cx.theme().muted_foreground)
@@ -1038,7 +1041,7 @@ impl SettingsPane {
                 help("completion_style", language),
                 cx,
             ));
-        v_flex().w_full().gap(px(GROUP_GAP)).child(terminal).child(completion).child(alerts)
+        v_flex().w_full().gap(ui(GROUP_GAP)).child(terminal).child(completion).child(alerts)
     }
 
     fn section_interaction(&mut self, cx: &mut Context<Self>) -> gpui::Div {
@@ -1047,7 +1050,7 @@ impl SettingsPane {
         // 拆成两组反而各自有了名字：一组管鼠标怎么用，一组管标签往哪放。
         v_flex()
             .w_full()
-            .gap(px(GROUP_GAP))
+            .gap(ui(GROUP_GAP))
             .child(
                 self.group(language.pick("鼠标与选区", "Mouse and selection"), cx)
                     .child(self.switch_row(
@@ -1201,33 +1204,34 @@ impl SettingsPane {
         let hairline = crate::gpui_shell::theme::settings_hairline(cx);
         // 返回入口和分类共用紧凑菜单尺寸；字号与搜索框一致，不继承终端配置字号。
         let mut nav = v_flex()
-            .w(px(SETTINGS_NAV_WIDTH))
+            .debug_selector(|| "settings-navigation".into())
+            .w(ui(SETTINGS_NAV_WIDTH))
             .h_full()
             .flex_shrink_0()
             .px_2()
-            .pt(px(12.0))
-            .pb(px(8.0))
-            .gap(px(4.0))
+            .pt(ui(12.0))
+            .pb(ui(8.0))
+            .gap(ui(4.0))
             .text_sm()
-            .line_height(px(20.0))
+            .line_height(ui(20.0))
             .border_r_1()
             .border_color(hairline)
             .child(
                 div()
                     .id("settings-back")
                     .mx_1()
-                    .mb(px(20.0))
-                    .h(px(SETTINGS_NAV_ROW_HEIGHT))
-                    .px(px(10.0))
+                    .mb(ui(20.0))
+                    .h(ui(SETTINGS_NAV_ROW_HEIGHT))
+                    .px(ui(10.0))
                     .flex()
                     .items_center()
-                    .gap(px(8.0))
+                    .gap(ui(8.0))
                     .rounded_md()
                     .cursor_pointer()
                     .text_color(muted)
                     .hover(move |item| item.bg(hover_bg).text_color(foreground))
                     .on_click(cx.listener(|_, _, _, cx| cx.emit(SettingsPaneEvent::Close)))
-                    .child(Icon::new(IconName::ArrowLeft).size(px(SETTINGS_NAV_ICON_SIZE)))
+                    .child(Icon::new(IconName::ArrowLeft).size(px(SETTINGS_NAV_ICON_SIZE * crate::gpui_shell::ui_scale::factor(cx))))
                     .child(language.pick("返回工作区", "Back to workspace")),
             );
         for ix in self.matching_settings_sections(cx) {
@@ -1235,13 +1239,13 @@ impl SettingsPane {
             nav = nav.child(
                 div()
                     .id(("settings-nav", ix))
-                    .px(px(10.0))
+                    .px(ui(10.0))
                     .ml_1()
                     .mr_1()
-                    .h(px(SETTINGS_NAV_ROW_HEIGHT))
+                    .h(ui(SETTINGS_NAV_ROW_HEIGHT))
                     .flex()
                     .items_center()
-                    .gap(px(8.0))
+                    .gap(ui(8.0))
                     .rounded_md()
                     .cursor_pointer()
                     // 选中态同时改变底色、墨色和字重，余光扫过也能确认当前位置。
@@ -1259,14 +1263,14 @@ impl SettingsPane {
                     .child(
                         Icon::default()
                             .path(section_icon(ix))
-                            .size(px(SETTINGS_NAV_ICON_SIZE))
+                            .size(px(SETTINGS_NAV_ICON_SIZE * crate::gpui_shell::ui_scale::factor(cx)))
                             .flex_shrink_0()
                             .text_color(if active { active_icon } else { muted }),
                     )
                     .child(section_label(ix, language)),
             );
         }
-        nav.child(div().flex_1().min_h(px(24.0)))
+        nav.child(div().flex_1().min_h(ui(24.0)))
             .child(
                 Button::new("settings-restore-defaults")
                     .icon(IconName::Undo2)
@@ -1274,7 +1278,7 @@ impl SettingsPane {
                     .ghost()
                     .small()
                     .w_full()
-                    .h(px(SETTINGS_NAV_ROW_HEIGHT))
+                    .h(ui(SETTINGS_NAV_ROW_HEIGHT))
                     .justify_start()
                     .px_3()
                     .text_color(muted)
@@ -1375,9 +1379,9 @@ impl Render for SettingsPane {
                             // section 容器的 `gap` 提供，不放在这里，也不放在
                             // 组自己身上——组自带 `pt` 时，首个元素不是分组的
                             // 页（按键映射开头是搜索框）就会直接贴到线上。
-                            .pt(px(20.0))
-                            .pb(px(22.0))
-                            .when(!application_page, |content| content.pt(px(28.0)).pb(px(30.0)))
+                            .pt(ui(20.0))
+                            .pb(ui(22.0))
+                            .when(!application_page, |content| content.pt(ui(28.0)).pb(ui(30.0)))
                             // 注意这层包装 `v_flex` 的 `w_full` 不能删（2026-08-23
                             // 又栽了一次）：`overflow_y_scrollbar` 把内容层清成
                             // `Display::Block`，而 flex 容器在 block 父里
@@ -1412,7 +1416,7 @@ impl Render for SettingsPane {
                                     .w_full()
                                     .flex()
                                     .justify_center()
-                                    .child(v_flex().w_full().when(application_page, |content| content.max_w(px(960.0))).child(content)),
+                                    .child(v_flex().w_full().when(application_page, |content| content.max_w(ui(960.0))).child(content)),
                             ),
                     ),
             )

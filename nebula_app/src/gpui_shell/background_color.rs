@@ -233,10 +233,10 @@ impl SettingsPane {
         let control = div()
             .id("background-color-combo")
             .relative()
-            .w(px(COMBOBOX_W))
-            .h(px(COMBOBOX_H))
+            .w(ui(COMBOBOX_W))
+            .h(ui(COMBOBOX_H))
             .flex_shrink_0()
-            .rounded(px(radius::CONTROL))
+            .rounded(ui(radius::CONTROL))
             .border_1()
             .border_color(hairline)
             .bg(surface)
@@ -247,16 +247,16 @@ impl SettingsPane {
             .child(
                 div()
                     .h_full()
-                    .px(px(12.0))
-                    .pr(px(28.0))
+                    .px(ui(12.0))
+                    .pr(ui(28.0))
                     .flex()
                     .items_center()
-                    .gap(px(8.0))
+                    .gap(ui(8.0))
                     .child(
                         div()
-                            .size(px(CHIP))
+                            .size(ui(CHIP))
                             .flex_shrink_0()
-                            .rounded(px(radius::CHIP))
+                            .rounded(ui(radius::CHIP))
                             .border_1()
                             .border_color(hairline)
                             .bg(chip),
@@ -264,7 +264,7 @@ impl SettingsPane {
                     .child(div().flex_1().min_w_0().truncate().text_color(accent).child(label)),
             )
             .child(
-                div().absolute().right(px(8.0)).top_0().bottom_0().flex().items_center().child(
+                div().absolute().right(ui(8.0)).top_0().bottom_0().flex().items_center().child(
                     Icon::new(if open { IconName::ChevronUp } else { IconName::ChevronDown })
                         .xsmall()
                         .text_color(ink_dim),
@@ -307,8 +307,8 @@ impl SettingsPane {
                         anchored()
                             .anchor(gpui::Anchor::TopRight)
                             .position(trigger_bounds.bottom_right())
-                            .offset(gpui::point(px(0.0), px(6.0)))
-                            .snap_to_window_with_margin(px(8.0))
+                            .offset(gpui::point(px(0.0), px(6.0 * crate::gpui_shell::ui_scale::factor(cx))))
+                            .snap_to_window_with_margin(px(8.0 * crate::gpui_shell::ui_scale::factor(cx)))
                             .child(panel),
                     )
                     .with_priority(2),
@@ -340,8 +340,8 @@ impl SettingsPane {
         let picker = cx.entity().downgrade();
         let sv = div()
             .w_full()
-            .h(px(SV_H))
-            .rounded(px(radius::CHIP))
+            .h(ui(SV_H))
+            .rounded(ui(radius::CHIP))
             .overflow_hidden()
             .cursor_pointer()
             .on_mouse_down(
@@ -366,8 +366,8 @@ impl SettingsPane {
         let picker = cx.entity().downgrade();
         let hue = div()
             .w_full()
-            .h(px(HUE_H))
-            .rounded(px(radius::CHIP))
+            .h(ui(HUE_H))
+            .rounded(ui(radius::CHIP))
             .overflow_hidden()
             .cursor_pointer()
             .on_mouse_down(
@@ -393,8 +393,8 @@ impl SettingsPane {
             div()
                 .flex()
                 .flex_wrap()
-                .gap(px(GAP))
-                .w(px(COLS as f32 * CELL + (COLS - 1) as f32 * GAP)),
+                .gap(ui(GAP))
+                .w(ui(COLS as f32 * CELL + (COLS - 1) as f32 * GAP)),
             |grid, index| {
                 let color = BACKGROUND_SWATCHES[index];
                 let rgb = [color.r, color.g, color.b];
@@ -402,8 +402,8 @@ impl SettingsPane {
                 grid.child(
                     div()
                         .id(SharedString::from(format!("bg-swatch-{index}")))
-                        .size(px(CELL))
-                        .rounded(px(6.0))
+                        .size(ui(CELL))
+                        .rounded(ui(6.0))
                         .border_1()
                         .border_color(if selected { accent } else { hairline })
                         .when(selected, |cell| {
@@ -411,7 +411,7 @@ impl SettingsPane {
                                 color: accent,
                                 offset: gpui::point(px(0.0), px(0.0)),
                                 blur_radius: px(0.0),
-                                spread_radius: px(2.0),
+                                spread_radius: px(2.0 * crate::gpui_shell::ui_scale::factor(cx)),
                                 inset: false,
                             }])
                         })
@@ -426,9 +426,9 @@ impl SettingsPane {
         );
 
         v_flex()
-            .w(px(pw))
-            .p(px(PAD))
-            .gap(px(GAP))
+            .w(ui(pw))
+            .p(ui(PAD))
+            .gap(ui(GAP))
             .popover_style(cx)
             .occlude()
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -446,9 +446,9 @@ impl SettingsPane {
             .child(swatches)
             .child(
                 div()
-                    .h(px(HEX_H))
+                    .h(ui(HEX_H))
                     .w_full()
-                    .rounded(px(7.0))
+                    .rounded(ui(7.0))
                     .border_1()
                     .border_color(hex_border)
                     .overflow_hidden()

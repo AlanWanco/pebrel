@@ -13,10 +13,10 @@ pub(super) fn editor_input(
 ) -> Input {
     let theme = cx.theme();
     let focused = state.read(cx).focus_handle(cx).is_focused(window);
-    gpui::Styled::h(Input::new(state), px(SSH_EDITOR_CTL_H))
-        .text_size(px(13.0))
-        .px(px(12.0))
-        .rounded(px(7.0))
+    gpui::Styled::h(Input::new(state), ui(SSH_EDITOR_CTL_H))
+        .text_size(ui(13.0))
+        .px(ui(12.0))
+        .rounded(ui(7.0))
         .bg(theme.popover)
         .focus_bordered(false)
         .border_color(if focused { theme.ring.opacity(0.8) } else { theme.input })
@@ -26,7 +26,7 @@ pub(super) fn editor_input(
                 color: theme.ring.opacity(0.13),
                 offset: gpui::point(px(0.0), px(0.0)),
                 blur_radius: px(0.0),
-                spread_radius: px(3.0),
+                spread_radius: px(3.0 * crate::gpui_shell::ui_scale::factor(cx)),
             }])
         })
         .aria_label(label)
@@ -36,7 +36,7 @@ pub(super) fn editor_field(label: &'static str, control: impl IntoElement) -> gp
     v_flex()
         .w_full()
         .min_w_0()
-        .gap(px(7.0))
+        .gap(ui(7.0))
         .child(div().text_xs().font_medium().child(label))
         .child(control)
 }
@@ -86,7 +86,7 @@ impl SettingsPane {
                 .label(label)
                 .ghost()
                 .small()
-                .h(px(38.0))
+                .h(ui(38.0))
                 .px_1()
                 .rounded_none()
                 .text_color(if selected { theme.foreground } else { theme.muted_foreground })
@@ -150,17 +150,17 @@ impl SettingsPane {
                         .flex()
                         .items_center()
                         .justify_center()
-                        .p(px(20.0))
+                        .p(ui(20.0))
                         .child(
                             v_flex()
                                 .id("ssh-editor-dialog")
                                 .debug_selector(|| "ssh-editor-dialog".to_owned())
-                                .w(px(EDITOR_WIDTH))
-                                .h(px(EDITOR_HEIGHT))
+                                .w(ui(EDITOR_WIDTH))
+                                .h(ui(EDITOR_HEIGHT))
                                 .max_w(gpui::relative(1.0))
                                 .max_h(gpui::relative(1.0))
                                 .flex_none()
-                                .rounded(px(13.0))
+                                .rounded(ui(13.0))
                                 .border_1()
                                 .border_color(theme.border.opacity(0.7))
                                 .bg(theme.popover)
@@ -169,9 +169,9 @@ impl SettingsPane {
                                 .overflow_hidden()
                                 .child(
                                     h_flex()
-                                        .h(px(94.0))
+                                        .h(ui(94.0))
                                         .flex_shrink_0()
-                                        .px(px(EDITOR_PADDING))
+                                        .px(ui(EDITOR_PADDING))
                                         .gap_3()
                                         .items_center()
                                         .child(avatar)
@@ -182,7 +182,7 @@ impl SettingsPane {
                                                 .gap_1()
                                                 .child(
                                                     div()
-                                                        .text_size(px(19.0))
+                                                        .text_size(ui(19.0))
                                                         .font_semibold()
                                                         .child(title),
                                                 )
@@ -207,9 +207,9 @@ impl SettingsPane {
                                 )
                                 .child(
                                     h_flex()
-                                        .h(px(39.0))
+                                        .h(ui(39.0))
                                         .flex_shrink_0()
-                                        .px(px(EDITOR_PADDING))
+                                        .px(ui(EDITOR_PADDING))
                                         .gap_6()
                                         .border_b_1()
                                         .border_color(theme.border)
@@ -229,7 +229,7 @@ impl SettingsPane {
                                         .flex_1()
                                         .min_h_0()
                                         .overflow_y_scrollbar()
-                                        .px(px(EDITOR_PADDING))
+                                        .px(ui(EDITOR_PADDING))
                                         .py_5()
                                         .child(content)
                                         .when_some(status, |body, (message, error)| {
@@ -272,15 +272,15 @@ impl SettingsPane {
                                 )
                                 .child(
                                     h_flex()
-                                        .h(px(71.0))
+                                        .h(ui(71.0))
                                         .flex_shrink_0()
-                                        .px(px(EDITOR_PADDING))
+                                        .px(ui(EDITOR_PADDING))
                                         .items_center()
                                         .justify_between()
                                         .border_t_1()
                                         .border_color(theme.border)
                                         .bg(theme.muted)
-                                        .rounded_b(px(13.0))
+                                        .rounded_b(ui(13.0))
                                         .child(
                                             Button::new("ssh-editor-test")
                                                 .debug_selector(|| "ssh-editor-test".to_owned())
@@ -304,7 +304,7 @@ impl SettingsPane {
                                                         .label(language.pick("取消", "Cancel"))
                                                         .ghost()
                                                         .small()
-                                                        .h(px(35.0))
+                                                        .h(ui(35.0))
                                                         .on_click(cx.listener(
                                                             |this, _, window, cx| {
                                                                 this.close_ssh_editor(window, cx)
@@ -319,8 +319,8 @@ impl SettingsPane {
                                                         .label(language.pick("保存", "Save"))
                                                         .primary()
                                                         .small()
-                                                        .h(px(35.0))
-                                                        .min_w(px(74.0))
+                                                        .h(ui(35.0))
+                                                        .min_w(ui(74.0))
                                                         .on_click(cx.listener(
                                                             |this, _, window, cx| {
                                                                 this.save_ssh_editor(window, cx)
@@ -353,7 +353,7 @@ impl SettingsPane {
             .w_full()
             .child(
                 v_flex()
-                    .gap(px(7.0))
+                    .gap(ui(7.0))
                     .child(
                         h_flex()
                             .gap_2()
@@ -391,7 +391,7 @@ impl SettingsPane {
                         )),
                     )
                     .child(
-                        div().w(px(84.0)).flex_shrink_0().child(editor_field(
+                        div().w(ui(84.0)).flex_shrink_0().child(editor_field(
                             language.pick("端口", "Port"),
                             editor_input(
                                 &self.ssh_port_input,
@@ -447,8 +447,8 @@ impl SettingsPane {
                 .small()
                 .flex_1()
                 .min_w_0()
-                .h(px(31.0))
-                .rounded(gpui_component::button::ButtonRounded::Size(px(5.0)))
+                .h(ui(31.0))
+                .rounded(gpui_component::button::ButtonRounded::Size(px(5.0 * crate::gpui_shell::ui_scale::factor(cx))))
                 .px_1()
                 .toggled(editor.auth == mode)
                 .when(editor.auth == mode, |button| {
@@ -468,9 +468,9 @@ impl SettingsPane {
             .child(
                 h_flex()
                     .mt_2()
-                    .p(px(3.0))
-                    .gap(px(3.0))
-                    .rounded(px(8.0))
+                    .p(ui(3.0))
+                    .gap(ui(3.0))
+                    .rounded(ui(8.0))
                     .bg(theme.muted)
                     .children(controls),
             )
@@ -514,7 +514,7 @@ impl SettingsPane {
                 let rows = editor.private_keys.iter().enumerate().map(|(index, path)| {
                     h_flex()
                         .w_full()
-                        .h(px(32.0))
+                        .h(ui(32.0))
                         .px_2()
                         .gap_2()
                         .items_center()
@@ -552,9 +552,9 @@ impl SettingsPane {
                         .when(!editor.private_keys.is_empty(), |list| {
                             list.child(
                                 v_flex()
-                                    .h(px((editor.private_keys.len() as f32 * 38.0).min(140.0)))
+                                    .h(ui((editor.private_keys.len() as f32 * 38.0).min(140.0)))
                                     .overflow_y_scrollbar()
-                                    .child(v_flex().gap(px(6.0)).children(rows)),
+                                    .child(v_flex().gap(ui(6.0)).children(rows)),
                             )
                         })
                         .child(
@@ -564,7 +564,7 @@ impl SettingsPane {
                                 .outline()
                                 .small()
                                 .w_full()
-                                .h(px(40.0))
+                                .h(ui(40.0))
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.add_ssh_private_key(window, cx)
                                 })),

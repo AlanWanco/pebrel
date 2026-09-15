@@ -138,25 +138,25 @@ impl RenderOnce for LanguageRow {
         let selector = format!("markdown-language-option-{}", self.option.name);
         h_flex()
             .debug_selector(move || selector.clone())
-            .h(px(32.0))
+            .h(ui(32.0))
             .w_full()
-            .gap(px(9.0))
-            .px(px(8.0))
-            .rounded(px(3.0))
+            .gap(ui(9.0))
+            .px(ui(8.0))
+            .rounded(ui(3.0))
             .items_center()
-            .text_size(px(12.0))
+            .text_size(ui(12.0))
             .text_color(colors.ink)
             .when(self.highlighted, |row| row.bg(colors.hover))
             .when(!self.highlighted, |row| row.hover(|row| row.bg(colors.hover)))
             .child(
                 div()
-                    .w(px(18.0))
-                    .h(px(18.0))
+                    .w(ui(18.0))
+                    .h(ui(18.0))
                     .flex_shrink_0()
                     .flex()
                     .items_center()
                     .justify_center()
-                    .text_size(px(11.0))
+                    .text_size(ui(11.0))
                     .text_color(colors.secondary)
                     .child(self.option.glyph),
             )
@@ -164,7 +164,7 @@ impl RenderOnce for LanguageRow {
             // flex child. This matters for localized/CJK language names.
             .child(div().flex_none().child(self.option.name))
             .when(self.checked, |row| {
-                row.child(Icon::new(IconName::Check).size(px(14.0)).text_color(colors.accent))
+                row.child(Icon::new(IconName::Check).size(ui(14.0)).text_color(colors.accent))
             })
     }
 }
@@ -264,8 +264,8 @@ fn render_language_picker(
         .debug_selector(|| "markdown-language-picker".to_owned())
         .relative()
         .w_auto()
-        .min_w(px(48.0))
-        .h(px(28.0))
+        .min_w(ui(48.0))
+        .h(ui(28.0))
         .child(
             div()
                 .group("markdown-language-trigger")
@@ -274,13 +274,13 @@ fn render_language_picker(
                 .h_full()
                 .track_focus(&focus)
                 .tab_stop(true)
-                .px(px(7.0))
-                .rounded(px(3.0))
-                .text_size(px(11.0))
+                .px(ui(7.0))
+                .rounded(ui(3.0))
+                .text_size(ui(11.0))
                 .text_color(colors.secondary)
                 .flex()
                 .items_center()
-                .gap(px(5.0))
+                .gap(ui(5.0))
                 // GPUI keeps mouse focus and keyboard focus separate. The
                 // former must not leave the black component outline behind;
                 // the latter remains discoverable through focus-visible.
@@ -289,8 +289,8 @@ fn render_language_picker(
                 .child(div().flex_none().child(current))
                 .child(
                     div()
-                        .w(px(16.0))
-                        .h(px(28.0))
+                        .w(ui(16.0))
+                        .h(ui(28.0))
                         .flex_shrink_0()
                         .flex()
                         .items_center()
@@ -298,7 +298,7 @@ fn render_language_picker(
                         .text_color(colors.secondary)
                         .when(!open, |icon| icon.opacity(0.0))
                         .group_hover("markdown-language-trigger", |icon| icon.opacity(1.0))
-                        .child(Icon::new(IconName::ChevronDown).size(px(10.0))),
+                        .child(Icon::new(IconName::ChevronDown).size(ui(10.0))),
                 )
                 .on_click(window.listener_for(&state, CodeLanguage::toggle)),
         );
@@ -307,20 +307,20 @@ fn render_language_picker(
     }
     picker.child(
         deferred(
-            anchored().snap_to_window_with_margin(px(8.0)).child(
+            anchored().snap_to_window_with_margin(px(8.0 * crate::gpui_shell::ui_scale::factor(cx))).child(
                 div()
                     .id("markdown-language-popup")
                     .debug_selector(|| "markdown-language-popup".to_owned())
                     .occlude()
-                    .w(px(224.0))
-                    .max_h(px(280.0))
+                    .w(ui(224.0))
+                    .max_h(ui(280.0))
                     .bg(colors.popup)
                     .text_color(colors.ink)
                     .border_1()
                     .border_color(colors.line)
-                    .rounded(px(6.0))
+                    .rounded(ui(6.0))
                     .shadow_lg()
-                    .p(px(6.0))
+                    .p(ui(6.0))
                     .child(
                         div().debug_selector(|| "markdown-language-search".to_owned()).child(
                             List::new(&list)
@@ -331,7 +331,7 @@ fn render_language_picker(
                                     .with_size(Size::Medium)
                                     .search_placeholder(search_placeholder)
                                     .scrollbar_visible(false)
-                                    .max_h(px(264.0))
+                                    .max_h(ui(264.0))
                                     .text_color(colors.ink),
                         ),
                     )
@@ -488,12 +488,12 @@ pub(super) fn render(
     let colors = code_ui_colors(cx);
     let mut surface = div()
         .id("code-surface")
-        .px(px(18.0))
-        .py(px(16.0))
-        .rounded(px(3.0))
+        .px(ui(18.0))
+        .py(ui(16.0))
+        .rounded(ui(3.0))
         .bg(colors.code)
         .text_color(colors.ink)
-        .text_size(px(13.0))
+        .text_size(ui(13.0))
         .line_height(gpui::relative(1.8))
         .whitespace_nowrap()
         .overflow_x_scroll();
@@ -520,7 +520,7 @@ pub(super) fn render(
                     .style(style),
             ),
         )
-        .child(h_flex().w_full().h(px(28.0)).justify_end().child(render_language_picker(
+        .child(h_flex().w_full().h(ui(28.0)).justify_end().child(render_language_picker(
             state.clone(),
             list,
             current,
@@ -534,8 +534,8 @@ pub(super) fn render(
             div()
                 .debug_selector(|| "markdown-copy-code".to_owned())
                 .absolute()
-                .top(px(8.0))
-                .right(px(8.0))
+                .top(ui(8.0))
+                .right(ui(8.0))
                 .invisible()
                 .when(copied, |slot| slot.visible())
                 .group_hover(hover_group, |slot| slot.visible())
@@ -547,7 +547,7 @@ pub(super) fn render(
                                 .hover(colors.hover)
                                 .active(colors.hover),
                         )
-                        .size(px(32.0))
+                        .size(ui(32.0))
                         .icon(if copied { IconName::Check } else { IconName::Copy })
                         .tooltip(language.text(Message::EditorCopyCode))
                         .on_click(move |_, _, cx| {

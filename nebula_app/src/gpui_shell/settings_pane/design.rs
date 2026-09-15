@@ -79,7 +79,7 @@ impl SettingsPane {
         // 不设宽度则走 flex 交叉轴 stretch：布局算法直接拉伸，不依赖父宽解析。
         v_flex().w_full().child(
             div()
-                .pb(px(10.0))
+                .pb(ui(10.0))
                 .text_size(px(base_px * DESC_SCALE))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(cx.theme().muted_foreground)
@@ -95,7 +95,7 @@ impl SettingsPane {
     /// 保留给"两块内容之间需要一口气"的非分组场景（关于页把外链沉到下面就
     /// 用它）。分组之间**不要**用它——组自己带上留白，再插一段就是两倍。
     pub(crate) fn group_divider(_cx: &Context<Self>) -> gpui::Div {
-        div().w_full().h(px(GROUP_GAP - 8.0)).flex_shrink_0()
+        div().w_full().h(ui(GROUP_GAP - 8.0)).flex_shrink_0()
     }
 
     /// 设置行。`desc` 写后果；确实无后果可说的项才传空串（尽量不要有）。
@@ -127,7 +127,7 @@ impl SettingsPane {
         let reset = dirty.then(|| {
             div()
                 .id(SharedString::from(format!("setting-reset-{label}")))
-                .size(px(20.0))
+                .size(ui(20.0))
                 .rounded_md()
                 .flex()
                 .items_center()
@@ -239,7 +239,7 @@ impl SettingsPane {
                             Button::new(SharedString::from(format!("settings-help-{label}")))
                                 .icon(IconName::Info)
                                 .ghost()
-                                .size(px(22.0))
+                                .size(ui(22.0))
                                 .text_color(theme.muted_foreground)
                                 .accessibility_id(SharedString::from(format!(
                                     "settings-help-{label}"
@@ -259,7 +259,7 @@ impl SettingsPane {
             .when(!desc.summary.is_empty(), |text| {
                 text.child(
                     div()
-                        .mt(px(LABEL_DESC_GAP))
+                        .mt(ui(LABEL_DESC_GAP))
                         .text_size(px(base_px * DESC_SCALE))
                         .font_weight(FontWeight::NORMAL)
                         .text_color(theme.muted_foreground)
@@ -269,7 +269,7 @@ impl SettingsPane {
             .when_some(desc.details.filter(|_| expanded), |text, details| {
                 text.child(
                     div()
-                        .mt(px(8.0))
+                        .mt(ui(8.0))
                         .text_size(px(base_px * DESC_SCALE))
                         .text_color(theme.muted_foreground)
                         .child(Self::desc_text(details, cx)),
@@ -280,11 +280,12 @@ impl SettingsPane {
             RowLayout::Standard => h_flex()
                 .w_full()
                 .items_start()
+                .flex_wrap()
                 .gap_4()
-                .child(text.flex_1().min_w(px(TEXT_COL_MIN_W)))
+                .child(text.flex_1().flex_basis(ui(TEXT_COL_MIN_W)).min_w_0())
                 .child(
                     h_flex()
-                        .w(px(CTRL_COL_W))
+                        .w(ui(CTRL_COL_W)).max_w_full()
                         .flex_shrink_0()
                         .justify_end()
                         .items_center()
@@ -297,12 +298,12 @@ impl SettingsPane {
             .relative()
             .w_full()
             .flex_shrink_0()
-            .pl(px(RAIL_INDENT))
+            .pl(ui(RAIL_INDENT))
             .pr_4()
-            .py(px(pad_y))
+            .py(ui(pad_y))
             // 四角都收。这里原来只圆右侧，是为了让 hover 底看起来"从灰轨道
             // 上长出来"；轨道已经删掉，再留着左边两个直角就只是缺角。
-            .rounded(px(7.0))
+            .rounded(ui(7.0))
             .hover(|row| row.bg(theme.list_hover.opacity(0.55)))
             // 竖线整条让给状态，不再画常驻的灰轨道。
             //
@@ -321,7 +322,7 @@ impl SettingsPane {
                         .absolute()
                         .left_0()
                         .bottom_0()
-                        .w(px(RAIL_W))
+                        .w(ui(RAIL_W))
                         .bg(crate::gpui_shell::theme::settings_mark(cx))
                         .with_animation(
                             ElementId::Name(format!("settings-mark-{label}").into()),

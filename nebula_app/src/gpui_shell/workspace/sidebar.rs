@@ -16,7 +16,7 @@ pub(super) fn sidebar_new_tab_control(
 ) -> gpui::Stateful<gpui::Div> {
     h_flex()
         .id("sidebar-new-tab")
-        .size(px(SIDEBAR_PLUS_SIZE))
+        .size(ui(SIDEBAR_PLUS_SIZE))
         .flex_shrink_0()
         .items_center()
         .justify_center()
@@ -76,7 +76,12 @@ impl NebulaWorkspace {
     /// 旧壳 `icons::push_spinner` 的 canvas 复刻：暗轨道 + 绕行亮弧（占
     /// 整圈 1/3），半径 5.5、笔画 0.30r，中性灰（spinner 表达「还在跑」，
     /// 不抢品牌色）。phase 由 render 侧的帧循环推进。
-    pub(super) fn spinner(phase: f32, track: gpui::Rgba, head: gpui::Rgba) -> impl IntoElement {
+    pub(super) fn spinner(
+        phase: f32,
+        track: gpui::Rgba,
+        head: gpui::Rgba,
+        scale: f32,
+    ) -> impl IntoElement {
         canvas(
             move |_, _, _| {},
             move |bounds, _, window, _| {
@@ -84,8 +89,8 @@ impl NebulaWorkspace {
                 let oy = f32::from(bounds.origin.y);
                 let side = f32::from(bounds.size.width);
                 let (cx, cy) = (ox + side * 0.5, oy + side * 0.5);
-                let radius = 5.5_f32;
-                let stroke = (radius * 0.30).max(1.0);
+                let radius = 5.5_f32 * scale;
+                let stroke = (radius * 0.30).max(1.0 * scale);
                 // 点铺在轨道中线上：外缘正好落在 radius 上。
                 let mid = radius - stroke * 0.5;
                 // 与旧壳 `push_spinner` 完全同式：相邻圆点约重叠 50%，既不
@@ -124,7 +129,7 @@ impl NebulaWorkspace {
                 }
             },
         )
-        .size(px(11.0))
+        .size(px(11.0 * scale))
     }
 
     /// 「有人在等你动手」的徽章：使用 Nerd Font 开掌 `nf-fa-hand_paper_o`
@@ -246,7 +251,10 @@ impl NebulaWorkspace {
         // （nebula.toml `font.size` 默认 11.25pt = 15px）。终端的持久化缩放
         // （`font_size=` 键）只影响终端网格，侧栏不得跟着变粗/变大；
         // 固定 14px 的旧毛病（比旧壳小一号）也不能回潮。
-        let label_px = settings.map(|settings| settings.base_font_size_px).unwrap_or(15.0);
+        let scale = crate::gpui_shell::ui_scale::factor(cx);
+        let label_px = settings
+            .map(|settings| settings.ui_font_size_px())
+            .unwrap_or(15.0 * scale);
         let cell_w = self.sidebar_cell_width(window, &chrome_family, label_px);
 
         // 受约束拖拽的渲染参数：激活后被拖行骑指针位移，落点槽位由位移换算。
@@ -262,7 +270,9 @@ impl NebulaWorkspace {
         let (tabs_scroll, tabs_show) = self.tabs_visible_window();
         // 行的确定宽度：侧栏宽 − 侧栏 p_2 两边 − 列表右侧滚动条留白。
         // 与下面 `label_avail` 同一份减法口径，两者不能各算一套。
-        let row_w = (self.sidebar_width - 16.0 - tab_scroll::TAB_SCROLL_GUTTER).max(1.0);
+        let sidebar_width = self.sidebar_width * scale;
+        let row_w =
+            (sidebar_width - 16.0 * scale - tab_scroll::TAB_SCROLL_GUTTER * scale).max(1.0);
         let items = (0..self.tabs.len())
             .filter(|&ix| tab_scroll::index_visible(ix, tabs_scroll, tabs_show))
             .map(|ix| {
@@ -290,11 +300,11 @@ impl NebulaWorkspace {
                 let has_icon =
                     is_settings || logo_image.is_some() || has_program_glyph || pane_count > 1;
                 let label_avail = row_w
-                    - 16.0
-                    - TAB_STATUS_SLOT_W
-                    - 8.0
-                    - if has_icon { TAB_LABEL_ICON_W + 8.0 } else { 0.0 }
-                    - if pane_count > 1 { pane_header::split_badge_slot_w(label_px) } else { 0.0 };
+                    - 16.0 * scale
+                    - TAB_STATUS_SLOT_W * scale
+                    - 8.0 * scale
+                    - if has_icon { (TAB_LABEL_ICON_W + 8.0) * scale } else { 0.0 }
+                    - if pane_count > 1 { pane_header::split_badge_slot_w(label_px, scale) } else { 0.0 };
                 let label_cols = (label_avail / cell_w).floor().max(1.0) as usize;
                 let title: SharedString =
                     crate::display::truncate_tab_label(&title, label_cols).into();
@@ -314,7 +324,15 @@ impl NebulaWorkspace {
                         items_running.set(true);
                         let (track, head) =
                             crate::gpui_shell::theme::sidebar_spinner_colors(cx, active);
-                        Some(Self::spinner(self.spinner_phase, track, head).into_any_element())
+                        Some(
+                            Self::spinner(
+                                self.spinner_phase,
+                                track,
+                                head,
+                                crate::gpui_shell::ui_scale::factor(cx),
+                            )
+                            .into_any_element(),
+                        )
                     },
                     SidebarActivity::Paused => Some(
                         Icon::new(IconName::Pause)
@@ -325,7 +343,7 @@ impl NebulaWorkspace {
                     // 回合完成、等下一条指令：旧壳蓝点语义——不转圈，留一个
                     // 「有结果没看」的痕迹。
                     SidebarActivity::Done => Some(
-                        div().size(px(6.0)).rounded_full().bg(theme.primary).into_any_element(),
+                        div().size(ui(6.0)).rounded_full().bg(theme.primary).into_any_element(),
                     ),
                     // 刚完成：先闪一个对勾做确认，`COMPLETION_FLASH` 之后沉降
                     // 成上面那个圆点（同一件事的两个阶段，不是两种语义）。
@@ -379,10 +397,10 @@ impl NebulaWorkspace {
                 let (dragged, shift) = match drag {
                     Some((src, _, _)) if ix == src => (true, 0.0),
                     Some((src, tgt, _)) if src < tgt && ix > src && ix <= tgt => {
-                        (false, -TAB_ROW_PITCH)
+                        (false, -TAB_ROW_PITCH * scale)
                     },
                     Some((src, tgt, _)) if src > tgt && ix >= tgt && ix < src => {
-                        (false, TAB_ROW_PITCH)
+                        (false, TAB_ROW_PITCH * scale)
                     },
                     _ => (false, 0.0),
                 };
@@ -404,11 +422,11 @@ impl NebulaWorkspace {
                 .overflow_hidden()
                 .gap_2()
                 .px_2()
-                .h(px(TAB_ROW_H))
+                .h(ui(TAB_ROW_H))
                 .items_center()
                 // 旧壳 pill 圆角 = UI_CORNER_RADIUS_LOGICAL(8)，rounded_md(6)
                 // 偏小一圈，选中水洗的轮廓形状会不一样。
-                .rounded(px(crate::display::UI_CORNER_RADIUS_LOGICAL))
+                .rounded(ui(crate::display::UI_CORNER_RADIUS_LOGICAL))
                 // GPUI 默认文本样式可能把侧栏整行带到中等/粗体；旧壳
                 // tab chrome 使用终端 Regular face，所有子文本从这里继承常规字重。
                 .font_weight(FontWeight::NORMAL)
@@ -434,7 +452,7 @@ impl NebulaWorkspace {
                             press_x: f32::from(event.position.x),
                             press_y: f32::from(event.position.y),
                             axis: TabDragAxis::Vertical,
-                            pitch: TAB_ROW_PITCH,
+                            pitch: TAB_ROW_PITCH * scale,
                             offset: 0.0,
                             active: false,
                             dock: None,
@@ -457,10 +475,10 @@ impl NebulaWorkspace {
                     row.child(
                         div()
                             .absolute()
-                            .left(px(4.0))
-                            .top(px(7.0))
-                            .w(px(2.5))
-                            .h(px(TAB_ROW_H - 14.0))
+                            .left(ui(4.0))
+                            .top(ui(7.0))
+                            .w(ui(2.5))
+                            .h(ui(TAB_ROW_H - 14.0))
                             .rounded_full()
                             .bg(color),
                     )
@@ -473,7 +491,7 @@ impl NebulaWorkspace {
                 // tab 变化」就是这个。数量由尾部胶囊表达，不必和图标抢槽位。
                 .when(is_settings, |row| {
                     row.child(
-                        div().w(px(TAB_LABEL_ICON_W)).flex_shrink_0().flex().justify_center().child(
+                        div().w(ui(TAB_LABEL_ICON_W)).flex_shrink_0().flex().justify_center().child(
                             Icon::new(IconName::Settings)
                                 .small()
                                 .text_color(if active { active_fg } else { muted }),
@@ -483,7 +501,7 @@ impl NebulaWorkspace {
                 .when_some(logo_image.clone(), |row, image| {
                     row.child(
                         img(image)
-                            .size(px(TAB_LABEL_ICON_SIZE))
+                            .size(ui(TAB_LABEL_ICON_SIZE))
                             .flex_shrink_0()
                             .object_fit(ObjectFit::Contain),
                     )
@@ -491,7 +509,7 @@ impl NebulaWorkspace {
                 .when_some(program_glyph, |row, glyph| {
                     row.child(
                         div()
-                            .w(px(TAB_LABEL_ICON_W))
+                            .w(ui(TAB_LABEL_ICON_W))
                             .flex_shrink_0()
                             .font_family(symbol_family.clone())
                             .text_size(px(label_px))
@@ -505,7 +523,7 @@ impl NebulaWorkspace {
                     |row| {
                         row.child(
                             div()
-                                .w(px(TAB_LABEL_ICON_W))
+                                .w(ui(TAB_LABEL_ICON_W))
                                 .flex_shrink_0()
                                 .flex()
                                 .items_center()
@@ -568,6 +586,7 @@ impl NebulaWorkspace {
                             .child(pane_header::split_badge(
                                 pane_count,
                                 label_px,
+                                scale,
                                 if active { active_fg } else { muted },
                                 if active { active_bg } else { theme.muted },
                             )),
@@ -576,7 +595,7 @@ impl NebulaWorkspace {
                 .child(
                     div()
                         .relative()
-                        .w(px(TAB_STATUS_SLOT_W))
+                        .w(ui(TAB_STATUS_SLOT_W))
                         .h_full()
                         .flex_shrink_0()
                         .when_some(resting_status, |slot, status| {
@@ -663,7 +682,7 @@ impl NebulaWorkspace {
         let count: SharedString = self.tabs.len().to_string().into();
 
         let sidebar = v_flex()
-            .w(px(self.sidebar_width))
+            .w(px(self.sidebar_width * scale))
             .h_full()
             .flex_shrink_0()
             // workspace 根保持透明，侧栏自己只铺一层壳色；否则终端卡会
@@ -684,7 +703,7 @@ impl NebulaWorkspace {
                     .id("sidebar-tabs-toggle")
                     .group(header_group.clone())
                     .w_full()
-                    .h(px(34.0))
+                    .h(ui(34.0))
                     .pb_1()
                     // 旧壳标题文字从 panel_x + 16px 起；侧栏根已有 8px
                     // padding，这里再补 8px，箭头不会贴住左边缘。
@@ -710,7 +729,7 @@ impl NebulaWorkspace {
                                 // 不再用 Nerd Font 实心字位——后者在侧栏标题
                                 // 上偏重、和右侧 +/⋯ 的 SVG 不一套语言。
                                 h_flex()
-                                    .w(px(TABS_DISCLOSURE_SLOT_W))
+                                    .w(ui(TABS_DISCLOSURE_SLOT_W))
                                     .h_full()
                                     .flex_shrink_0()
                                     .items_center()
@@ -737,8 +756,10 @@ impl NebulaWorkspace {
                                 // 数字 ink_faint。
                                 h_flex()
                                     .ml_2()
-                                    .h(px((label_px * 1.22 * SIDEBAR_TITLE_SCALE * 1.18).max(11.0)))
-                                    .min_w(px(label_px * 0.62 + 8.0))
+                                    .h(ui((label_px * 1.22 * SIDEBAR_TITLE_SCALE * 1.18)
+                                        .max(11.0)
+                                        / scale))
+                                    .min_w(px(label_px * 0.62 + 8.0 * scale))
                                     .px_2()
                                     .justify_center()
                                     .items_center()
@@ -755,7 +776,7 @@ impl NebulaWorkspace {
                         h_flex()
                             .flex_shrink_0()
                             .items_center()
-                            .gap(px(2.0))
+                            .gap(ui(2.0))
                             .child(
                                 // 旧壳 `ChromeHit::NewTab`：直接开设置里的默认
                                 // shell，不经过选择器。三点才是 NewTabMenu。
@@ -776,14 +797,14 @@ impl NebulaWorkspace {
                                         .build(window, cx)
                                     })
                                     .child(
-                                        Icon::new(IconName::Plus).with_size(px(SIDEBAR_HEADER_ICON)),
+                                        Icon::new(IconName::Plus).with_size(px(SIDEBAR_HEADER_ICON * crate::gpui_shell::ui_scale::factor(cx))),
                                     ),
                             )
                             .child(
                                 h_flex()
                                     .id("sidebar-tabs-menu")
-                                    .w(px(SIDEBAR_MENU_W))
-                                    .h(px(SIDEBAR_PLUS_SIZE))
+                                    .w(ui(SIDEBAR_MENU_W))
+                                    .h(ui(SIDEBAR_PLUS_SIZE))
                                     .flex_shrink_0()
                                     .items_center()
                                     .justify_center()
@@ -801,7 +822,7 @@ impl NebulaWorkspace {
                                     }))
                                     .child(
                                         Icon::new(IconName::EllipsisVertical)
-                                            .with_size(px(SIDEBAR_HEADER_ICON)),
+                                            .with_size(px(SIDEBAR_HEADER_ICON * crate::gpui_shell::ui_scale::factor(cx))),
                                     ),
                             ),
                     ),
@@ -891,7 +912,7 @@ impl NebulaWorkspace {
                 self.render_sidebar(window, cx).into_any_element()
             };
         }
-        let width = self.sidebar_width;
+        let width = self.sidebar_width * crate::gpui_shell::ui_scale::factor(cx);
         let (from, to) = if collapsed { (width, 0.0) } else { (0.0, width) };
         div()
             .h_full()
@@ -1046,7 +1067,10 @@ impl NebulaWorkspace {
         let settings = cx.try_global::<crate::gpui_shell::config::Settings>();
         let chrome_family = theme.mono_font_family.clone();
         let symbol_family: SharedString = crate::font_install::REQUIRED_FONT_FAMILY.into();
-        let label_px = settings.map(|settings| settings.base_font_size_px).unwrap_or(15.0);
+        let scale = crate::gpui_shell::ui_scale::factor(cx);
+        let label_px = settings
+            .map(|settings| settings.ui_font_size_px())
+            .unwrap_or(15.0 * scale);
         let TabPresentation { title, logo_image, program_glyph, pane_count, .. } =
             self.tab_presentation(self.active, cx, dark);
         slot.child(
@@ -1061,7 +1085,7 @@ impl NebulaWorkspace {
                 .when_some(logo_image, |row, image| {
                     row.child(
                         img(image)
-                            .size(px(TAB_LABEL_ICON_SIZE))
+                            .size(ui(TAB_LABEL_ICON_SIZE))
                             .flex_shrink_0()
                             .object_fit(ObjectFit::Contain),
                     )
@@ -1088,7 +1112,13 @@ impl NebulaWorkspace {
                 )
                 // 折叠态没有侧栏行可看，分屏数量只能挂在这里；> 1 才画。
                 .when(pane_count > 1, |row| {
-                    row.child(pane_header::split_badge(pane_count, label_px, dim, badge_fill))
+                    row.child(pane_header::split_badge(
+                        pane_count,
+                        label_px,
+                        scale,
+                        dim,
+                        badge_fill,
+                    ))
                 }),
         )
     }

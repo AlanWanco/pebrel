@@ -119,17 +119,24 @@ pub(super) fn split_glyph(size_px: f32, color: Hsla) -> impl IntoElement {
 /// min-w-[22px]`、前景 18% 描边、背景 60% 半透明底），但尺寸按 chrome 字号
 /// 等比推导而不是钉死 10px——侧栏字号跟随配置字号，钉死会在大字号下缩成
 /// 一粒米。
-pub(super) fn split_badge(count: usize, label_px: f32, ink: Hsla, fill: Hsla) -> impl IntoElement {
-    let height = (label_px * 1.18).max(15.0);
+pub(super) fn split_badge(
+    count: usize,
+    label_px: f32,
+    scale: f32,
+    ink: Hsla,
+    fill: Hsla,
+) -> impl IntoElement {
+    let scale = scale.max(0.01);
+    let height = (label_px * 1.18).max(15.0 * scale);
     h_flex()
         .flex_shrink_0()
         .h(px(height))
         .min_w(px(height * 1.25))
-        .px(px(5.0))
+        .px(px(5.0 * scale))
         .items_center()
         .justify_center()
         .rounded_full()
-        .border(px(1.0))
+        .border(px(1.0 * scale))
         .border_color(ink.opacity(0.18))
         .bg(fill.opacity(0.6))
         .text_size(px(label_px * 0.68))
@@ -140,8 +147,8 @@ pub(super) fn split_badge(count: usize, label_px: f32, ink: Hsla, fill: Hsla) ->
 
 /// 胶囊在行内占的水平预算（含左侧 gap）：侧栏标题的列数换算要按同一份减法
 /// 扣掉它，否则省略号会压到胶囊上。
-pub(super) fn split_badge_slot_w(label_px: f32) -> f32 {
-    (label_px * 1.18).max(15.0) * 1.25 + 8.0
+pub(super) fn split_badge_slot_w(label_px: f32, scale: f32) -> f32 {
+    (label_px * 1.18).max(15.0 * scale) * 1.25 + 8.0 * scale
 }
 
 /// 广播记号：中心点 + 左右各两段同心弧。fork 的 `IconName` 里没有
@@ -224,15 +231,18 @@ impl NebulaWorkspace {
             .filter(|_| logo.is_none())
             .map(crate::display::program_icon)
             .or(view.ssh_destination.as_ref().map(|_| "\u{f0716}"));
-        let text = match (&program, &view.ssh_destination) {
-            (Some(program), _) => SharedString::from(program.clone()),
-            (None, Some(destination)) => SharedString::from(destination.clone()),
-            (None, None) => SharedString::from(view.tab_label()),
+        let text = match self.pane_custom_name(view.pane_id) {
+            Some(name) => SharedString::from(name.to_owned()),
+            None => match (&program, &view.ssh_destination) {
+                (Some(program), _) => SharedString::from(program.clone()),
+                (None, Some(destination)) => SharedString::from(destination.clone()),
+                (None, None) => SharedString::from(view.tab_label()),
+            },
         };
         PaneTitle { logo, glyph, text }
     }
 
-    /// 一个 pane 的标题条。左区整条是切焦点的命中区，右区三枚按钮各自
+    /// 一个 pane 的标题条。左区整条是切焦点的命中区，右区按钮各自
     /// `stop_propagation`，不会顺手把焦点也换掉。
     #[allow(clippy::too_many_arguments)]
     pub(super) fn render_pane_header(
@@ -260,21 +270,25 @@ impl NebulaWorkspace {
         let settings = cx.try_global::<crate::gpui_shell::config::Settings>();
         let chrome_family = theme.mono_font_family.clone();
         let symbol_family: SharedString = crate::font_install::REQUIRED_FONT_FAMILY.into();
-        let label_px = settings.map(|settings| settings.base_font_size_px).unwrap_or(15.0);
+        let scale = crate::gpui_shell::ui_scale::factor(cx);
+        let label_px = settings
+            .map(|settings| settings.ui_font_size_px())
+            .unwrap_or(15.0 * scale);
         let title_px = label_px * 0.78;
         let PaneTitle { logo, glyph, text } = self.pane_title(view, cx, dark);
+        let rename_prefill = text.to_string();
         let group: SharedString = format!("pane-header-{pane_id}").into();
         let icon_ink = if focused { ink } else { muted };
 
         h_flex()
             .id(("pane-header", pane_id as usize))
             .group(group.clone())
-            .h(px(PANE_HEADER_H))
+            .h(ui(PANE_HEADER_H))
             .w_full()
             .flex_shrink_0()
             .items_center()
             .gap_1()
-            .px(px(6.0))
+            .px(ui(6.0))
             .bg(bar_bg)
             // 贴着卡角的那一枚自己收角，见 [`HeaderCorners`]。
             .when(corners.top_left, |bar| {
@@ -353,7 +367,15 @@ impl NebulaWorkspace {
                 h_flex()
                     .flex_shrink_0()
                     .items_center()
-                    .gap(px(1.0))
+                    .gap(ui(1.0))
+                    .child(
+                        super::pane_rename::rename_button(pane_id, icon_ink, cx).on_click(
+                            cx.listener(move |this, _, window, cx| {
+                                cx.stop_propagation();
+                                this.begin_pane_rename(pane_id, rename_prefill.clone(), window, cx);
+                            }),
+                        ),
+                    )
                     .child(
                         Button::new(("pane-broadcast", pane_id as usize))
                             .ghost()
@@ -686,13 +708,13 @@ impl NebulaWorkspace {
                 .child(
                     div()
                         .absolute()
-                        .left(px(x + 12.0))
-                        .top(px(y + 12.0))
+                        .left(px(x + 12.0 * crate::gpui_shell::ui_scale::factor(cx)))
+                        .top(px(y + 12.0 * crate::gpui_shell::ui_scale::factor(cx)))
                         .px_2()
-                        .py(px(3.0))
-                        .rounded(px(6.0))
+                        .py(ui(3.0))
+                        .rounded(ui(6.0))
                         .bg(hint_bg)
-                        .text_size(px(11.0))
+                        .text_size(ui(11.0))
                         .text_color(hint_fg)
                         .child(if detach {
                             "松手：拉出为独立标签"
@@ -776,9 +798,9 @@ mod tests {
 
     #[test]
     fn badge_slot_tracks_the_chrome_font_size() {
-        assert!(split_badge_slot_w(15.0) > split_badge_slot_w(11.0));
-        // 小字号下仍保留 15px 的胶囊最小高度，槽宽因此有下限。
-        assert_eq!(split_badge_slot_w(8.0), 15.0 * 1.25 + 8.0);
+        assert!(split_badge_slot_w(15.0, 1.0) > split_badge_slot_w(11.0, 1.0));
+        // 小字号下仍保留按 UI scale 缩放的胶囊最小高度，槽宽因此有下限。
+        assert_eq!(split_badge_slot_w(8.0, 1.0), 15.0 * 1.25 + 8.0);
     }
 
     /// 收角资格必须**只**落在真正贴着卡角的那一枚上：多收一个角会在分屏缝

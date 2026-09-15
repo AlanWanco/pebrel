@@ -97,9 +97,20 @@ struct TabsWindow {
 }
 
 impl NebulaWorkspace {
+    pub(super) fn sync_tabs_scale(&mut self, cx: &mut Context<Self>) {
+        let scale = crate::gpui_shell::ui_scale::factor(cx);
+        if self.tabs_ui_scale != scale {
+            self.tabs_ui_scale = scale;
+            self.tab_drag = None;
+            self.tabs_scroll_grab = None;
+            self.clamp_tabs_scroll();
+            self.reveal_active_tab();
+        }
+    }
+
     fn tabs_window(&self) -> TabsWindow {
         let want = self.tabs.len();
-        let show = visible_count(want, self.tabs_viewport_h, TAB_ROW_PITCH, TAB_ROW_GAP);
+        let show = visible_count(want, self.tabs_viewport_h, TAB_ROW_PITCH * self.tabs_ui_scale, TAB_ROW_GAP * self.tabs_ui_scale);
         let max = max_scroll(want, show);
         let scroll = clamp_scroll(self.tabs_scroll, max);
         TabsWindow { scroll, show, max, want }
@@ -137,15 +148,15 @@ impl NebulaWorkspace {
         if window.show == 0 || window.want <= window.show {
             return None;
         }
-        let viewport = rows_h(window.show, TAB_ROW_PITCH, TAB_ROW_GAP).max(1.0);
-        let content = rows_h(window.want, TAB_ROW_PITCH, TAB_ROW_GAP);
+        let viewport = rows_h(window.show, TAB_ROW_PITCH * self.tabs_ui_scale, TAB_ROW_GAP * self.tabs_ui_scale).max(1.0);
+        let content = rows_h(window.want, TAB_ROW_PITCH * self.tabs_ui_scale, TAB_ROW_GAP * self.tabs_ui_scale);
         let width = self.tabs_list_width.max(1.0);
         let height = self.tabs_viewport_h.max(viewport);
         widgets::overlay_scrollbar(
             (0.0, 0.0, width, height),
             viewport,
             content,
-            window.scroll as f32 * TAB_ROW_PITCH,
+            window.scroll as f32 * TAB_ROW_PITCH * self.tabs_ui_scale,
             1.0,
         )
     }
@@ -191,7 +202,12 @@ impl NebulaWorkspace {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let delta_y = f32::from(event.delta.pixel_delta(px(TAB_ROW_PITCH)).y);
+        let delta_y = f32::from(
+            event
+                .delta
+                .pixel_delta(px(TAB_ROW_PITCH * self.tabs_ui_scale.max(0.01)))
+                .y,
+        );
         let rows = wheel_rows(delta_y);
         if rows == 0 {
             return;
@@ -234,7 +250,7 @@ impl NebulaWorkspace {
             .min_h_0()
             .relative()
             .overflow_hidden()
-            .pr(px(TAB_SCROLL_GUTTER))
+            .pr(ui(TAB_SCROLL_GUTTER))
             .on_scroll_wheel(cx.listener(Self::on_tabs_wheel))
             .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
                 if this.tabs_list_hot != *hovered {
@@ -254,7 +270,7 @@ impl NebulaWorkspace {
                 .absolute()
                 .size_full(),
             )
-            .child(v_flex().w_full().gap_2().children(items))
+            .child(v_flex().w_full().gap(ui(TAB_ROW_GAP)).children(items))
             .when_some(bar.filter(|_| show_thumb), |list, bar| {
                 list.child(
                     div()
@@ -304,7 +320,7 @@ impl NebulaWorkspace {
         }
         // 折叠中/已折叠：裁剪高度不是 `tabs_avail`。写回去会让
         // `visible_count` 按 20–40px 算出 0/1 行，展开后整列锁死。
-        if !self.tabs_section_collapsed && !self.tabs_fold_frozen && h >= TAB_ROW_H {
+        if !self.tabs_section_collapsed && !self.tabs_fold_frozen && h >= TAB_ROW_H * self.tabs_ui_scale {
             self.tabs_viewport_h = h;
         }
         self.tabs_list_width = w;

@@ -40,7 +40,7 @@ use super::session::{self, TerminalSession};
 use super::suggest;
 use super::{KEY_CONTEXT, TerminalBackTab, TerminalTab};
 use crate::gpui_shell::config::Settings;
-use crate::gpui_shell::prelude::{ActiveTheme as _, Colorize as _};
+use crate::gpui_shell::prelude::{ActiveTheme as _, Colorize as _, ui};
 use crate::{config::UiConfig, font_install::REQUIRED_FONT_FAMILY};
 
 /// 等宽字体描述。GPUI 的 Windows 后端收到空 feature 列表会在
@@ -56,8 +56,8 @@ fn mono_font(family: &str, weight: FontWeight, style: FontStyle) -> Font {
 }
 
 /// Overlay 滚动条的拇指宽度、最小高度与命中放宽量（逻辑 px；旧壳
-/// `scrollbar_geometry` 的 4/24/8 设备 px 在同一 DPI 语义下等值）。4px 的细条
-/// 不好抓，所以命中带比可见拇指左右各宽 `SLOP`。
+/// `scrollbar_geometry` 的 4/24/8 设备 px 在同一 DPI 语义下等值）。按界面缩放，
+/// 轨道位置和拖动反算仍使用实测逻辑坐标；命中带比可见拇指左右各宽 `SLOP`。
 const SCROLLBAR_W: f32 = 4.0;
 const SCROLLBAR_MIN_THUMB: f32 = 24.0;
 const SCROLLBAR_SLOP: f32 = 8.0;
@@ -852,7 +852,7 @@ impl TerminalView {
                 state
             },
             suggest_anchor: None,
-            completion_viewport: super::completion_viewport::CompletionViewport::default(),
+            completion_viewport: super::completion_viewport::CompletionViewport::new(crate::gpui_shell::ui_scale::factor(cx)),
             ghost_enabled,
             accept,
             completion_style,
@@ -2062,6 +2062,7 @@ impl gpui::EntityInputHandler for TerminalView {
 
 impl Render for TerminalView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.completion_viewport.chrome_scale = crate::gpui_shell::ui_scale::factor(cx);
         if let Some(reader) = &self.answer_reader {
             return div().size_full().child(reader.clone()).into_any_element();
         }
@@ -2082,9 +2083,8 @@ impl Render for TerminalView {
             // 只属于整个终端卡外壳；分屏 pane 自己带圆角会露出四个独立卡片。
             // 卡内呼吸边距，对齐旧壳网格 reserve 的换算值：上下 8（chrome
             // 64/底 16 各减 8px 卡缝），左右 12（CONTENT_PAD_X 20 − 卡缝 8）。
-            // 网格因此不贴圆角；padding 区点击由 grid_point 的钳制兜底。
-            .py(px(8.0))
-            .px(px(12.0))
+            .py(ui(8.0))
+            .px(ui(12.0))
             .track_focus(&self.focus_handle)
             .on_action(cx.listener(Self::on_terminal_tab))
             .on_action(cx.listener(Self::on_terminal_back_tab))

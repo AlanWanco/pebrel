@@ -141,8 +141,8 @@ pub(super) fn extensions(base: Option<PathBuf>) -> MarkdownExtensions {
                             .id(("centered-image", index))
                             .max_w_full()
                             .object_fit(ObjectFit::Contain)
-                            .when_some(image.width, |image, width| image.w(px(width)))
-                            .when_some(image.height, |image, height| image.h(px(height)))
+                            .when_some(image.width, |image, width| image.w(ui(width)))
+                            .when_some(image.height, |image, height| image.h(ui(height)))
                             .when_some(image.link.clone(), |image, link| {
                                 image.cursor_pointer().on_click(move |_, _, cx| cx.open_url(&link))
                             }),
@@ -165,6 +165,8 @@ pub(super) fn extensions(base: Option<PathBuf>) -> MarkdownExtensions {
                                 image_base: base.clone().map(Arc::from),
                                 highlight_theme: cx.theme().highlight_theme.clone(),
                                 is_dark: cx.theme().is_dark(),
+                                heading_base_font_size: px(reader_presentation::HEADING_BASE
+                                    * crate::gpui_shell::ui_scale::factor(cx)),
                                 ..Default::default()
                             }),
                     )
@@ -280,15 +282,16 @@ impl TextFileView {
         let extensions = self.preview_extensions.clone();
         let scroll = self.scroll.clone();
         let bounds = self.preview_bounds.clone();
+        let chrome_scale = crate::gpui_shell::ui_scale::factor(cx);
         let style = TextViewStyle {
             image_base: self.path.parent().map(Arc::from),
             highlight_theme: cx.theme().highlight_theme.clone(),
             is_dark: cx.theme().is_dark(),
             paragraph_gap: gpui::rems(0.7),
-            heading_base_font_size: px(reader_presentation::HEADING_BASE),
+            heading_base_font_size: px(reader_presentation::HEADING_BASE * chrome_scale),
             code_block: {
                 let mut style = gpui::StyleRefinement::default();
-                style.padding.top = Some(px(16.0).into());
+                style.padding.top = Some(px(16.0 * chrome_scale).into());
                 style.background = Some(super::super::theme::code_block_background(cx).into());
                 style
             },
@@ -300,8 +303,8 @@ impl TextFileView {
             .h_full()
             .relative()
             .overflow_hidden()
-            .px(px(reader_presentation::PAGE_MARGIN))
-            .pt(px(reader_presentation::TOP_MARGIN))
+            .px(ui(reader_presentation::PAGE_MARGIN))
+            .pt(ui(reader_presentation::TOP_MARGIN))
             .debug_selector(|| "markdown-preview-viewport".to_owned())
             .on_prepaint(move |viewport, _, _| *bounds.borrow_mut() = viewport)
             .on_mouse_down(
@@ -371,11 +374,11 @@ impl TextFileView {
                         .child(
                             div()
                                 .w_full()
-                                .max_w(px(reader_presentation::PAGE_WIDTH))
+                                .max_w(ui(reader_presentation::PAGE_WIDTH))
                                 .mx_auto()
                                 .min_w_0()
                                 .debug_selector(move || format!("markdown-preview-block-{index}"))
-                                .text_size(px(reader_presentation::BODY_SIZE))
+                                .text_size(ui(reader_presentation::BODY_SIZE))
                                 .line_height(gpui::relative(reader_presentation::LINE_HEIGHT))
                                 .whitespace_normal()
                                 .child(
@@ -400,7 +403,7 @@ impl TextFileView {
                     .top_0()
                     .right_0()
                     .bottom_0()
-                    .w(px(16.0))
+                    .w(ui(16.0))
                     .debug_selector(|| "markdown-preview-scrollbar".to_owned())
                     .on_hover(cx.listener(|view, hovered: &bool, _, cx| {
                         view.preview_scrollbar_hovered = *hovered;

@@ -10,9 +10,9 @@ fn appearance_copy(
         .min_w_0()
         .flex_1()
         .text_left()
-        .gap(px(4.0))
-        .child(div().text_size(px(14.0)).font_semibold().child(title))
-        .child(div().text_size(px(12.0)).text_color(colors.secondary).child(description))
+        .gap(ui(4.0))
+        .child(div().text_size(ui(14.0)).font_semibold().child(title))
+        .child(div().text_size(ui(12.0)).text_color(colors.secondary).child(description))
 }
 
 impl SettingsPane {
@@ -39,25 +39,25 @@ impl SettingsPane {
         let focus = if theme { &self.theme_picker_trigger } else { &self.icon_picker_trigger };
         let sample = if theme {
             div()
-                .size(px(45.0))
+                .size(ui(45.0))
                 .flex_shrink_0()
                 .child(super::theme_picker::theme_sample(name, true, false))
         } else {
-            super::app_icon::icon_image(icon, 45.0, window)
+            super::app_icon::icon_image(icon, 45.0, window, cx)
         };
         h_flex()
             .id(if theme { "open-theme-picker" } else { "open-icon-picker" })
             .track_focus(&focus.clone().tab_stop(true))
             .role(gpui::accesskit::Role::Button)
             .aria_label(format!("{action}: {label}"))
-            .min_w(px(166.0))
-            .max_w(px(250.0))
+            .min_w(ui(166.0))
+            .max_w(ui(250.0))
             .flex_shrink_0()
-            .gap(px(11.0))
-            .py(px(8.0))
-            .pl(px(8.0))
-            .pr(px(10.0))
-            .rounded(px(9.0))
+            .gap(ui(11.0))
+            .py(ui(8.0))
+            .pl(ui(8.0))
+            .pr(ui(10.0))
+            .rounded(ui(9.0))
             .border_1()
             .border_color(if focus.is_focused(window) {
                 colors.control
@@ -71,11 +71,11 @@ impl SettingsPane {
                 v_flex()
                     .flex_1()
                     .min_w_0()
-                    .gap(px(2.0))
-                    .child(div().text_size(px(12.0)).font_medium().truncate().child(label))
-                    .child(div().text_size(px(10.5)).text_color(colors.secondary).child(action)),
+                    .gap(ui(2.0))
+                    .child(div().text_size(ui(12.0)).font_medium().truncate().child(label))
+                    .child(div().text_size(ui(10.5)).text_color(colors.secondary).child(action)),
             )
-            .child(Icon::new(IconName::ChevronRight).size(px(14.0)).text_color(colors.secondary))
+            .child(Icon::new(IconName::ChevronRight).size(px(14.0 * crate::gpui_shell::ui_scale::factor(cx))).text_color(colors.secondary))
             .on_click(cx.listener(move |this, _, window, cx| {
                 this.open_appearance_picker(theme, window, cx)
             }))
@@ -92,14 +92,14 @@ impl SettingsPane {
         let language = crate::gpui_shell::config::ui_language(cx);
         let size = self.terminal_font_size_px(cx);
         let stepper = h_flex()
-            .w(px(142.0))
-            .h(px(36.0))
+            .w(ui(142.0))
+            .h(ui(36.0))
             .items_center()
             .child(
                 Button::new("appearance-font-smaller")
                     .icon(IconName::Minus)
                     .ghost()
-                    .size(px(34.0))
+                    .size(ui(34.0))
                     .disabled(size <= 4.0)
                     .tooltip(language.pick("减小字号", "Decrease font size"))
                     .on_click(cx.listener(|this, _, _, cx| {
@@ -114,7 +114,7 @@ impl SettingsPane {
                 Button::new("appearance-font-larger")
                     .icon(IconName::Plus)
                     .ghost()
-                    .size(px(34.0))
+                    .size(ui(34.0))
                     .disabled(size >= 96.0)
                     .tooltip(language.pick("增大字号", "Increase font size"))
                     .on_click(cx.listener(|this, _, _, cx| {
@@ -144,12 +144,18 @@ impl SettingsPane {
         let icon = self.appearance_trigger(false, window, cx);
         let selectors = v_flex()
             .w_full()
-            .gap(px(24.0))
+            .gap(ui(24.0))
+            .child(self.select_row(
+                "ui_scale",
+                language.text(crate::i18n::Message::SettingsUiScale),
+                language.text(crate::i18n::Message::SettingsUiScaleHint),
+                cx,
+            ))
             .child(
                 h_flex()
                     .w_full()
-                    .min_h(px(58.0))
-                    .gap(px(25.0))
+                    .min_h(ui(58.0))
+                    .gap(ui(25.0))
                     .items_center()
                     .justify_between()
                     .child(appearance_copy(
@@ -175,8 +181,8 @@ impl SettingsPane {
             .child(
                 h_flex()
                     .w_full()
-                    .min_h(px(58.0))
-                    .gap(px(25.0))
+                    .min_h(ui(58.0))
+                    .gap(ui(25.0))
                     .items_center()
                     .justify_between()
                     .child(appearance_copy(
@@ -190,6 +196,6 @@ impl SettingsPane {
                     .child(icon),
             );
         let settings = self.appearance_advanced_settings(window, cx);
-        v_flex().w_full().gap(px(GROUP_GAP)).child(selectors).child(settings)
+        v_flex().w_full().gap(ui(GROUP_GAP)).child(selectors).child(settings)
     }
 }

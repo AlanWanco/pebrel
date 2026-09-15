@@ -35,7 +35,7 @@ fn valid_layout(layout: &LayoutSession, depth: usize) -> bool {
         return false;
     }
     match layout {
-        LayoutSession::Pane { cwd, agent } => {
+        LayoutSession::Pane { cwd, agent, .. } => {
             !cwd.contains('\0') && cwd.len() <= 32768 && agent.is_none()
         },
         LayoutSession::Split { ratio_permille, first, second, .. } => {
@@ -151,12 +151,13 @@ mod tests {
             ratio_permille: 370,
             first: Box::new(LayoutSession::Pane {
                 cwd: "D:/api".into(),
+                custom_name: Some("后端 API".into()),
                 agent: Some(AgentSession {
                     source: "claude".into(),
                     session_id: Some("private-id".into()),
                 }),
             }),
-            second: Box::new(LayoutSession::Pane { cwd: "D:/web".into(), agent: None }),
+            second: Box::new(LayoutSession::unnamed_pane("D:/web".into(), None)),
         });
         let recipe = Recipe::new("开发环境".into(), Session::new(0, vec![tab])).unwrap();
         let directory = tempfile::tempdir().unwrap();
@@ -178,5 +179,62 @@ mod tests {
         recipe.version = 999;
         assert!(save_at(directory.path(), &recipe).is_err());
         assert!(Recipe::new("".into(), Session::new(0, vec![])).is_err());
+    }
+
+    #[test]
+    fn invalid_layout_ratios_depth_and_working_directories_are_rejected() {
+        let pane = || LayoutSession::unnamed_pane("/tmp".into(), None);
+        for ratio_permille in [0, 1000] {
+            let tab = TabSession {
+                cwd: "/tmp".into(),
+                custom_name: None,
+                color: None,
+                launch: None,
+                layout: Some(LayoutSession::Split {
+                    axis: SplitAxis::LeftRight,
+                    ratio_permille,
+                    first: Box::new(pane()),
+                    second: Box::new(pane()),
+                }),
+                active_pane: 0,
+            };
+            assert!(Recipe::new("ratio".into(), Session::new(0, vec![tab])).is_err());
+        }
+
+        let bad_cwd = TabSession::single("/tmp\0/not-a-directory".into(), None, None);
+        assert!(Recipe::new("cwd".into(), Session::new(0, vec![bad_cwd])).is_err());
+
+        let mut deep = pane();
+        for _ in 0..17 {
+            deep = LayoutSession::Split {
+                axis: SplitAxis::TopBottom,
+                ratio_permille: 500,
+                first: Box::new(deep),
+                second: Box::new(pane()),
+            };
+        }
+        let mut tab = TabSession::single("/tmp".into(), None, None);
+        tab.layout = Some(deep);
+        assert!(Recipe::new("depth".into(), Session::new(0, vec![tab])).is_err());
+    }
+
+    #[test]
+    fn listing_rejects_a_recipe_that_would_replay_an_ai_session() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut tab = TabSession::single("/tmp".into(), None, None);
+        tab.layout = Some(LayoutSession::Pane {
+            cwd: "/tmp".into(),
+            agent: Some(AgentSession { source: "claude".into(), session_id: Some("id".into()) }),
+            custom_name: None,
+        });
+        let recipe = Recipe {
+            version: 1,
+            name: "unsafe".into(),
+            session: Session::new(0, vec![tab]),
+            path: PathBuf::new(),
+        };
+        std::fs::write(directory.path().join("unsafe.json"), serde_json::to_vec(&recipe).unwrap())
+            .unwrap();
+        assert!(list_at(directory.path()).is_err());
     }
 }

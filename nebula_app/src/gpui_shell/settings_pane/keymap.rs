@@ -208,13 +208,13 @@ impl SettingsPane {
             theme.muted_foreground
         };
         div()
-            .min_w(px(72.0))
+            .min_w(ui(72.0))
             .px_2()
-            .h(px(24.0))
+            .h(ui(24.0))
             .flex()
             .items_center()
             .justify_center()
-            .rounded(px(crate::display::UI_CORNER_RADIUS_LOGICAL * 0.75))
+            .rounded(ui(crate::display::UI_CORNER_RADIUS_LOGICAL * 0.75))
             .text_size(px(self.font_size_px(cx) * 0.86))
             .when(clash, |chip| chip.bg(theme.danger).text_color(theme.danger_foreground))
             .when(!clash && (custom || capturing), |chip| {
@@ -271,11 +271,11 @@ impl SettingsPane {
         h_flex()
             .id(("keymap-row", flat))
             .w_full()
-            .h(px(SETTINGS_ROW_HEIGHT))
+            .h(ui(SETTINGS_ROW_HEIGHT))
             .flex_shrink_0()
             .items_center()
             .pr_4()
-            .rounded(px(crate::display::UI_CORNER_RADIUS_LOGICAL))
+            .rounded(ui(crate::display::UI_CORNER_RADIUS_LOGICAL))
             .cursor_pointer()
             .hover(|style| style.bg(crate::gpui_shell::theme::settings_hover_bg(cx, false)))
             // mouse_down 而非 click：容器（section 根）同捕一个 mouse_down
@@ -374,7 +374,7 @@ impl SettingsPane {
                 groups_block = groups_block.child(
                     h_flex()
                         .w_full()
-                        .h(px(SETTINGS_ROW_HEIGHT))
+                        .h(ui(SETTINGS_ROW_HEIGHT))
                         .flex_shrink_0()
                         .items_center()
                         .pr_4()
@@ -388,13 +388,13 @@ impl SettingsPane {
                         )
                         .child(
                             div()
-                                .min_w(px(72.0))
+                                .min_w(ui(72.0))
                                 .px_2()
-                                .h(px(24.0))
+                                .h(ui(24.0))
                                 .flex()
                                 .items_center()
                                 .justify_center()
-                                .rounded(px(crate::display::UI_CORNER_RADIUS_LOGICAL * 0.75))
+                                .rounded(ui(crate::display::UI_CORNER_RADIUS_LOGICAL * 0.75))
                                 .border_1()
                                 .border_color(cx.theme().border)
                                 .text_size(px(self.font_size_px(cx) * 0.86))
@@ -427,11 +427,11 @@ impl SettingsPane {
             .child(
                 div()
                     .w_full()
-                    .h(px(34.0))
+                    .h(ui(34.0))
                     .flex_shrink_0()
                     .child(Input::new(&self.keymap_search_input).w_full()),
             )
-            .child(div().h(px(12.0)).w_full().flex_shrink_0())
+            .child(div().h(ui(12.0)).w_full().flex_shrink_0())
             // 冲突是允许存在的可见状态，用组件库的 Warning Alert 呈现；
             // 不再用自绘 danger 色块，也不静默删掉另一个动作。
             .when_some(clash_note, |section, note| {

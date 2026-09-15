@@ -6,6 +6,9 @@
     "en_us": "English"
   },
   "settings": {
+    "ui_scale_save_failed": "Could not save interface scale: {error}",
+    "ui_scale": "Interface scale",
+    "ui_scale_hint": "Scales interface text, controls and menus in addition to system display scaling. Terminal font size is separate.",
     "sidebar": {
       "application": "Application",
       "appearance": "Appearance",
@@ -131,6 +134,10 @@
       "http_status": "Service returned HTTP {status}",
       "start_failed": "Could not start the provider test: {error}"
     }
+  },
+  "pane": {
+    "rename_title": "Rename pane",
+    "rename_hint": "Only this pane's title changes. Leave the name empty to restore its automatic title."
   },
   "common": {
     "settings": "Settings",

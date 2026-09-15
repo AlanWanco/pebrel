@@ -379,9 +379,9 @@ impl CodeTabView {
             .overflow_hidden()
             .child(
                 h_flex()
-                    .h(px(38.0))
+                    .h(ui(38.0))
                     .flex_shrink_0()
-                    .px(px(12.0))
+                    .px(ui(12.0))
                     .items_center()
                     .gap_2()
                     .border_b_1()
@@ -398,7 +398,7 @@ impl CodeTabView {
                             .min_w_0()
                             .truncate()
                             .font_family(mono_family.clone())
-                            .text_size(px(12.0))
+                            .text_size(ui(12.0))
                             .child(display_path),
                     )
                     .child(
@@ -431,9 +431,9 @@ impl CodeTabView {
             .when_some(self.notice.clone(), |root, notice| {
                 root.child(
                     h_flex()
-                        .min_h(px(28.0))
+                        .min_h(ui(28.0))
                         .flex_shrink_0()
-                        .px(px(12.0))
+                        .px(ui(12.0))
                         .border_b_1()
                         .border_color(border)
                         .text_xs()
@@ -536,8 +536,8 @@ fn editor(
         .font_family(family)
         .text_size(size)
         .line_height(relative(1.55))
-        .px(px(10.0))
-        .py(px(8.0))
+        .px(ui(10.0))
+        .py(ui(8.0))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -560,9 +560,9 @@ fn merge_pane(
         .border_color(border)
         .child(
             h_flex()
-                .h(px(32.0))
+                .h(ui(32.0))
                 .flex_shrink_0()
-                .px(px(10.0))
+                .px(ui(10.0))
                 .items_center()
                 .border_b_1()
                 .border_color(border)

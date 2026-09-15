@@ -206,7 +206,7 @@ impl SettingsPane {
                     ),
             )
             .child(div().text_xs().child(language.text(Message::HostsNotes)))
-            .child(Input::new(&self.ssh_library.notes).w_full().h(px(80.0)))
+            .child(Input::new(&self.ssh_library.notes).w_full().h(ui(80.0)))
             .into_any_element()
     }
 
@@ -226,8 +226,8 @@ impl SettingsPane {
         let symbol_family: SharedString = crate::font_install::REQUIRED_FONT_FAMILY.into();
         let font_px = cx
             .try_global::<crate::gpui_shell::config::Settings>()
-            .map(|s| s.base_font_size_px)
-            .unwrap_or(15.0);
+            .map(|s| s.ui_font_size_px())
+            .unwrap_or(15.0 * crate::gpui_shell::ui_scale::factor(cx));
         let title_h = font_px;
         let subtitle_h = font_px * 0.78;
         let delete_confirm = self.ssh_delete_confirm.clone();
@@ -249,20 +249,20 @@ impl SettingsPane {
                 .group(row_group.clone())
                 // 旧壳 `SSH_HOST_ROW_H` 固定 58px；两行文字与 OS 图标在
                 // 这个高度里共用中线，不能压成普通 48px 设置行。
-                .h(px(SSH_HOST_ROW_H))
+                .h(ui(SSH_HOST_ROW_H))
                 .w_full()
                 .px_3()
                 .items_center()
                 .gap_3()
-                .when(ix == 0, |row| row.rounded_t(px(8.0)))
-                .when(ix + 1 == host_count, |row| row.rounded_b(px(8.0)))
+                .when(ix == 0, |row| row.rounded_t(ui(8.0)))
+                .when(ix + 1 == host_count, |row| row.rounded_b(ui(8.0)))
                 .when(ix + 1 < host_count, |row| {
                     row.border_b_1().border_color(theme.border.opacity(0.5))
                 })
                 .hover(move |row| row.bg(hover_bg))
                 .child(
                     div()
-                        .w(px(22.0))
+                        .w(ui(22.0))
                         .h_full()
                         .flex_shrink_0()
                         .relative()
@@ -270,7 +270,7 @@ impl SettingsPane {
                         .items_center()
                         .justify_center()
                         .font_family(symbol_family.clone())
-                        .text_size(px(18.0))
+                        .text_size(ui(18.0))
                         .text_color(muted)
                         .text_center()
                         .child(os_icon.glyph.to_string()),
@@ -312,7 +312,7 @@ impl SettingsPane {
                                     line.child(
                                         div()
                                             .flex_shrink_0()
-                                            .px(px(5.0))
+                                            .px(ui(5.0))
                                             .rounded_sm()
                                             .text_xs()
                                             .text_color(muted)
@@ -434,7 +434,7 @@ impl SettingsPane {
         )
         .track_scroll(&self.ssh_library.scroll)
         .w_full()
-        .h(px(SSH_HOST_ROW_H * host_count.clamp(1, 8) as f32));
+        .h(ui(SSH_HOST_ROW_H * host_count.clamp(1, 8) as f32));
 
         let hidden_rows = self.ssh_show_hidden.then(|| {
             hidden
@@ -443,7 +443,7 @@ impl SettingsPane {
                 .map(|(ix, host)| {
                     let restore_host = host.clone();
                     h_flex()
-                        .h(px(32.0))
+                        .h(ui(32.0))
                         .w_full()
                         .px_3()
                         .items_center()
@@ -488,7 +488,7 @@ impl SettingsPane {
             )
             .child(
                 h_flex()
-                    .h(px(32.0))
+                    .h(ui(32.0))
                     .items_center()
                     .gap_2()
                     .child(
@@ -499,7 +499,7 @@ impl SettingsPane {
                     .when(host_count > 0, |header| {
                         header.child(
                             div()
-                                .px(px(6.0))
+                                .px(ui(6.0))
                                 .rounded_sm()
                                 .text_xs()
                                 .text_color(muted)
@@ -518,11 +518,11 @@ impl SettingsPane {
                             })),
                     ),
             )
-            .child(div().h(px(SSH_HOST_GAP)))
+            .child(div().h(ui(SSH_HOST_GAP)))
             .child(
                 v_flex()
                     .w_full()
-                    .rounded(px(8.0))
+                    .rounded(ui(8.0))
                     .border_1()
                     .border_color(theme.border)
                     .overflow_hidden()
@@ -547,7 +547,7 @@ impl SettingsPane {
                         )
                     }),
             )
-            .child(div().h(px(SSH_HOST_GAP)))
+            .child(div().h(ui(SSH_HOST_GAP)))
             .child(
                 h_flex()
                     .gap_2()
@@ -588,10 +588,10 @@ impl SettingsPane {
                     ),
             )
             .when_some(hidden_rows, |group, rows| {
-                group.child(div().h(px(8.0))).child(
+                group.child(div().h(ui(8.0))).child(
                     v_flex()
                         .w_full()
-                        .rounded(px(8.0))
+                        .rounded(ui(8.0))
                         .border_1()
                         .border_color(theme.border)
                         .overflow_hidden()
@@ -599,13 +599,13 @@ impl SettingsPane {
                 )
             })
             .when_some(undo_bar, |group, (host, _)| {
-                group.child(div().h(px(8.0))).child(
+                group.child(div().h(ui(8.0))).child(
                     h_flex()
-                        .h(px(36.0))
+                        .h(ui(36.0))
                         .px_3()
                         .items_center()
                         .gap_2()
-                        .rounded(px(6.0))
+                        .rounded(ui(6.0))
                         .bg(theme.muted)
                         .child(Icon::new(IconName::Undo2).xsmall().text_color(muted))
                         .child(div().flex_1().text_sm().child(SharedString::from(format!(
@@ -627,7 +627,7 @@ impl SettingsPane {
                 let message = status.text(language);
                 group.child(
                     div()
-                        .pt(px(6.0))
+                        .pt(ui(6.0))
                         .text_sm()
                         .text_color(if error { theme.danger } else { theme.success })
                         .child(message),

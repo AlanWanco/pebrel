@@ -72,18 +72,18 @@ impl SelectItem for SendToChatTarget {
 
     fn render(&self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         h_flex()
-            .h(px(42.0))
+            .h(ui(42.0))
             .w_full()
             .min_w_0()
             .gap_2()
             .child(
                 div()
                     .flex()
-                    .size(px(24.0))
+                    .size(ui(24.0))
                     .flex_shrink_0()
                     .items_center()
                     .justify_center()
-                    .rounded(px(crate::display::ui::tokens::radius::CHIP))
+                    .rounded(ui(crate::display::ui::tokens::radius::CHIP))
                     .bg(cx.theme().group_box)
                     .child(Icon::new(IconName::Star).xsmall().text_color(cx.theme().link)),
             )
@@ -92,8 +92,8 @@ impl SelectItem for SendToChatTarget {
             .children(self.remote.clone().map(|destination| {
                 div()
                     .flex_shrink_0()
-                    .px(px(6.0))
-                    .rounded(px(crate::display::ui::tokens::radius::CHIP))
+                    .px(ui(6.0))
+                    .rounded(ui(crate::display::ui::tokens::radius::CHIP))
                     .bg(cx.theme().warning.opacity(0.16))
                     .text_xs()
                     .text_color(cx.theme().warning)
@@ -208,13 +208,13 @@ impl NebulaWorkspace {
         cx.notify();
     }
 
-    pub(super) fn render_selection_context_menu(&self) -> Option<AnyElement> {
+    pub(super) fn render_selection_context_menu(&self, cx: &App) -> Option<AnyElement> {
         let state = self.selection_context_menu.as_ref()?;
         Some(
             deferred(
                 anchored()
                     .position(state.position)
-                    .snap_to_window_with_margin(px(8.0))
+                    .snap_to_window_with_margin(px(8.0 * crate::gpui_shell::ui_scale::factor(cx)))
                     .anchor(Anchor::TopLeft)
                     .child(state.menu.clone()),
             )
@@ -291,14 +291,14 @@ impl NebulaWorkspace {
             let quote = div()
                 .id("send-to-chat-quote")
                 .flex()
-                .h(px(QUOTE_PREVIEW_HEIGHT))
+                .h(ui(QUOTE_PREVIEW_HEIGHT))
                 .w_full()
                 .overflow_hidden()
-                .rounded(px(crate::display::ui::tokens::radius::CONTROL))
+                .rounded(ui(crate::display::ui::tokens::radius::CONTROL))
                 .border_1()
                 .border_color(cx.theme().border)
                 .bg(cx.theme().group_box)
-                .child(div().w(px(3.0)).h_full().flex_shrink_0().bg(cx.theme().link))
+                .child(div().w(ui(3.0)).h_full().flex_shrink_0().bg(cx.theme().link))
                 .child(
                     div()
                         .id("send-to-chat-quote-scroll")
@@ -351,7 +351,7 @@ impl NebulaWorkspace {
                                 .font_semibold()
                                 .child(language.pick("评论：", "Comment:")),
                         )
-                        .child(div().w_full().h(px(COMMENT_HEIGHT)).child(Input::new(&comment))),
+                        .child(div().w_full().h(ui(COMMENT_HEIGHT)).child(Input::new(&comment))),
                 );
 
             let copy_selection = selection.clone();

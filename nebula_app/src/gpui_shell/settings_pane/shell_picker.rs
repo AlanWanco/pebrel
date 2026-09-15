@@ -47,13 +47,13 @@ impl ShellSelectItem {
     pub(super) fn view(&self, size: f32, image: Option<&Arc<RenderImage>>) -> gpui::AnyElement {
         let icon: gpui::AnyElement = if let Some(image) = image {
             gpui::StyledImage::object_fit(
-                img(image.clone()).size(px(size)).flex_shrink_0(),
+                img(image.clone()).size(ui(size)).flex_shrink_0(),
                 gpui::ObjectFit::Contain,
             )
             .into_any_element()
         } else if self.is_import_action() {
             // 动作行与真实 shell 行必须一眼分得开：文件夹口 = 「去别处拿」。
-            Icon::new(IconName::FolderOpen).size(px(size * FALLBACK_ICON_SCALE)).into_any_element()
+            Icon::new(IconName::FolderOpen).size(ui(size * FALLBACK_ICON_SCALE)).into_any_element()
         } else {
             // 没有品牌贴图的 shell 沿用旧壳那张按 id 取字的 Nerd Font 表
             // （`icon_for_id`，设置行/命令面板同一口径）。字号按回落字形的
@@ -62,7 +62,7 @@ impl ShellSelectItem {
             // 两种图标才真的同尺寸。
             div()
                 .font_family(crate::font_install::REQUIRED_FONT_FAMILY)
-                .text_size(px(size * FALLBACK_ICON_SCALE))
+                .text_size(ui(size * FALLBACK_ICON_SCALE))
                 .child(crate::shell_detect::icon_for_id(&self.id))
                 .into_any_element()
         };
@@ -75,7 +75,7 @@ impl ShellSelectItem {
             // 溢出自己的槽位，压住上下相邻行（选中高亮错位就是这么来的）。
             .child(
                 div()
-                    .size(px(size))
+                    .size(ui(size))
                     .flex_shrink_0()
                     .flex()
                     .items_center()

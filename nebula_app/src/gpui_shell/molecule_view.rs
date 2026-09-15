@@ -1,8 +1,9 @@
 //! Markdown and tooltip adapter for the shared SMILES depiction engine.
 
+use crate::gpui_shell::ui_scale::ui;
 use crate::i18n::Message;
 use gpui::prelude::*;
-use gpui::{App, Context, IntoElement, ObjectFit, Render, SharedString, Window, div, img, px};
+use gpui::{App, Context, IntoElement, ObjectFit, Render, SharedString, Window, div, img};
 use gpui_component::ActiveTheme;
 
 pub(crate) struct MoleculeView {
@@ -26,7 +27,7 @@ impl Render for MoleculeView {
         div()
             .w_full()
             .min_w_0()
-            .max_w(px(600.0))
+            .max_w(ui(600.0))
             .flex()
             .flex_col()
             .gap_2()
@@ -37,10 +38,10 @@ impl Render for MoleculeView {
             .bg(cx.theme().muted)
             .child(div().text_xs().text_color(cx.theme().muted_foreground).child("SMILES"))
             .when_some(image, |root, image| {
-                root.child(img(image).w_full().h(px(240.0)).object_fit(ObjectFit::Contain))
+                root.child(img(image).w_full().h(ui(240.0)).object_fit(ObjectFit::Contain))
             })
             .when(loading, |root| {
-                root.child(div().h(px(240.0)).child(language.text(Message::ChemistryLoading)))
+                root.child(div().h(ui(240.0)).child(language.text(Message::ChemistryLoading)))
             })
             .when(invalid, |root| {
                 root.child(

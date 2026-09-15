@@ -10,7 +10,7 @@
 //! [`crate::display::side_panel::FileDrag`] 还要自己追踪按压阈值、指针位置和
 //! 是否悬停在终端上——GPUI 的拖放引擎原生管这些，所以本模块的载荷是纯数据。
 
-use gpui::{Context, IntoElement, ParentElement as _, Render, Styled as _, Window, div, px};
+use gpui::{Context, IntoElement, ParentElement as _, Render, Styled as _, Window, div};
 
 use crate::gpui_shell::prelude::*;
 
@@ -55,7 +55,7 @@ impl Render for FileDragGhost {
             .bg(theme.popover)
             .text_color(theme.foreground)
             .text_sm()
-            .max_w(px(320.0))
+            .max_w(ui(320.0))
             .overflow_hidden()
             .whitespace_nowrap()
             .child(self.name.clone())

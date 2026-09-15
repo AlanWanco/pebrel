@@ -38,8 +38,9 @@ impl NebulaWorkspace {
         })
         .detach();
         let language = crate::gpui_shell::config::ui_language(cx);
+        let dialog_width = px(600.0 * crate::gpui_shell::ui_scale::factor(cx));
         window.open_dialog(cx, move |dialog, _, _| {
-            dialog.title(language.text(Message::RecipeTitle)).w(px(600.0)).child(library.clone())
+            dialog.title(language.text(Message::RecipeTitle)).w(dialog_width).child(library.clone())
         });
     }
 }
@@ -226,7 +227,7 @@ impl Render for RecipeLibrary {
                 v_flex()
                     .id("recipe-list")
                     .w_full()
-                    .h(px(300.0))
+                    .h(ui(300.0))
                     .overflow_y_scroll()
                     .gap_2()
                     .when(self.busy, |list| {

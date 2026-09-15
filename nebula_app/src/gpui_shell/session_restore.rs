@@ -25,12 +25,12 @@ fn direction_of(axis: SplitAxis) -> SplitDirection {
 /// 不被 f32 序列化噪声绊倒，旧壳同因）。
 pub fn layout_from_tree(
     tree: &SplitTree<u64>,
-    leaf_data: &impl Fn(u64) -> (String, Option<AgentSession>),
+    leaf_data: &impl Fn(u64) -> (String, Option<AgentSession>, Option<String>),
 ) -> LayoutSession {
     match tree {
         SplitTree::Leaf(id) => {
-            let (cwd, agent) = leaf_data(*id);
-            LayoutSession::Pane { cwd, agent }
+            let (cwd, agent, custom_name) = leaf_data(*id);
+            LayoutSession::Pane { cwd, agent, custom_name }
         },
         SplitTree::Split { direction, ratio, first, second, .. } => LayoutSession::Split {
             axis: axis_of(*direction),
@@ -92,7 +92,7 @@ mod tests {
     #[test]
     fn layout_round_trips_structure_ratio_and_leaf_order() {
         let tree = sample_tree();
-        let layout = layout_from_tree(&tree, &|id| (format!("D:/pane-{id}"), None));
+        let layout = layout_from_tree(&tree, &|id| (format!("D:/pane-{id}"), None, Some(format!("Pane {id}"))));
         assert_eq!(layout.pane_count(), 3);
 
         let mut next = 10u64;
@@ -106,11 +106,13 @@ mod tests {
         let leaves = layout.leaves();
         assert!(matches!(
             leaves[0],
-            LayoutSession::Pane { cwd, .. } if cwd == "D:/pane-1"
+            LayoutSession::Pane { cwd, custom_name: Some(name), .. }
+                if cwd == "D:/pane-1" && name == "Pane 1"
         ));
         assert!(matches!(
             leaves[1],
-            LayoutSession::Pane { cwd, .. } if cwd == "D:/pane-2"
+            LayoutSession::Pane { cwd, custom_name: Some(name), .. }
+                if cwd == "D:/pane-2" && name == "Pane 2"
         ));
 
         // 比例经 permille 往返，误差 ≤ 0.001。
@@ -129,6 +131,7 @@ mod tests {
             (
                 "D:/work".to_owned(),
                 Some(AgentSession { source: "claude".into(), session_id: Some("abc-1".into()) }),
+                None,
             )
         });
         assert!(matches!(

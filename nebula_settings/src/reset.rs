@@ -11,6 +11,7 @@ const RESET_KEYS: &[&str] = &[
     "follow_system_theme",
     "font_family",
     "font_size",
+    "ui_scale",
     "cursor_shape",
     "cursor_blink",
     "copy_on_select",
@@ -123,6 +124,13 @@ mod tests {
         let restored = default_settings_text(original);
         assert_eq!(restored, "custom_data=keep\n");
         assert!(RuntimeSettings::from_raw(&RawSettings::from_text(&restored)).ai_toasts);
+    }
+
+    #[test]
+    fn reset_restores_ui_scale_without_touching_unknown_keys() {
+        let text = default_settings_text("ui_scale=175\nfuture_setting=keep\n");
+        assert_eq!(text, "future_setting=keep\n");
+        assert_eq!(RuntimeSettings::from_raw(&RawSettings::from_text(&text)).ui_scale.factor(), 1.0);
     }
 
     #[test]

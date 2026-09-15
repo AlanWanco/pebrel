@@ -101,7 +101,7 @@ fn is_duplicate(text: &str) -> bool {
     duplicate
 }
 
-fn note(kind: ToastKind, text: String) -> Notification {
+fn note(kind: ToastKind, text: String, scale: f32) -> Notification {
     // 通知栏是「一眼带过」的层。正文先收短：模型回合完成的正文可能是整段
     // 回答（OSC 9 更是无界），不设上限时按固定宽度排出来比窗口还高，锚在
     // 右下就会整条溢出屏幕、把关闭按钮顶到看不见的地方。完整原文仍在日志
@@ -114,7 +114,9 @@ fn note(kind: ToastKind, text: String) -> Notification {
     };
     // `refine_style` 在组件自身的 `w_112` 之后应用，所以这里能可靠覆盖
     // 固定宽度；auto 让短消息收紧，max_w 给长路径/错误信息提供换行约束。
-    note.w_auto().min_w(px(TOAST_MIN_WIDTH)).max_w(px(TOAST_MAX_WIDTH))
+    note.w_auto()
+        .min_w(px(TOAST_MIN_WIDTH * scale))
+        .max_w(px(TOAST_MAX_WIDTH * scale))
 }
 
 /// 窗口构造闭包里 `NebulaWorkspace::new` 早于外层 `Root::new` 返回；此时
@@ -159,7 +161,7 @@ pub fn render_layer(window: &mut Window, cx: &mut App) -> Option<AnyElement> {
             .flex()
             .items_end()
             .justify_end()
-            .p(px(20.0))
+            .p(ui(20.0))
             // 约束动画和阴影的绘制范围。裁剪本身不限制卡片/堆叠高度，
             // 关闭按钮是否可达仍须由窗口尺寸与真实布局回归验证。
             .overflow_hidden()
@@ -177,7 +179,7 @@ pub fn toast(window: &mut Window, cx: &mut App, kind: ToastKind, text: impl Into
         return;
     }
     log::info!("toast [{kind:?}]: {text}");
-    push_notification(window, cx, note(kind, text));
+    push_notification(window, cx, note(kind, text, crate::gpui_shell::ui_scale::factor(cx)));
 }
 
 /// 驻留一条消息（消息栏层）：停留远长于 toast，但**有上限**，见
@@ -192,7 +194,12 @@ pub fn banner(window: &mut Window, cx: &mut App, kind: ToastKind, text: impl Int
         return;
     }
     log::warn!("banner [{kind:?}]: {text}");
-    push_banner(window, cx, note(kind, text).on_click(|_, _, _| {}), false);
+    push_banner(
+        window,
+        cx,
+        note(kind, text, crate::gpui_shell::ui_scale::factor(cx)).on_click(|_, _, _| {}),
+        false,
+    );
 }
 
 pub(crate) fn banner_for_pane(
@@ -215,7 +222,7 @@ pub(crate) fn banner_for_pane(
         return;
     }
     log::info!("pane banner [{kind:?}] pane={pane_id}: {text}");
-    let mut notification = note(kind, text).on_click(move |_, _, cx| {
+    let mut notification = note(kind, text, crate::gpui_shell::ui_scale::factor(cx)).on_click(move |_, _, cx| {
         cx.defer(move |cx| super::workspace::windowing::focus_notification(Some(pane_id), cx));
     });
     if ai_toast {
@@ -236,7 +243,11 @@ pub(crate) fn confirmation_for_pane(
     let allow_label = language.text(crate::i18n::Message::CommonYes).to_owned();
     let deny_label = language.text(crate::i18n::Message::CommonNo).to_owned();
     let request_id = confirmation.id;
-    let notification = note(ToastKind::Warning, text)
+    let notification = note(
+        ToastKind::Warning,
+        text,
+        crate::gpui_shell::ui_scale::factor(cx),
+    )
         .id1::<AiToast>(format!("pane-{pane_id}-request-{request_id}"))
         .on_click(move |_, _, cx| {
             cx.defer(move |cx| super::workspace::windowing::focus_notification(Some(pane_id), cx));
