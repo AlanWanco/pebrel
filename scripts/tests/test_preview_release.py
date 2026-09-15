@@ -193,6 +193,8 @@ class PreviewReleaseTests(unittest.TestCase):
         workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/preview-packages.yml").read_text(encoding="utf-8")
         for required in (
             "-PreviewId $env:PREVIEW_ID",
+            "python scripts/conformance/windows_standard_user.py",
+            "scripts/conformance/run.py --app target/release/pebrel.exe",
             "preview-package-windows-x86_64",
             "Pebrel-v${{ needs.prepare.outputs.asset_version }}-windows-x64.zip",
             "Pebrel-v${{ needs.prepare.outputs.asset_version }}-windows-x64-setup.exe",

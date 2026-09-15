@@ -538,7 +538,8 @@ jobs:
         env:
           NEBULA_RESIZE_TRACE: "1"
         run: >-
-          python scripts/conformance/run.py --app target/release/pebrel.exe
+          python scripts/conformance/windows_standard_user.py
+          scripts/conformance/run.py --app target/release/pebrel.exe
           --platform windows-x86_64 --output dist/conformance/windows-report.json
       - name: Upload Windows Preview packages
         if: always()
