@@ -173,15 +173,21 @@ fn init(cx: &mut App) {
     // 网络图片加载：gpui 默认 NullHttpClient，markdown 文档里的 http(s)
     // 图源全部失败；换成 ureq 实现（跑在后台 executor）。
     http::register(cx);
+    // Read one runtime snapshot before installing any renderer. The resolved
+    // custom theme, terminal palette and chrome therefore start from the same
+    // immutable value and cannot diverge during bootstrap.
+    let runtime = nebula_settings::RuntimeSettings::load();
+    let theme = theme::resolve_theme_name(
+        runtime.theme,
+        runtime.follow_system_theme,
+        theme::system_is_light(cx),
+    );
+    let settings = config::Settings::load_with_runtime(theme, runtime);
+    gpui_component::set_locale(settings.ui_language.gpui_component_locale());
+    cx.set_global(settings);
     theme::apply_chrome_theme(cx);
     terminal::init(cx);
     workspace::init(cx);
-
-    // 用户 nebula.toml + nebula_settings.txt，启动读一次；失败回退默认，
-    // 具体错误由 config 的 notice 上浮，并在可用时写入 stderr。
-    let settings = config::Settings::load(theme::effective_theme_name(cx));
-    gpui_component::set_locale(settings.ui_language.gpui_component_locale());
-    cx.set_global(settings);
     toast::init(cx);
 }
 

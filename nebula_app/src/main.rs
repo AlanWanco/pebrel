@@ -126,6 +126,8 @@ mod taskbar;
 mod terminal_profiles;
 mod text_document;
 mod text_preview;
+#[cfg(feature = "gpui-shell")]
+pub(crate) mod theme_library;
 mod tray;
 mod update_check;
 #[cfg(feature = "gpui-shell")]

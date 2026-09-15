@@ -344,6 +344,62 @@ inactive-pane dimming defaults on to preserve the existing appearance. Both are
 cached by the GPUI settings adapter; pointer movement and rendering do not read
 settings files.
 
+## ADR-0011 — Editable theme snapshots and preview before application
+
+- **Status:** Implemented in the working tree, 2026-09-14. Windows GPUI product
+  build and native interaction checks have run; this is not a release claim.
+- **Context:** The fixed built-in theme enum cannot represent user-created themes.
+  Users need to start from an existing theme, adjust common settings, preview text
+  colors and exchange themes without making the selection page an editor.
+- **Decision:** Keep built-in identities compatible. Shared, dependency-free theme
+  values and validation belong to `nebula_settings`; versioned JSON, external format
+  adapters and library I/O belong to the application's `theme_library` capability.
+  A custom theme is an independent snapshot with a stable library identity and a
+  built-in fallback. Copying or renaming does not edit its source or create a runtime
+  inheritance chain. Existing atomic replacement and OS handle locks protect writes;
+  a revision check rejects a competing edit. Unknown native extension data survives
+  a round trip. External input is bounded static data and never executes configuration
+  scripts, includes or commands.
+- **Interaction:** The theme dialog's lower-left custom action opens a dedicated
+  editor: existing template, name, visible common settings, then collapsed advanced
+  settings. Theme and icon category selections use the same rounded treatment.
+  The three suggested foreground swatches contain the original color and readable
+  cool/warm alternatives; a fourth multicolor swatch opens arbitrary color selection.
+  Foreground changes affect the preview and are saved with explicit application.
+  Back returns to the preserved theme picker selection and filter; it confirms
+  discarding editor changes before returning. Cancel, close and Escape separately
+  exit the workflow and confirm before discarding a changed draft. Saving alone
+  writes an independent library copy while leaving the active snapshot unchanged.
+  Font selection and color palettes belong to the editor draft, with component
+  popovers above the editor surface. Text and numeric inputs use a focusable
+  underline; inherited cursor color presentation follows foreground edits.
+- **Runtime and cost:** Resolve the active theme on settings changes and read prepared
+  values during rendering. Theme defaults, explicit personal preferences and per-session
+  OSC overrides remain distinct; changing defaults must not erase session overrides or
+  reinterpret truecolor RGB as palette indices. Font and geometry overrides are optional.
+  Import, export and library writes use scoped background work with stale-result checks.
+  No extra production dependency or resident worker is justified by this feature.
+- **Alternatives:** Extending the built-in enum with mutable global data, keeping a
+  second renderer-specific validation model, or translating each pair of formats
+  independently would couple unrelated lifecycles and duplicate behavior.
+- **Validation:** Required evidence includes original-theme preservation, foreground
+  persistence/cancellation, malformed input and unknown fields, conflicting saves,
+  native palette behavior, keyboard/real control interaction and approved-layout
+  comparison. A contrast calculation for opaque default foreground/background is
+  not a guarantee for arbitrary transparency, syntax colors or displays. Browser
+  prototype checks and native GPUI acceptance are reported separately. The working
+  implementation has passed 54 settings-model tests, 24 document/store/format
+  contracts (including 90 static color round trips), 14 catalog/allocation tests,
+  and Windows native theme interaction checks. Actual window inspection exposed
+  and corrected a hidden font popup and stale inherited cursor HEX presentation.
+  Window captures cover the theme picker, common editor, font selector, palette,
+  and Back confirmation; these are Windows results, not cross-platform visual
+  or universal performance guarantees.
+- **Revisit condition:** Dynamic inheritance, downloaded resources, additional format
+  semantics or system appearance slot changes require their own compatibility and
+  ownership evidence; they do not silently expand this snapshot contract.
+
+
 ## ADR-0012 — Bounded background images and explicit atlas retirement
 
 - **Status:** Requested by the maintainer, 2026-09-14; implementation and validation in progress.
@@ -376,6 +432,7 @@ settings files.
 - **Revisit condition:** Replace manual atlas retirement if upstream introduces
   equivalent ownership-aware image resources. Adopt target-size native decoding
   only with verified peak accounting and compatibility evidence.
+
 
 ## ADR-0013 — Bounded, on-demand filename search
 

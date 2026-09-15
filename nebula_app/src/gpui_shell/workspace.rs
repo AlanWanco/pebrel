@@ -1295,9 +1295,7 @@ impl NebulaWorkspace {
     /// 设置或系统外观变化后的统一热应用：重载全局 `Settings`（主题经
     /// follow_system 折算）、逐终端刷新、重建 chrome 令牌。
     fn apply_runtime_settings(&mut self, cx: &mut Context<Self>) {
-        let settings = crate::gpui_shell::config::Settings::load(
-            crate::gpui_shell::theme::effective_theme_name(cx),
-        );
+        let (runtime, settings) = crate::gpui_shell::config::Settings::load_current_snapshot(cx);
         cx.set_global(settings);
         for tab in &self.tabs {
             if let WorkspaceTab::Terminal { panes, .. } = tab {
@@ -1307,7 +1305,6 @@ impl NebulaWorkspace {
             }
         }
         crate::gpui_shell::theme::apply_chrome_theme(cx);
-        let runtime = nebula_settings::RuntimeSettings::load();
         crate::gpui_shell::apply_app_icon(runtime.app_icon, cx);
         self.sidebar_width = runtime.sidebar_width;
         self.tabs_position = runtime.tabs_position;
@@ -4152,14 +4149,17 @@ impl Render for NebulaWorkspace {
                 root.child(menu)
             })
             // 组件库的模态/通知层不会自己上屏：`Root::render` 只画宿主视图，
-            // dialog/notification 两层由宿主显式挂。挂在最外层链尾＝盖住命令
-            // 面板和所有拖拽罩层；dialog 在下、notification 在上，确认框弹着
-            // 时仍看得见 toast。
+            // dialog/notification 两层由宿主显式挂。确认框需要晚于设置页中
+            // priority 4–6 的主题浮层绘制；通知再覆盖确认框。
             //
             // 少了这两行，`window.open_dialog` 只会把模态推进 `Root` 并抢走
             // 焦点而不画任何东西——终端看着就像卡死了。
-            .children(Root::render_dialog_layer(window, cx))
-            .children(crate::gpui_shell::toast::render_layer(window, cx))
+            .children(Root::render_dialog_layer(window, cx).map(|layer| {
+                gpui::deferred(layer).with_priority(10)
+            }))
+            .children(crate::gpui_shell::toast::render_layer(window, cx).map(|layer| {
+                gpui::deferred(layer).with_priority(11)
+            }))
     }
 }
 

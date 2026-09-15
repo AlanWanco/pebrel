@@ -86,7 +86,7 @@ impl SettingsPane {
 
     /// 系统字体和导入字体的探测都可能读大量文件，必须离开 UI 线程；目录
     /// 结果只装配一次，整个字体组下拉框共享这一份缓存。
-    fn ensure_font_catalog(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn ensure_font_catalog(&mut self, cx: &mut Context<Self>) {
         if self.font_system.is_some() || self.font_loading {
             return;
         }
@@ -104,7 +104,7 @@ impl SettingsPane {
             });
             cx.spawn(async move |this, cx| {
                 let (system, imported) = task.await;
-                let _ = this.update(cx, |pane, cx| {
+                let _ = this.update_in(cx, |pane, window, cx| {
                     pane.font_system = Some(system);
                     for family in imported {
                         if !pane
@@ -116,6 +116,7 @@ impl SettingsPane {
                         }
                     }
                     pane.font_loading = false;
+                    pane.refresh_theme_font_select(window, cx);
                     cx.notify();
                 });
             })
