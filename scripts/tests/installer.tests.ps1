@@ -13,7 +13,7 @@ $installer = Get-Content -LiteralPath $installerPath -Raw -Encoding UTF8
 $migration = Get-Content -LiteralPath $migrationPath -Raw -Encoding UTF8
 $requiredPatterns = [ordered]@{
     'migration-aware installation directory' = 'DefaultDirName=\{code:DefaultInstallDir\}'
-    'explicit previous-directory migration' = 'UsePreviousAppDir=no'
+    'registered previous-directory reuse' = 'UsePreviousAppDir=yes'
     'Pebrel start-menu group' = 'UsePreviousGroup=no'
     'non-admin installation' = 'PrivilegesRequired=lowest'
     'Windows 10 1809 floor' = 'MinVersion=10\.0\.17763'
@@ -48,6 +48,7 @@ $requiredPatterns = [ordered]@{
     'notification identity on shortcuts' = 'AppUserModelID: "com\.pebrel\.terminal"'
     'environment change notification' = 'ChangesEnvironment=yes'
     'PATH uninstall cleanup' = 'CurUninstallStepChanged\(CurUninstallStep: TUninstallStep\)'
+    'isolated acceptance installer identity' = 'AppId=\{\{76B778B5-76C6-4F60-9431-9E67C2A351AF\}'
     'runtime control API documentation' = 'Source: "\{#RepoRoot\}\\docs\\runtime-control-api\.md"; DestDir: "\{app\}\\docs";'
     'runtime API schema' = 'Source: "\{#RepoRoot\}\\docs\\runtime-api-v1\.schema\.json"; DestDir: "\{app\}\\docs";'
     'Pebrel Runtime skill instructions' = 'Source: "\{#RepoRoot\}\\docs\\skills\\pebrel-runtime\\SKILL\.md"; DestDir: "\{app\}\\skills\\pebrel-runtime";'
@@ -57,6 +58,20 @@ $requiredPatterns = [ordered]@{
 foreach ($entry in $requiredPatterns.GetEnumerator()) {
     if ($installer -notmatch $entry.Value) {
         throw "Installer is missing $($entry.Key): $($entry.Value)"
+    }
+}
+
+$acceptanceIsolationPatterns = [ordered]@{
+    'tasks' = '(?s)\[Tasks\]\s*#ifndef AcceptanceFixture.*?#endif'
+    'per-user font installation' = '(?s)#ifndef AcceptanceFixture\s*Source:.*?\{autofonts\}.*?#endif'
+    'shortcuts' = '(?s)\[Icons\]\s*#ifndef AcceptanceFixture.*?#endif'
+    'registry integrations' = '(?s)\[Registry\]\s*#ifndef AcceptanceFixture.*?#endif'
+    'AI hook uninstall action' = '(?s)\[UninstallRun\]\s*#ifndef AcceptanceFixture.*?#endif'
+    'PATH uninstall cleanup' = '(?s)#ifndef AcceptanceFixture\s*procedure CurUninstallStepChanged.*?end;\s*#endif'
+}
+foreach ($entry in $acceptanceIsolationPatterns.GetEnumerator()) {
+    if ($installer -notmatch $entry.Value) {
+        throw "Acceptance installer must exclude $($entry.Key)."
     }
 }
 
@@ -87,6 +102,8 @@ $migrationPatterns = [ordered]@{
     'nonzero migration failure exit' = 'GetCustomSetupExitCode'
     'precise legacy payload cleanup' = 'RemoveLegacyPayload'
     'linked path protection' = 'Attributes and \$400'
+    'isolated acceptance settings identity' = "ProductSettingsKey = 'Software\\PebrelUpdateAcceptance'"
+    'isolated acceptance legacy identity' = "LegacySettingsKey = 'Software\\PebrelUpdateAcceptanceLegacy'"
 }
 foreach ($entry in $migrationPatterns.GetEnumerator()) {
     if ($migration -notmatch $entry.Value) {

@@ -1055,6 +1055,12 @@ pub fn powershell_with_nebula_integration(program: String, args: Vec<String>) ->
 }
 
 /// Build the default shell, injecting the Nebula prompt when possible.
+/// The engine's default launch, also used by workspace snapshots to freeze the
+/// actual shell without copying default-selection or integration rules.
+pub fn resolved_default_shell() -> Shell {
+    nebula_default_shell(nebula_runtime_settings())
+}
+
 fn nebula_default_shell(settings: NebulaRuntimeSettings) -> Shell {
     match settings.shell {
         NebulaShellExecutor::Bash => return nebula_bash_shell(),
@@ -1080,7 +1086,7 @@ fn nebula_default_shell(settings: NebulaRuntimeSettings) -> Shell {
 }
 
 fn cmdline(config: &Options) -> String {
-    let default_shell = nebula_default_shell(nebula_runtime_settings());
+    let default_shell = resolved_default_shell();
     let using_default_shell = config.shell.is_none();
     let shell = config.shell.as_ref().unwrap_or(&default_shell);
 

@@ -130,10 +130,13 @@ impl TerminalView {
     /// lifecycle routes cannot drift apart.
     pub(super) fn clear_foreground_agent_state(&mut self) -> bool {
         self.confirmation.observe_waiting(false);
+        self.recovery.command_ended();
         self.answers.close();
         let program_changed = self.running_program.take().is_some();
         let title_changed = self.ai_session.take().is_some() || program_changed;
-        self.invalidate_ai_session_probe();
+        if !self.recovery.preparing() {
+            self.invalidate_ai_session_probe();
+        }
         self.primary_agent_pid = None;
         self.ai_session_from_probe = false;
         self.agent_status = crate::ai_agents::AgentStatus::Unknown;
@@ -693,15 +696,18 @@ impl TerminalView {
     }
 
     pub(crate) fn prepare_ai_session_save(&mut self, cx: &mut Context<Self>) {
-        if self.ai_session_from_probe {
-            self.ai_session = None;
-        }
+        // A refresh may fail or time out. Keep the last confirmed native ID.
         self.last_ai_session_probe = None;
         self.probe_missing_codex_session(cx);
     }
 
     pub(crate) fn ai_session_save_pending(&self) -> bool {
-        self.ai_session_probe_pending
+        // A failed refresh cannot erase an already durable identity. Pi/Codex
+        // without any native target must finish identifying before safe exit.
+        self.session_agent().is_some_and(|agent| {
+            matches!(agent.source.as_str(), "pi" | "codex")
+                && agent.session_id.as_deref().is_none_or(str::is_empty)
+        })
     }
 
     /// Read the active conversation metadata when its hook has not reported an ID.
@@ -751,6 +757,18 @@ impl TerminalView {
                 }
                 if let Some(session) = session_id {
                     log::debug!("agent session identity from active rollout: pane={pane_id}");
+                    let target = crate::session::AgentSession {
+                        source: "codex".to_owned(),
+                        session_id: Some(session.session_id.clone()),
+                        session_file: None,
+                    };
+                    let previous = view.recovery.target.clone();
+                    if !view.recovery.confirm(target) {
+                        return;
+                    }
+                    if previous != view.recovery.target {
+                        cx.emit(TerminalViewEvent::SessionIdentityChanged);
+                    }
                     view.ai_session = Some(crate::display::AiSessionIdentity {
                         source: "codex".to_owned(),
                         session_id: session.session_id,
@@ -866,6 +884,20 @@ impl TerminalView {
             && let Some(reader) = &self.answer_reader
         {
             reader.update(cx, |reader, cx| reader.needs_attention(cx));
+        }
+        if from_primary_agent && let Some(id) = event.session_id.as_deref() {
+            let target = crate::session::AgentSession {
+                source: event.source.clone(),
+                session_id: Some(id.to_owned()),
+                session_file: event.session_file.clone(),
+            };
+            let previous = self.recovery.target.clone();
+            if !self.recovery.confirm(target) {
+                return false;
+            }
+            if previous != self.recovery.target {
+                cx.emit(TerminalViewEvent::SessionIdentityChanged);
+            }
         }
         if from_primary_agent
             && let Some(id) = event.session_id.as_deref()

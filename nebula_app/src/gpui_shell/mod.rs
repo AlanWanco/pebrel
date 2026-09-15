@@ -79,6 +79,21 @@ pub fn run_shell(
     initial_cwd: Option<std::path::PathBuf>,
     initial_command: Option<crate::config::ui_config::Program>,
 ) {
+    #[cfg(windows)]
+    match crate::update_download::handoff::installation_in_progress() {
+        Ok(true) => {
+            log::info!("Installation is being updated; resident startup deferred");
+            return;
+        },
+        Err(error) => {
+            log::warn!("Could not inspect installation ownership: {error}");
+        },
+        Ok(false) => {},
+    }
+    #[cfg(windows)]
+    if crate::update_download::handoff::apply_scheduled() {
+        return;
+    }
     let (shell_tx, shell_rx) = std::sync::mpsc::channel();
     crate::notify::init_gpui_activation(shell_tx.clone());
     crate::ssh_prompt::install({

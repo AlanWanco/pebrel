@@ -679,6 +679,10 @@
     "too_large": "背景图超出内存限制，请选择尺寸更小的图片。"
   },
   "update": {
+    "installation_failed": "更新安装失败",
+    "installation_failed_hint": "更新未完成，原会话快照仍保留。检查错误后可重新校验安装包，再确认安装。",
+    "recheck_package": "重新校验安装包",
+    "view_details": "查看详情",
     "download": {
       "dns": "无法解析更新服务器或代理地址。请检查网络和代理设置后重试。",
       "tls": "无法为更新建立安全连接。请检查系统时间，以及代理是否拦截了 TLS 连接。",
@@ -688,7 +692,16 @@
       "proxy": "无法通过代理连接更新服务器。请检查代理地址、协议和认证信息后重试。",
       "http": "更新服务器返回 HTTP {status}。请稍后重试，或从发布页手动下载安装包。",
       "network": "无法下载更新。请检查网络和代理设置，或从发布页手动下载。"
-    }
+    },
+    "auto_download": "在后台预下载更新",
+    "stop_download": "停止下载",
+    "restart_install": "重启并安装",
+    "install_next_launch": "下次启动时安装",
+    "ready_hint": "更新已就绪。Pebrel 将先保存工作区并退出，再安装更新并重新打开。",
+    "later": "稍后",
+    "prepare_failed": "更新准备失败：{error}。Pebrel 将保持打开。",
+    "draft_changed": "准备退出期间文档发生了变化。请保存或放弃最新修改后重试。",
+    "in_progress": "当前安装正在更新，请等待更新完成，Pebrel 随后会自动重新打开。"
   },
   "files.search_failed": "无法完成搜索",
   "files.search_running": "正在搜索…",
@@ -701,5 +714,12 @@
   "files.search_limit_reason": "搜索已达到限制，或部分目录无法读取。",
   "files.search_narrow": "选择更小的目录，或输入更具体的关键词。",
   "files.search_empty": "没有匹配的文件",
-  "files.search_empty_reason": "当前目录中没有符合查询条件的文件或文件夹。"
+  "files.search_empty_reason": "当前目录中没有符合查询条件的文件或文件夹。",
+  "session": {
+    "save_failed": "无法保存工作区，应用将保持打开。请检查剩余空间和目录权限后重试。",
+    "identity_pending": "部分运行中的 AI 会话尚未提供恢复身份，请等待它们启动完成后重试。",
+    "restore_failed": "此 AI 对话未能恢复，原恢复记录已保留。可在标签菜单中重试恢复，或到历史会话中定位。",
+    "restore_ambiguous": "有多个原生会话文件匹配此对话，原恢复记录已保留。请在历史会话中选择准确的对话。",
+    "retry": "重试会话恢复"
+  }
 }

@@ -67,6 +67,7 @@ mod remote_files;
 mod residency;
 mod send_to_chat;
 mod session_persistence;
+mod session_recovery;
 mod shell_picker;
 use shell_picker::shell_palette_rows;
 mod settings_navigation;
@@ -844,6 +845,7 @@ pub struct NebulaWorkspace {
     /// 系统关闭按钮可能连续送来多次 should-close；确认框在场时只保留一份。
     window_close_confirm_open: bool,
     window_close_pending: bool,
+    recovery_boot_attempts: u32,
     /// `keep_session` 关窗后 HWND 已隐藏、PTY 仍在；托盘 / mux ATTACH 用来捞回。
     window_hidden: bool,
     /// 开窗时记下，mux `tab.new` 需要从 pump 拿到 `&mut Window`。
@@ -1083,6 +1085,7 @@ impl NebulaWorkspace {
             spinner_visible: std::cell::Cell::new(false),
             window_close_confirm_open: false,
             window_close_pending: false,
+            recovery_boot_attempts: 0,
             window_hidden: false,
             window_handle: window.window_handle(),
             runtime_window_id,
@@ -1104,6 +1107,11 @@ impl NebulaWorkspace {
             );
         }
         match startup {
+            windowing::WorkspaceStartup::RestoreUpdate(session) => {
+                if !this.restore_update_session(&session, runtime.resume_ai, window, cx) {
+                    this.add_terminal_at(std::env::current_dir().ok(), None, window, cx);
+                }
+            },
             windowing::WorkspaceStartup::RestoreOrDefault => {
                 // 只有首窗恢复全局 session，避免每个新窗口重复回放同一批 PTY。
                 if !runtime.restore_session
@@ -1242,8 +1250,8 @@ impl NebulaWorkspace {
         }
     }
 
-    /// 把共享会话 launch 还原为一次 GPUI PTY 启动。只有首 Pane 使用 Tab 的
-    /// launch；其它分屏继续沿用旧壳合同，按当前默认 Shell 重建。
+    /// 把一份冻结的会话 launch 还原为一次 GPUI PTY 启动。逐 pane 选择
+    /// 与旧快照回退由 session_recovery 统一负责。
     fn terminal_launch_from_session(
         launch: &crate::session::LaunchSession,
         cwd: Option<std::path::PathBuf>,
@@ -1699,13 +1707,13 @@ impl NebulaWorkspace {
         (0..self.tabs.len()).find_map(|tab_ix| self.busy_process_in_tab(tab_ix, None, cx))
     }
 
-    fn save_clean_window_session(&mut self, cx: &mut App) {
+    fn save_clean_window_session(&mut self, cx: &mut App) -> std::io::Result<()> {
         windowing::save_current_window_session(
             self.runtime_window_id,
             self.snapshot_session(cx),
             session_persistence::SaveReason::WindowClose,
             cx,
-        );
+        )
     }
 
     fn request_close_pane(
@@ -1838,184 +1846,6 @@ impl NebulaWorkspace {
         }
     }
 
-    /// 启动恢复：断路器跳闸就隔离现场并走干净路径；恢复成功弹一条
-    /// 自动消失的提示（崩溃现场多一句来源说明）。返回是否恢复出了 tab。
-    fn try_restore_session(
-        &mut self,
-        resume_ai: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        use crate::display::ToastKind;
-
-        let Some(mut session) = crate::session::load() else { return false };
-        if !crate::session::should_restore(&session) {
-            if !session.tabs.is_empty() {
-                // 连续几次启动都没活到第一次自动保存：把「一恢复就崩」的
-                // 现场挪去隔离文件（唯一的诊断材料），本次干净启动。
-                if let Some(path) = crate::session::quarantine() {
-                    crate::gpui_shell::toast::banner(
-                        window,
-                        cx,
-                        ToastKind::Warning,
-                        format!("连续多次启动未完成恢复，已跳过；现场保存在 {}", path.display()),
-                    );
-                }
-            }
-            return false;
-        }
-        let crashed = crate::session::was_crash(&session);
-        crate::session::mark_boot_attempt(&mut session);
-        let mut restored = 0usize;
-        for tab in &session.tabs {
-            if self.restore_tab(tab, resume_ai, window, cx) {
-                restored += 1;
-            }
-        }
-        if restored == 0 {
-            return false;
-        }
-        self.active = session.active_tab.min(self.tabs.len().saturating_sub(1));
-        self.focus_active(window, cx);
-        let text = if crashed {
-            format!("上次未正常退出，已恢复 {restored} 个标签")
-        } else {
-            format!("已恢复 {restored} 个标签")
-        };
-        crate::gpui_shell::toast::toast(window, cx, ToastKind::Success, text);
-        cx.notify();
-        true
-    }
-
-    /// 恢复一个 Terminal tab：DFS 逐叶 spawn（消失目录回退默认 cwd、AI 会话
-    /// 以安全 resume 命令接续、SSH launch 只作用于首 pane——launch 描述的
-    /// 是「首 pane 怎么启动」，旧壳同义），再按持久化树的形状重建分屏树。
-    fn restore_tab(
-        &mut self,
-        tab: &crate::session::TabSession,
-        resume_ai: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        use crate::session::{LaunchSession, LayoutSession};
-
-        let layout =
-            tab.layout.clone().unwrap_or(LayoutSession::Pane { cwd: tab.cwd.clone(), agent: None });
-        // v1-v3 / 早期 GPUI 快照没有 launch，按共享 schema 回退 Default；
-        // v4 的 Shell/Profile/Ssh 必须原样用于首 Pane，不能再次读取当前默认。
-        let saved_launch = tab.launch.clone().unwrap_or(LaunchSession::Default);
-        let grid = self.initial_grid;
-        let mut panes: Vec<TerminalPane> = Vec::new();
-        for (index, leaf) in layout.leaves().into_iter().enumerate() {
-            let LayoutSession::Pane { cwd, agent } = leaf else { continue };
-            let mut launch_session =
-                if index == 0 { saved_launch.clone() } else { Self::configured_local_launch(cx) };
-            if matches!(launch_session, LaunchSession::Default) {
-                launch_session = Self::configured_local_launch(cx);
-            }
-            let guest_directory =
-                tab_duplication::inherit_guest_directory(&mut launch_session, cwd);
-            let local_cwd = if guest_directory { None } else { crate::session::valid_dir(cwd) };
-            let launch = Self::terminal_launch_from_session(&launch_session, local_cwd);
-            let command = restored_agent_command(resume_ai, agent.as_ref());
-            let resuming = command.is_some();
-            let pane = self.new_pane(grid, launch, command, window, cx);
-            // Display and persist the restored location while the guest shell
-            // starts; subsequent OSC reports remain authoritative.
-            if guest_directory {
-                pane.view.update(cx, |view, cx| {
-                    view.seed_restored_cwd(cwd.clone(), cx);
-                });
-            }
-            // 冷恢复已经知道这段对话的 hook 身份：种回 view，右键「分叉
-            // AI 会话」不必再等下一条带 session_id 的 hook。
-            if resuming
-                && let Some((source, session_id)) = agent
-                    .as_ref()
-                    .and_then(|agent| Some((agent.source.clone(), agent.session_id.clone()?)))
-            {
-                pane.view.update(cx, |view, cx| view.seed_ai_session(source, session_id, cx));
-            }
-            panes.push(pane);
-        }
-        if panes.is_empty() {
-            return false;
-        }
-        let mut ids = panes.iter().map(|pane| pane.id).collect::<Vec<_>>().into_iter();
-        let (tree, _) = crate::gpui_shell::session_restore::tree_from_layout(&layout, &mut || {
-            ids.next().unwrap_or(0)
-        });
-        let focused =
-            panes.get(tab.active_pane).or_else(|| panes.first()).map(|pane| pane.id).unwrap_or(0);
-        // 恢复期保持文件里的既有次序，不套「新标签插入位置」策略。
-        // 重命名与色标随会话一起回来（旧壳同合同）。
-        let at = self.tabs.len();
-        self.insert_tab_at(
-            at,
-            WorkspaceTab::Terminal { panes, tree, focused, zoomed: false, broadcast: false },
-            TabMeta {
-                custom_name: tab.custom_name.clone(),
-                color: tab.color,
-                shell_tag: Self::launch_shell_tag(&saved_launch),
-                launch: Some(saved_launch),
-                has_bell: false,
-            },
-        );
-        true
-    }
-
-    /// 当前工作区 → 共享 v4 快照。设置/文档/图片 tab 不进会话（旧壳同
-    /// 合同）；AI 会话身份优先取 hook 直报的精确 id，退而取可解析的前台
-    /// 程序名（claude 无 id 恢复成 `--continue`，安全判定在 schema 层）。
-    pub(crate) fn snapshot_session(&self, cx: &App) -> crate::session::Session {
-        use crate::session::{AgentSession, LaunchSession, Session, TabSession};
-
-        let mut tabs = Vec::new();
-        let mut active_out = 0usize;
-        for (ix, tab) in self.tabs.iter().enumerate() {
-            let WorkspaceTab::Terminal { panes, tree, focused, .. } = tab else { continue };
-            if ix == self.active {
-                active_out = tabs.len();
-            }
-            let leaf_data = |id: u64| -> (String, Option<AgentSession>) {
-                let Some(pane) = panes.iter().find(|pane| pane.id == id) else {
-                    return (String::new(), None);
-                };
-                let view = pane.view.read(cx);
-                let agent = view.session_agent();
-                (view.cwd.clone(), agent)
-            };
-            let layout = crate::gpui_shell::session_restore::layout_from_tree(tree, &leaf_data);
-            let cwd = panes
-                .iter()
-                .find(|pane| pane.id == *focused)
-                .map(|pane| pane.view.read(cx).cwd.clone())
-                .unwrap_or_default();
-            let meta = self.meta(ix);
-            let first_leaf = tree.first_leaf();
-            let launch = meta.launch.clone().unwrap_or_else(|| {
-                // 兼容本次修复前已经在内存中的 Tab：SSH 仍可从首 Pane 取回；
-                // 旧本地 Tab 已经没有身份信息，只能诚实落为 Default。
-                panes
-                    .iter()
-                    .find(|pane| pane.id == first_leaf)
-                    .and_then(|pane| pane.view.read(cx).ssh_destination.clone())
-                    .map(|host| LaunchSession::Ssh { host })
-                    .unwrap_or(LaunchSession::Default)
-            });
-            let active_pane = tree.leaves().iter().position(|id| id == focused).unwrap_or(0);
-            tabs.push(TabSession {
-                cwd,
-                custom_name: meta.custom_name,
-                color: meta.color,
-                launch: Some(launch),
-                layout: Some(layout),
-                active_pane,
-            });
-        }
-        Session::new(active_out, tabs)
-    }
-
     /// 按视图实体反查 (tab 下标, pane id)。
     fn locate_pane(&self, entity_id: gpui::EntityId) -> Option<(usize, u64)> {
         self.tabs.iter().enumerate().find_map(|(ix, tab)| match tab {
@@ -2035,6 +1865,16 @@ impl NebulaWorkspace {
         cx: &mut Context<Self>,
     ) {
         match event {
+            TerminalViewEvent::SessionIdentityChanged => {
+                if let Err(error) = windowing::save_current_window_session(
+                    self.runtime_window_id,
+                    self.snapshot_session(cx),
+                    session_persistence::SaveReason::Checkpoint,
+                    cx,
+                ) {
+                    log::warn!("Could not checkpoint native recovery identity: {error}");
+                }
+            },
             // OSC 7 cwd 与标题共用这条事件。只有当前聚焦 pane 能驱动共享文件树；
             // 后台 pane 的提示符更新不能把前台目录覆盖掉。
             TerminalViewEvent::TitleChanged => {
@@ -2197,12 +2037,14 @@ impl NebulaWorkspace {
             self.active -= 1;
         }
         self.active = self.active.min(self.tabs.len().saturating_sub(1));
-        windowing::save_current_window_session(
+        if let Err(error) = windowing::save_current_window_session(
             self.runtime_window_id,
             self.snapshot_session(cx),
             session_persistence::SaveReason::TabsClosed,
             cx,
-        );
+        ) {
+            log::warn!("Could not save closed tabs: {error}");
+        }
         self.reveal_active_tab();
         self.focus_active(window, cx);
         self.sync_side_panel_to_active(true, cx);

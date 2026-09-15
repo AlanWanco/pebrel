@@ -999,6 +999,8 @@ pub struct RuntimeSettings {
     /// Check GitHub Releases after startup. Manual checks remain available
     /// from the Application settings page when this is disabled.
     pub auto_check_updates: bool,
+    /// Optional background package download; never grants install permission.
+    pub auto_download_updates: bool,
     pub keep_session: bool,
     /// Start the first window hidden when a system tray is available and enabled.
     pub silent_start: bool,
@@ -1164,6 +1166,7 @@ impl RuntimeSettings {
             ai_toasts: raw.bool_on("ai_toasts").unwrap_or(true),
             fetch: raw.bool_on("fetch").unwrap_or(false),
             auto_check_updates: raw.bool_on("auto_check_updates").unwrap_or(true),
+            auto_download_updates: raw.bool_on("auto_download_updates").unwrap_or(false),
             keep_session: raw.bool_on("keep_session").unwrap_or(false),
             silent_start: raw.bool_on("silent_start").unwrap_or(false),
             restore_session: raw.bool_on("restore_session").unwrap_or(true),

@@ -570,3 +570,54 @@ settings files.
 - **Revisit condition:** Remove the font fork patch when upstream provides the same
   ownership contract. Revisit native adapters when supported platform interfaces
   provide equivalent process identity and resource-lifetime guarantees.
+
+
+## ADR-0016 — Durable recovery targets and update handoff
+
+- **Status:** Implementation authorized by the maintainer on 2026-09-15; native
+  upgrade acceptance is required before declaring this behavior delivered.
+- **Context:** Launching setup before terminal shutdown races executable-file
+  ownership. A failed snapshot write must be able to cancel exit. A resume command
+  submitted to a PTY is not evidence that the provider opened the requested chat.
+- **Recovery ownership:** The shared v4 session schema gains optional native file
+  and per-pane launch fields. Older snapshots remain readable; per-tab launch is
+  only the compatibility fallback. The terminal owns a durable recovery target
+  separately from native-confirmed foreground identity. Failed verification or
+  resume keeps that target available for retry, while an intentional exit after
+  confirmation clears it. Provider metadata is read on the background executor,
+  within bounded file/output/time budgets and the original execution environment.
+  No conversation text, arbitrary environment map or authentication secret is saved.
+- **Identity:** Pi metadata/header IDs are authoritative; process badges and
+  timestamped filenames are not native IDs. Legacy timestamp IDs require an exact
+  header match. Multiple matching files are an error, never a most-recent-file rule.
+  Bridge process identity orders Pi session switches within one monotonic stream.
+- **Persistence:** Quit freezes only after durable success. Failure leaves windows
+  open and allows later checkpoints to include new native identity. Draft approval
+  covers all participating windows, including drafts changed while prompts are up.
+  Renderer adapters capture window state; shared persistence owns the write rule.
+  Optional window boundaries partition the existing flat tab list in the same
+  atomically replaced session document. Old readers retain that flat list; both
+  immediate and next-start installation use the last durable window partition
+  and reopen the active window last. Invalid partitions cancel installation.
+  This preserves window/tab grouping, not desktop coordinates or window sizes
+  that the current startup policy deliberately derives from preferences.
+- **Download ownership:** Optional predownload grants no permission to install.
+  One process-wide state serves prompts and settings. Generation checks reject
+  cancelled/obsolete progress and completion. Disk metadata is a cache descriptor;
+  reopening and installing reverify the package bytes using the existing official
+  asset, proxy, length and SHA-256 contracts.
+- **Handoff boundary:** A temporary Windows helper must live outside the target
+  installation. It acquires exact process handles, verifies the package, and
+  acknowledges readiness before an explicit durable commit allows exit/install.
+  Setup starts only after participant exit, with a specific validated target
+  directory and without process-name force termination. Kernel lifetime locks
+  block competing installation/startup and cannot remain owned after a crash.
+  Upgrade restore state and installation failures survive process exit. Inno
+  in-place installation is not claimed to provide arbitrary mid-install rollback.
+- **Validation boundary:** Provider bridge execution, serialization/failure cases,
+  actual GPUI lifecycle tests and native simulated upgrades are separate evidence.
+  Metadata compilation alone does not validate restoration or installer behavior.
+  Debug-only local rehearsal shares version eligibility with scheduled updates:
+  it permits an exact-version reinstall, never a downgrade. Such a reinstall
+  must replace the executable bytes; an unchanged executable after setup exits
+  zero is a failure. This does not substitute for a full packaged upgrade test.
