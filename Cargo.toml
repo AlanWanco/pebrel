@@ -43,7 +43,7 @@ image = { opt-level = 3 }
 
 # Debug 壳仍要承担真实终端负载：GPUI 布局/字体塑形和 VT 解析若以
 # opt-level 0 运行，窗口拖拽与持续输入都会出现发布版没有的延迟。
-# 外部依赖统一 O2（Zed 同款策略：图形栈/图像解码/Unicode 处理散布在
+# 外部依赖统一 O2（图形栈/图像解码/Unicode 处理散布在
 # 几十个 crate 里，逐个点名永远漏），少数塑形/布局热点保持 O3；
 # workspace 成员不受 "*" 影响，主 crate 继续增量 debug。
 [profile.dev]

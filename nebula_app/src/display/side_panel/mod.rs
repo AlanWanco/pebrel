@@ -134,7 +134,7 @@ pub struct GitInfo {
     pub staged: Vec<(char, String)>,
     /// 合并冲突（porcelain 的 U*/AA/DD；SVN 的 `C`）。冲突路径**同时**保留
     /// 在 `staged`/`unstaged` 里：旧壳视图零改动照常显示，GPUI 壳按本列表
-    /// 单独分组并从另两组过滤（VS Code 的 Merge Changes 合同）。
+    /// 单独分组并从暂存和未暂存两组过滤，避免冲突路径重复显示。
     pub conflicts: Vec<(char, String)>,
     /// `git log --all --date-order` 的最近提交。显示层依据对象 ID 和父提交
     /// 生成连续轨道，不把 `git --graph` 的字符画当成视觉数据。
@@ -456,7 +456,7 @@ pub struct SidePanel {
     snapshot_running: std::sync::Arc<std::sync::atomic::AtomicBool>,
     /// The worker's finished snapshot, harvested by `sync` on the next frame.
     /// 切换视图/根不再同步跑 git——旧内容原样留在屏上，新快照落地后整体
-    /// 替换（VSCode 的树刷新模式）。
+    /// 替换。
     snapshot_slot: std::sync::Arc<std::sync::Mutex<Option<PanelSnapshot>>>,
     /// 上一份落地快照的枚举是否失败（WSL 超时 / find 非零退出）。UI 靠它区分
     /// "读不到"和"目录真的是空的"。
@@ -594,7 +594,7 @@ impl SidePanel {
             return false;
         }
         // 先收割落地的后台快照——旧内容在工人跑动期间一直显示，这里一次
-        // 性换成新内容（先显示旧的、再更新，VSCode 的树刷新模式）。
+        // 性换成新内容，避免刷新期间出现空白。
         let mut changed = self.harvest_snapshot();
         changed |= self.harvest_file_search();
         // 聚焦 pane 报不出位置时（SSH、shell 尚未发 OSC）保留最后一个有效根；
