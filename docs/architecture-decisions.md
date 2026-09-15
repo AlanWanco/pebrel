@@ -478,7 +478,63 @@ settings files.
   measured query latency, completeness and sustained allocation evidence. Do not
   restore eager full-tree indexing to improve a synthetic latency number.
 
-## ADR-0014 — Native font ownership and terminal resource reclamation
+## ADR-0014 — Parallel release validation with one product build graph
+
+- **Date:** 2026-09-14
+- **Context:** The 1.7.0 Windows release job took 41m28s despite a full dependency
+  cache hit. Its logs show three application test compilations (4m44s, 9m16s and
+  4m07s), a 15m08s release build, and 4m16s of additional dependency compilation
+  during packaging. The user requested a slowest-job target of ten minutes.
+- **Decision:** Run the complete Rust workspace with the product interaction
+  feature enabled in one unfiltered invocation. Run native tests independently
+  from package construction; asset aggregation depends on both. Each native
+  platform still runs the complete Python helper and harness suites. Separate
+  test and release cache keys prevent concurrent jobs from replacing one another's
+  compiled workload. Dependency archives and Git objects are shared within each
+  platform; each workload saves only the profiles it uses (native tests also keep
+  release-check metadata). A fallback
+  reads existing combined caches during migration. Cargo still validates source,
+  profile and feature fingerprints before reuse. Each source revision saves an
+  immutable entry while restoring compatible earlier revisions; a partially built
+  cache from a failed revision cannot prevent later successful cache updates.
+- **Scheduling:** Stable releases call the same complete four-platform native
+  workflow used for contributions, including architecture, translation allocation
+  contracts and the release-workspace check. Release branch pushes omit a duplicate
+  automatic invocation; the release aggregation still requires the called suite.
+- **Test profile:** An explicit CI-only profile removes developer-preview
+  optimization and debug information from test compilation, including named
+  dependency overrides. It retains debug assertions and overflow checks. The
+  native suite also checks the actual product feature configuration, since GPUI
+  test support changes dependency features. Release optimization is unaffected.
+- **Product compilation:** The application keeps O3 and Thin LTO and uses 16
+  codegen units to parallelize its large translation unit. Other package settings
+  retain their existing values. Both Windows packagers call one explicit builder
+  for the product and its packaged hook, preserving the same feature graph.
+  Packaging still invokes Cargo and validates source freshness and binary identity.
+- **Contract clarification:** The old packaging test required the literal
+  `--workspace --exclude nebula`, rejecting a valid explicit selection of the two
+  shipped binaries. It now verifies the actual selected packages, binaries and
+  product feature, plus failure propagation and restoration of the caller's target.
+  No test filtering, freshness bypass, size-budget increase or dependency change
+  is part of this decision.
+- **Validation:** The release pipeline runs native tests, packaging fixtures,
+  package-size/identity checks and installed or mounted conformance on all four
+  platforms. Actual job timings determine whether the target is met; cache input
+  changes and first compilation must be reported separately. A configured timeout
+  or parallel scheduling alone is not evidence of a ten-minute successful build.
+- **Windows host privileges:** The first hosted run exposed administrator-token
+  dependence in ordinary-window persistence fixtures and runtime discovery.
+  Persistence tests now explicitly select ordinary-window state while retaining
+  privileged isolation tests. Native conformance launches under a restricted copy
+  of the runner's own token, verifies that elevation was removed and preserves
+  the desktop, environment and child exit status. It does not weaken the product's
+  administrator isolation or create a separate user account. Native launch tests
+  cover elevation, literal argument passing and successful/failed child exit.
+- **Revisit condition:** Retain only changes whose complete CI run and package
+  checks pass. Reconsider codegen partitioning if artifact size or runtime
+  measurements regress, and remove redundant caches if restore/save cost grows.
+
+## ADR-0015 — Native font ownership and terminal resource reclamation
 
 - **Status:** Existing local fixes selected for commit at the maintainer's request,
   2026-09-15. This records ownership contracts, not a release or process-memory claim.
@@ -516,7 +572,7 @@ settings files.
   provide equivalent process identity and resource-lifetime guarantees.
 
 
-## ADR-0015 — Completion ownership follows the active connection
+## ADR-0016 — Completion ownership follows the active connection
 
 - **Date:** 2026-09-15
 - **Context:** Launch-time Local/WSL/SSH pools do not follow a typed SSH/WSL

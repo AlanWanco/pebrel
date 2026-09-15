@@ -238,7 +238,7 @@ impl SettingsPane {
         let symbol_family: SharedString = crate::font_install::REQUIRED_FONT_FAMILY.into();
         let font_px = cx
             .try_global::<crate::gpui_shell::config::Settings>()
-            .map(|s| s.base_font_size_px)
+            .map(|s| s.ui_font_size_px)
             .unwrap_or(15.0);
         let title_h = font_px;
         let subtitle_h = font_px * 0.78;

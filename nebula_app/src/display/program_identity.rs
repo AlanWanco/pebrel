@@ -12,10 +12,11 @@ pub enum AiLogo {
     Antigravity,
     Trae,
     OhMyPi,
+    CodeBuddy,
 }
 
 impl AiLogo {
-    pub(crate) const ALL: [Self; 8] = [
+    pub(crate) const ALL: [Self; 9] = [
         Self::Claude,
         Self::OpenAi,
         Self::OpenCode,
@@ -24,6 +25,7 @@ impl AiLogo {
         Self::Antigravity,
         Self::Trae,
         Self::OhMyPi,
+        Self::CodeBuddy,
     ];
 
     /// One source catalog for both shells. Official color assets are embedded unchanged.
@@ -38,6 +40,7 @@ impl AiLogo {
             Self::Antigravity => include_bytes!("../../../extra/logo/ai_antigravity.png"),
             Self::Trae => include_bytes!("../../../extra/logo/ai_trae.png"),
             Self::OhMyPi => include_bytes!("../../../extra/logo/ai_omp.png"),
+            Self::CodeBuddy => include_bytes!("../../../extra/logo/ai_codebuddy.png"),
         }
     }
 
@@ -46,7 +49,12 @@ impl AiLogo {
             Self::OpenAi | Self::Pi => false,
             // OpenCode stores a luma map: the frame is white, the inner block gray.
             Self::OpenCode => true,
-            Self::Claude | Self::Grok | Self::Antigravity | Self::Trae | Self::OhMyPi => return,
+            Self::Claude
+            | Self::Grok
+            | Self::Antigravity
+            | Self::Trae
+            | Self::OhMyPi
+            | Self::CodeBuddy => return,
         };
         for pixel in pixels.chunks_exact_mut(4) {
             let luma = if preserve_luma { u16::from(pixel[0]) } else { 255 };
@@ -123,6 +131,7 @@ pub(crate) fn ai_logo_for_program(program: &str) -> Option<AiLogo> {
         AgentKind::Antigravity => Some(AiLogo::Antigravity),
         AgentKind::Trae => Some(AiLogo::Trae),
         AgentKind::OhMyPi => Some(AiLogo::OhMyPi),
+        AgentKind::CodeBuddy => Some(AiLogo::CodeBuddy),
         _ => None,
     }
 }
@@ -144,6 +153,7 @@ pub(crate) fn program_icon(program: &str) -> &'static str {
         "aider" | "goose" | "crush" | "ollama" => "\u{f06a9}",
         "opencode" | "trae-cli" => "\u{f489}",
         "pi" | "omp" | "oh-my-pi" => "\u{f135}",
+        "codebuddy" | "cbc" | "codebuddy-code" | "codebuddy-lowmem" => "\u{f06a9}",
         "git" | "lazygit" => "\u{f418}",
         "vim" | "nvim" | "vi" | "hx" | "nano" => "\u{e62b}",
         "ssh" | "mosh" => "\u{f489}",
@@ -347,6 +357,54 @@ mod tests {
         assert_eq!(logo_for_command("trae-cli-helper"), None);
         for command in ["omp", "oh-my-pi", r"C:\tools\OMP.EXE"] {
             assert_eq!(logo_for_command(command), Some(AiLogo::OhMyPi));
+        }
+    }
+
+    #[test]
+    fn codebuddy_commands_share_the_color_logo_without_matching_helpers() {
+        for command in [
+            "codebuddy",
+            "cbc",
+            "codebuddy-code",
+            "codebuddy-lowmem",
+            r"C:\tools\CODEBUDDY.CMD --help",
+        ] {
+            assert_eq!(logo_for_command(command), Some(AiLogo::CodeBuddy), "{command}");
+        }
+        for command in ["cbc-prewarm", "codebuddy-helper", "cat codebuddy.md"] {
+            assert_eq!(logo_for_command(command), None, "{command}");
+        }
+    }
+
+    #[test]
+    fn codebuddy_square_logo_smooths_edges_without_recoloring_the_brand() {
+        let logo = AiLogo::CodeBuddy;
+        let (width, height, source) = decode_png(logo.png(false));
+        assert_eq!((width, height), (1024, 1024));
+        let original = image::RgbaImage::from_raw(width, height, source.clone()).unwrap();
+        let partial_coverage =
+            |pixels: &[u8]| pixels.chunks_exact(4).filter(|p| p[3] > 0 && p[3] < 255).count();
+        for size in [16, 18, 24, 27, 36, 48] {
+            let (pixels, width, height) = prepare_ai_logo_texture(&source, width, height, size);
+            assert_eq!((width, height), (size, size));
+            assert!(pixels.chunks_exact(4).any(|p| p[3] == 0));
+            assert!(pixels.chunks_exact(4).any(|p| p[3] == 255));
+            // A symmetric rounded square has fewer distinct edge alpha levels
+            // than the asymmetric marks above. Compare actual fractional edge
+            // coverage with a deliberately aliased nearest-neighbor sample.
+            let aliased = image::imageops::resize(
+                &original,
+                size,
+                size,
+                image::imageops::FilterType::Nearest,
+            );
+            assert!(partial_coverage(&pixels) > partial_coverage(aliased.as_raw()), "{size}px");
+            assert!(pixels.chunks_exact(4).any(|p| p[3] > 128 && p[2] > p[0].saturating_add(50)));
+            for ink in [[236, 239, 245], [35, 40, 50]] {
+                let mut tinted = pixels.clone();
+                logo.tint_pixels(&mut tinted, ink);
+                assert_eq!(tinted, pixels);
+            }
         }
     }
 }

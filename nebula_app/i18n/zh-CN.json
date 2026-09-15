@@ -77,6 +77,13 @@
       "background_cover_description": "背景图会延伸到标题栏、窗口按钮、Tab 与 SSH 侧栏下方，低对比度图片可能影响操作可见性；界面仍会保留最低不透明度保护。"
     },
     "font": {
+      "ui_family": "界面字体",
+      "ui_family_description": "输入已安装的字体名称；留空使用默认字体。按回车或离开输入框后生效。",
+      "ui_size": "界面字号",
+      "ui_size_description": "独立调整界面文字和组件字号，不影响终端文字。",
+      "english": "英文终端字体",
+      "chinese": "中文终端字体",
+      "chinese_description": "用于中文等全宽字符。输入字体名称，多个字体以逗号分隔；留空时使用 Maple Mono NF CN。按回车或离开输入框后生效。",
       "fallback_description": "第 1 项优先显示；缺失字形依次使用后续字体，内置 Maple 是最终安全兜底。",
       "group_description": "第 1 项是主字体，其余按顺序回退",
       "loading": "正在枚举系统字体…",
@@ -118,7 +125,16 @@
       "dim_inactive": "调暗非活动窗格",
       "dim_inactive_description": "降低其他分屏窗格的亮度，突出当前活动窗格。"
     },
-    "save_failed": "无法保存设置：{error}"
+    "save_failed": "无法保存设置：{error}",
+    "reset_title": "恢复默认设置？",
+    "reset_description": "这将重置你的设置与快捷键。SSH 主机、凭据和历史将保留，当前设置会备份。是否继续？",
+    "startup": {
+      "launch_at_login": "登录时自启动",
+      "launch_at_login_help": "登录 Windows 后启动 Pebrel，与安装器使用同一个启动快捷方式。",
+      "silent_start": "静默启动",
+      "silent_start_help": "启动后在后台运行，不显示窗口。开启时会同时启用系统托盘，点击托盘图标可重新打开窗口。托盘启用时生效，显式打开目录时除外。",
+      "save_failed": "无法更改启动设置：{error}"
+    }
   },
   "provider": {
     "test": {
@@ -385,6 +401,8 @@
     "save_copy": "保存副本"
   },
   "files": {
+    "path_unavailable": "路径已不存在",
+    "delete_failed": "删除失败：{error}",
     "ignore_add": "加入 .gitignore",
     "ignore_remove": "从 .gitignore 移除",
     "ignore_added": "已写入 .gitignore：{entry}",
@@ -471,6 +489,51 @@
     "exported": "主机信息已导出，不含凭据",
     "imported": "已新增 {added} 台主机，跳过 {skipped} 台已有主机",
     "imported_partial": "已新增 {added} 台主机，但显示状态未能更新。请重试导入：{error}"
+  },
+  "vcs": {
+    "changes": "变更",
+    "staged": "已暂存",
+    "merge_conflicts": "合并冲突",
+    "no_conflicts": "没有待解决的冲突",
+    "no_changes": "没有更改",
+    "no_history": "还没有提交历史",
+    "no_branch": "(无分支)",
+    "confirm_discard": "确认丢弃",
+    "discard": "丢弃改动",
+    "stage": "暂存",
+    "unstage": "取消暂存",
+    "resolve_in_merge_editor": "在三栏合并器中解决",
+    "commit_changes": "提交 / 变更",
+    "graph": "线路",
+    "history_graph": "历史线路",
+    "conflicts": "冲突",
+    "resolve_conflicts": "解决冲突",
+    "commit": "提交",
+    "commit_placeholder": "提交信息…",
+    "stage_all": "全部暂存",
+    "pull": "拉取",
+    "push": "推送",
+    "push_ahead": "推送 ↑{count}",
+    "follow_directory": "回到终端当前目录",
+    "not_repository": "当前目录不在 Git/SVN 仓库中",
+    "refresh_status": "刷新 {vcs} 状态",
+    "close_status": "关闭 {vcs} 状态",
+    "toggle_git": "Git 状态 (Ctrl+Shift+G)",
+    "time_now": "刚刚",
+    "time_minute": "1 分钟前",
+    "time_minutes": "{count} 分钟前",
+    "time_hour": "1 小时前",
+    "time_hours": "{count} 小时前",
+    "time_day": "1 天前",
+    "time_days": "{count} 天前",
+    "time_month": "1 个月前",
+    "time_months": "{count} 个月前",
+    "time_year": "1 年前",
+    "time_years": "{count} 年前",
+    "directory_unavailable": "所选目录不可用",
+    "following_directory": "所选目录不可用，已跟随当前目录",
+    "command_failed": "{program} 失败",
+    "task_start_failed": "无法启动版本控制任务: {error}"
   },
   "launcher": {
     "open_admin": "以管理员身份打开",

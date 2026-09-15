@@ -96,6 +96,7 @@ pub struct SettingsPane {
     pub(super) focus_handle: FocusHandle,
     /// 渲染与写盘的单一事实源；每次 persist 后整体重载。
     pub(super) runtime: RuntimeSettings,
+    launch_at_login: bool,
     /// 当前分区（`SECTIONS` 下标）；默认落在应用主页。
     active_section: usize,
     appearance_picker: Option<appearance_picker::AppearancePicker>,
@@ -193,6 +194,7 @@ pub struct SettingsPane {
     /// GPUI text system 已注册的导入族名（启动扫描 + 本次导入累计）。
     font_imported: Vec<String>,
     font_family_input: Entity<InputState>,
+    font_family_cjk_input: Entity<InputState>,
     /// 字体输入框上一帧的窗口坐标。字体目录是宽弹层，不能把整条设置行当
     /// 锚点；否则输入框在右侧、菜单却会从正文左缘展开。
     font_picker_trigger_bounds: Option<gpui::Bounds<gpui::Pixels>>,
@@ -341,6 +343,33 @@ impl SettingsPane {
             self.request_cover_chrome(value, window, cx);
             return;
         }
+        if key == "launch_at_login" || key == "silent_start" {
+            let result = if key == "launch_at_login" {
+                crate::platform::startup::set_launch_at_login(value).map(|()| {
+                    self.launch_at_login = value;
+                })
+            } else {
+                let mut updates = vec![(key, (value as u8).to_string())];
+                if value {
+                    updates.push(("tray", "1".to_owned()));
+                }
+                self.try_persist(&updates, cx)
+            };
+            if let Err(error) = result {
+                let language = crate::gpui_shell::config::ui_language(cx);
+                super::toast::toast(
+                    window,
+                    cx,
+                    super::toast::ToastKind::Warning,
+                    language.format(
+                        crate::i18n::Message::SettingsStartupSaveFailed,
+                        &[("error", &error.to_string())],
+                    ),
+                );
+            }
+            cx.notify();
+            return;
+        }
         if matches!(key, "ai_toasts" | "focus_follows_mouse" | "dim_inactive_panes") {
             if let Err(error) = self.try_persist(&[(key, (value as u8).to_string())], cx) {
                 let language = crate::gpui_shell::config::ui_language(cx);
@@ -421,24 +450,14 @@ impl SettingsPane {
         self.sync_background_color_picker(window, cx);
     }
 
-    /// Workspace tab 与设置正文共用的主文字字号事实源；导航使用组件小字号。
-    ///
-    /// 旧壳合同（display/mod.rs `ui_font_px`）：chrome 排版锚定**配置字号**
-    /// （nebula.toml `font.size`，默认 11.25pt = 15px），终端的持久化缩放
-    /// （设置 spinner / Ctrl+滚轮写入的 `font_size=`）只影响终端网格，
-    /// 不得放大侧栏与设置文字。
+    /// 界面独立字号；未设置时保留原配置字号，终端缩放不影响这里。
     fn font_size_px(&self, cx: &App) -> f32 {
-        cx.global::<crate::gpui_shell::config::Settings>().base_font_size_px
+        cx.global::<crate::gpui_shell::config::Settings>().ui_font_size_px
     }
 
     /// 终端字号（预览与「终端字号」步进行显示的值）。
     fn terminal_font_size_px(&self, cx: &App) -> f32 {
         cx.global::<crate::gpui_shell::config::Settings>().font_size_px
-    }
-
-    fn set_font_size(&mut self, size: f32, cx: &mut Context<Self>) {
-        let size = size.clamp(4.0, 96.0);
-        self.persist(&[("font_size", format!("{size:.2}"))], cx);
     }
 
     /// 拖拽期间只做"改 alpha + 重绘"这两件必须的事，落盘与整套热应用
@@ -1179,6 +1198,24 @@ impl SettingsPane {
         // `platform::capabilities` 的说明）。
         let caps = crate::platform::CAPABILITIES;
         self.group(language.pick("会话生命周期", "Session lifecycle"), cx)
+            .when(caps.launch_at_login, |group| {
+                group.child(self.switch_row(
+                    "launch_at_login",
+                    language.text(crate::i18n::Message::SettingsStartupLaunchAtLogin),
+                    language.text(crate::i18n::Message::SettingsStartupLaunchAtLoginHelp),
+                    self.launch_at_login,
+                    cx,
+                ))
+            })
+            .when(caps.hide_window_on_close, |group| {
+                group.child(self.switch_row(
+                    "silent_start",
+                    language.text(crate::i18n::Message::SettingsStartupSilentStart),
+                    language.text(crate::i18n::Message::SettingsStartupSilentStartHelp),
+                    self.runtime.silent_start,
+                    cx,
+                ))
+            })
             .when(caps.hide_window_on_close, |group| {
                 group.child(self.switch_row(
                     "keep_session",
@@ -1338,7 +1375,7 @@ impl SettingsPane {
                     .px_3()
                     .text_color(muted)
                     .tooltip(language.pick("恢复设置与快捷键；保留 SSH 主机、凭据和历史，并备份原设置。", "Restores settings and shortcuts. Keeps SSH hosts, credentials and history, and backs up current settings."))
-                    .on_click(cx.listener(|this, _, window, cx| this.reset_all_settings(window, cx))),
+                    .on_click(cx.listener(|this, _, window, cx| this.confirm_reset_all_settings(window, cx))),
             )
             .into_any_element()
     }

@@ -531,7 +531,9 @@ fn try_hand_over_to_resident(options: &Options) -> bool {
         .window_options
         .terminal_options
         .resolved_working_directory()
-        .filter(|path| path.is_dir());
+        .or_else(|| env::current_dir().ok())
+        .filter(|path| path.is_dir())
+        .and_then(|path| std::path::absolute(path).ok());
     if !options.daemon
         && !has_command
         && nebula_settings::RuntimeSettings::load().windowing_behavior
@@ -539,9 +541,7 @@ fn try_hand_over_to_resident(options: &Options) -> bool {
     {
         return runtime_api::try_open_window_existing(launch_dir.as_deref());
     }
-    let plain_launch = !options.daemon
-        && options.window_options.terminal_options.working_directory.is_none()
-        && !has_command;
+    let plain_launch = !options.daemon && launch_dir.is_none() && !has_command;
     if plain_launch && runtime_api::try_open_default_tab_existing() {
         return true;
     }

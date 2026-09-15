@@ -9,6 +9,8 @@ use nebula_settings::ThemeName;
 mod custom;
 mod syntax;
 
+#[cfg(all(test, feature = "gpui-test-support"))]
+mod selection_tests;
 pub(crate) use custom::ResolvedTheme;
 
 struct DocumentColors {
@@ -598,6 +600,10 @@ fn soften(c: crate::display::color::Rgb, keep: f32) -> crate::display::color::Rg
 }
 
 fn apply_skin_tokens(chrome: &ResolvedTheme, cx: &mut App) {
+    let (ui_font_family, ui_font_size) = cx
+        .try_global::<crate::gpui_shell::config::Settings>()
+        .map(|settings| (settings.ui_font_family.clone(), settings.ui_font_size_override))
+        .unwrap_or_default();
     let sk = chrome.skin();
     let transparent = hsla(0.0, 0.0, 0.0, 0.0);
     let theme = Theme::global_mut(cx);
@@ -698,7 +704,10 @@ fn apply_skin_tokens(chrome: &ResolvedTheme, cx: &mut App) {
     // 焦点 / 选择 / 链接 / 拖拽。
     theme.ring = ink(sk.accent);
     theme.caret = ink(sk.accent);
-    theme.selection = wash(sk.accent_soft);
+    // TextView paints selection over glyphs. Match gpui-component's 0.3 alpha
+    // cap instead of passing through the opaque selected surface from Skin.
+    let selection = wash(sk.accent_soft);
+    theme.selection = selection.alpha(selection.a.min(0.3));
     theme.link = ink(sk.accent);
     theme.link_hover = shift3(sk.accent.r, sk.accent.g, sk.accent.b, 0.10);
     theme.link_active = shift3(sk.accent.r, sk.accent.g, sk.accent.b, 0.18);
@@ -717,8 +726,8 @@ fn apply_skin_tokens(chrome: &ResolvedTheme, cx: &mut App) {
 
     // 字号与圆角：控件 pill 档 = 旧壳 UI_CORNER_RADIUS_LOGICAL(8)；浮层
     // 12，低于终端卡的 14——三档呼应旧壳的圆角层级。
-    theme.font_size = px(14.0);
-    theme.mono_font_size = px(13.0);
+    theme.font_size = px(ui_font_size.unwrap_or(14.0));
+    theme.mono_font_size = theme.font_size * (13.0 / 14.0);
 
     // 整壳的兜底字体（fork `root.rs` 用 `theme.font_family` 给根容器）。上游
     // 默认 `.SystemUIFont` 在 Windows 上没落到 UI 字体，中文最终回落进终端等
@@ -728,14 +737,17 @@ fn apply_skin_tokens(chrome: &ResolvedTheme, cx: &mut App) {
     // 我们是终端，所以等宽在这里是**语义标记**而不是全局字体：路径、键帽、
     // 命令、数值这类"机器读、要逐字符对齐、要能整段复制"的东西显式走 mono；
     // 标题和说明是给人读的，走 sans。
-    #[cfg(target_os = "windows")]
-    {
-        theme.font_family = "Microsoft YaHei UI".into();
-        // UI 中的等宽语义也必须稳定。终端字体由 TerminalView 单独读取；
-        // 若把用户字体组写进全局 theme，tab、标题和代码字面量的字宽都会
-        // 随终端主字体变化，进而破坏 chrome 的既定间距。
-        theme.mono_font_family = crate::font_install::REQUIRED_FONT_FAMILY.into();
-    }
+    let default_ui_font =
+        if crate::platform::Platform::current() == crate::platform::Platform::Windows {
+            // UI 中的等宽语义也必须稳定。终端字体由 TerminalView 单独读取；
+            // 若把用户字体组写进全局 theme，tab、标题和代码字面量的字宽都会
+            // 随终端主字体变化，进而破坏 chrome 的既定间距。
+            theme.mono_font_family = crate::font_install::REQUIRED_FONT_FAMILY.into();
+            "Microsoft YaHei UI"
+        } else {
+            ".SystemUIFont"
+        };
+    theme.font_family = ui_font_family.unwrap_or_else(|| default_ui_font.to_owned()).into();
     theme.radius = px(crate::display::UI_CORNER_RADIUS_LOGICAL);
     theme.radius_lg = px(12.0);
 

@@ -13,6 +13,15 @@ use nebula_settings::{RawSettings, RuntimeSettings, ThemeDefinition, ThemeName};
 const TEST_SETTINGS: &str =
     "theme=Nord\nfollow_system_theme=0\napp_icon=graphite-violet\nfont_size=15\n";
 
+// These rendered fixtures share the real settings path and theme library.
+// Readers must hold the same guard as Save/Apply tests so their before/after
+// snapshots cannot observe another fixture's writes or restoration cleanup.
+// Only this fixture group is serialized; the rest of the native suite stays parallel.
+fn lock_theme_studio() -> std::sync::MutexGuard<'static, ()> {
+    static FIXTURES: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    FIXTURES.lock().unwrap_or_else(|error| error.into_inner())
+}
+
 #[derive(Clone, Debug, PartialEq)]
 struct RuntimeSnapshot {
     theme: ThemeName,
@@ -357,6 +366,7 @@ fn editor_template(pane: &Entity<SettingsPane>, cx: &mut VisualTestContext) -> T
 fn theme_editor_opens_from_the_picker_with_common_fields_and_collapsed_advanced(
     cx: &mut TestAppContext,
 ) {
+    let _fixture_guard = lock_theme_studio();
     let (_pane, mut window) = open_settings(cx);
     open_theme_editor(&mut window);
 
@@ -387,6 +397,7 @@ fn theme_editor_opens_from_the_picker_with_common_fields_and_collapsed_advanced(
 fn theme_editor_input_is_a_local_draft_until_apply_and_preserves_builtin_source(
     cx: &mut TestAppContext,
 ) {
+    let _fixture_guard = lock_theme_studio();
     let (pane, mut window) = open_settings(cx);
     let before_runtime = runtime_snapshot();
     let before_palette = palette_snapshot(&mut window);
@@ -409,6 +420,7 @@ fn theme_editor_input_is_a_local_draft_until_apply_and_preserves_builtin_source(
 
 #[gpui::test]
 fn theme_editor_template_keyboard_selection_replaces_only_the_draft(cx: &mut TestAppContext) {
+    let _fixture_guard = lock_theme_studio();
     let (pane, mut window) = open_settings(cx);
     let before_runtime = runtime_snapshot();
     open_theme_editor(&mut window);
@@ -430,6 +442,7 @@ fn theme_editor_template_keyboard_selection_replaces_only_the_draft(cx: &mut Tes
 fn theme_editor_dirty_back_and_escape_show_confirmation_and_keep_or_discard_draft(
     cx: &mut TestAppContext,
 ) {
+    let _fixture_guard = lock_theme_studio();
     let (pane, mut window) = open_settings(cx);
     let before_runtime = runtime_snapshot();
     let before_palette = palette_snapshot(&mut window);
@@ -453,6 +466,7 @@ fn theme_editor_dirty_back_and_escape_show_confirmation_and_keep_or_discard_draf
 
 #[gpui::test]
 fn theme_editor_back_returns_to_picker_and_preserves_its_draft(cx: &mut TestAppContext) {
+    let _fixture_guard = lock_theme_studio();
     let (pane, mut window) = open_settings(cx);
     click("open-theme-picker", &mut window);
     click_first_theme_option(&mut window);
@@ -483,6 +497,7 @@ fn theme_editor_back_returns_to_picker_and_preserves_its_draft(cx: &mut TestAppC
 fn theme_editor_save_only_persists_a_copy_without_changing_source_selection(
     cx: &mut TestAppContext,
 ) {
+    let _fixture_guard = lock_theme_studio();
     let (pane, mut window) = open_settings(cx);
     let before_runtime = runtime_snapshot();
     let before_palette = palette_snapshot(&mut window);
@@ -532,6 +547,7 @@ fn theme_editor_save_only_persists_a_copy_without_changing_source_selection(
 
 #[gpui::test]
 fn theme_editor_save_and_apply_persists_copy_and_reloads_its_foreground(cx: &mut TestAppContext) {
+    let _fixture_guard = lock_theme_studio();
     let _settings_guard = SettingsBytesGuard::capture();
     std::fs::write(nebula_settings::settings_path(), TEST_SETTINGS)
         .expect("write isolated apply settings");
@@ -593,6 +609,7 @@ fn theme_editor_save_and_apply_persists_copy_and_reloads_its_foreground(cx: &mut
 
 #[gpui::test]
 fn invalid_color_stays_dirty_and_save_rejects_after_a_later_valid_edit(cx: &mut TestAppContext) {
+    let _fixture_guard = lock_theme_studio();
     let (pane, mut window) = open_settings(cx);
     let before_runtime = runtime_snapshot();
     let before_palette = palette_snapshot(&mut window);
@@ -627,6 +644,7 @@ fn invalid_color_stays_dirty_and_save_rejects_after_a_later_valid_edit(cx: &mut 
 
 #[gpui::test]
 fn non_finite_font_values_stay_out_of_the_draft_and_save_is_rejected(cx: &mut TestAppContext) {
+    let _fixture_guard = lock_theme_studio();
     let (pane, mut window) = open_settings(cx);
     let before_runtime = runtime_snapshot();
     let before_palette = palette_snapshot(&mut window);
@@ -655,6 +673,7 @@ fn non_finite_font_values_stay_out_of_the_draft_and_save_is_rejected(cx: &mut Te
 
 #[gpui::test]
 fn theme_editor_font_select_changes_only_the_draft(cx: &mut TestAppContext) {
+    let _fixture_guard = lock_theme_studio();
     let (pane, mut window) = open_settings(cx);
     pane.update(&mut window, |pane, _| {
         // Keep the real selector independent of the fonts installed on the host.
@@ -716,6 +735,7 @@ fn theme_editor_font_select_changes_only_the_draft(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn theme_editor_color_picker_is_draft_only_and_cancel_restores(cx: &mut TestAppContext) {
+    let _fixture_guard = lock_theme_studio();
     let (pane, mut window) = open_settings(cx);
     let before_runtime = runtime_snapshot();
     let before_palette = palette_snapshot(&mut window);
@@ -774,6 +794,7 @@ fn theme_editor_color_picker_is_draft_only_and_cancel_restores(cx: &mut TestAppC
 
 #[gpui::test]
 fn theme_and_icon_filter_pills_select_independently(cx: &mut TestAppContext) {
+    let _fixture_guard = lock_theme_studio();
     let (pane, mut window) = open_settings(cx);
     click("open-theme-picker", &mut window);
     let theme_counts = pane.read_with(&mut window, |pane, _| {
@@ -810,6 +831,7 @@ fn theme_and_icon_filter_pills_select_independently(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn theme_picker_foreground_swatches_are_local_until_apply(cx: &mut TestAppContext) {
+    let _fixture_guard = lock_theme_studio();
     let (pane, mut window) = open_settings(cx);
     let before_runtime = runtime_snapshot();
     let before_palette = palette_snapshot(&mut window);
@@ -851,6 +873,7 @@ fn theme_picker_foreground_swatches_are_local_until_apply(cx: &mut TestAppContex
 
 #[gpui::test]
 fn theme_foreground_drag_hex_and_cancel_stay_local_in_a_narrow_window(cx: &mut TestAppContext) {
+    let _fixture_guard = lock_theme_studio();
     let (pane, mut window) = open_settings(cx);
     let settings_before = settings_file_snapshot();
     let palette_before = palette_snapshot(&mut window);
@@ -921,6 +944,7 @@ fn theme_foreground_drag_hex_and_cancel_stay_local_in_a_narrow_window(cx: &mut T
 
 #[gpui::test]
 fn theme_picker_foreground_swatches_fit_above_footer_in_a_short_window(cx: &mut TestAppContext) {
+    let _fixture_guard = lock_theme_studio();
     let (pane, mut window) = open_settings(cx);
     let palette_before = palette_snapshot(&mut window);
     window.simulate_resize(size(px(900.0), px(590.0)));
@@ -963,6 +987,7 @@ fn theme_picker_foreground_swatches_fit_above_footer_in_a_short_window(cx: &mut 
 fn theme_transfer_import_uses_a_rendered_candidate_and_keeps_unknown_fields_and_preferences(
     cx: &mut TestAppContext,
 ) {
+    let _fixture_guard = lock_theme_studio();
     let (import_path, fixture) = write_transfer_fixture("import");
     let (pane, mut window) = open_settings(cx);
     let before_runtime = runtime_snapshot();
@@ -1012,6 +1037,7 @@ fn theme_transfer_import_uses_a_rendered_candidate_and_keeps_unknown_fields_and_
 fn theme_transfer_export_writes_a_valid_native_document_without_publishing_preferences(
     cx: &mut TestAppContext,
 ) {
+    let _fixture_guard = lock_theme_studio();
     let (import_path, fixture) = write_transfer_fixture("export");
     let output_path = transfer_temp_path("export-output");
     let (pane, mut window) = open_settings(cx);
@@ -1065,6 +1091,7 @@ fn theme_transfer_export_writes_a_valid_native_document_without_publishing_prefe
 
 #[gpui::test]
 fn theme_transfer_cancel_and_invalid_input_leave_the_editor_recoverable(cx: &mut TestAppContext) {
+    let _fixture_guard = lock_theme_studio();
     let invalid_path = transfer_temp_path("invalid");
     std::fs::write(&invalid_path, b"not valid theme json").expect("write invalid theme");
     let (pane, mut window) = open_settings(cx);
@@ -1106,6 +1133,7 @@ fn theme_transfer_cancel_and_invalid_input_leave_the_editor_recoverable(cx: &mut
 
 #[gpui::test]
 fn theme_transfer_late_picker_result_is_ignored_after_rendered_cancel(cx: &mut TestAppContext) {
+    let _fixture_guard = lock_theme_studio();
     let (import_path, _) = write_transfer_fixture("late");
     let (pane, mut window) = open_settings(cx);
     let before_runtime = runtime_snapshot();
@@ -1137,6 +1165,7 @@ fn theme_transfer_late_picker_result_is_ignored_after_rendered_cancel(cx: &mut T
 fn theme_picker_recommended_foreground_is_local_until_apply_and_restores_after_reopen(
     cx: &mut TestAppContext,
 ) {
+    let _fixture_guard = lock_theme_studio();
     let _settings_guard = SettingsBytesGuard::capture();
     std::fs::write(nebula_settings::settings_path(), TEST_SETTINGS)
         .expect("write isolated picker settings");
@@ -1190,6 +1219,7 @@ fn theme_picker_recommended_foreground_is_local_until_apply_and_restores_after_r
 fn theme_editor_save_only_forks_a_non_active_custom_template_without_publishing_it(
     cx: &mut TestAppContext,
 ) {
+    let _fixture_guard = lock_theme_studio();
     let _settings_guard = SettingsBytesGuard::capture();
     std::fs::write(nebula_settings::settings_path(), TEST_SETTINGS)
         .expect("write isolated template settings");

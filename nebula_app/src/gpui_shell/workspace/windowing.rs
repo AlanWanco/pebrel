@@ -374,7 +374,7 @@ fn workspace_window_options(cx: &mut App, focus: bool, role: WindowRole) -> Wind
                     )
                 },
             );
-            WindowOptions {
+            crate::platform::window_chrome::configure_options(WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
                 window_min_size: Some(size(px(760.0), px(540.0)).min(&bounds.size)),
                 titlebar: Some(TitleBar::title_bar_options()),
@@ -382,7 +382,7 @@ fn workspace_window_options(cx: &mut App, focus: bool, role: WindowRole) -> Wind
                 window_background: crate::gpui_shell::wallpaper::initial_background_appearance(),
                 focus,
                 ..Default::default()
-            }
+            })
         },
         #[cfg(windows)]
         WindowRole::QuickTerminal => {
@@ -439,13 +439,21 @@ fn open_workspace_window(
     role: WindowRole,
 ) -> gpui::Result<(u64, Entity<NebulaWorkspace>)> {
     let (runtime_window_id, runtime_hub) = allocate_window(cx);
-    let options = workspace_window_options(cx, focus, role);
+    let start_hidden = shell_events.is_some()
+        && matches!(startup, WorkspaceStartup::RestoreOrDefault)
+        && crate::platform::startup::start_hidden(&nebula_settings::RuntimeSettings::load());
+    let mut options = workspace_window_options(cx, focus, role);
+    if start_hidden {
+        options.show = false;
+        options.focus = false;
+    }
     let workspace_slot = Rc::new(RefCell::new(None));
     let hwnd_slot = Rc::new(RefCell::new(0isize));
     let workspace_out = workspace_slot.clone();
     let hwnd_out = hwnd_slot.clone();
     let handle = cx.open_window(options, move |window, cx| {
         window.set_window_title(crate::brand::NAME);
+        crate::platform::window_chrome::configure(window);
         *hwnd_out.borrow_mut() = native_hwnd(window).unwrap_or_default();
         #[cfg(windows)]
         crate::gpui_shell::set_native_window_icon(window);
@@ -461,6 +469,7 @@ fn open_workspace_window(
                 cx,
             )
         });
+        workspace.update(cx, |workspace, _| workspace.window_hidden = start_hidden);
         if runtime_window_id == 1
             && let Ok(path) = std::env::var("NEBULA_GPUI_OPEN_DOC")
             && !path.is_empty()

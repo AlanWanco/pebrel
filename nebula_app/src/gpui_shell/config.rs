@@ -43,6 +43,7 @@ pub struct Settings {
     /// 已解析的界面语言。GPUI 组件只读这个内存全局，渲染路径不得重复读盘。
     pub ui_language: UiLanguage,
     pub font_family: String,
+    pub font_cjk: Option<[gpui::Font; 4]>,
     pub font_bold_family: String,
     pub font_italic_family: String,
     pub font_bold_italic_family: String,
@@ -51,6 +52,9 @@ pub struct Settings {
     /// 配置文件的基准字号，不含设置页/Ctrl+滚轮持久化的终端缩放。
     /// 启动窗口按它定形，和旧壳的 `window_size` 契约一致。
     pub base_font_size_px: f32,
+    pub ui_font_size_px: f32,
+    pub(crate) ui_font_family: Option<String>,
+    pub(crate) ui_font_size_override: Option<f32>,
     /// 字体 cell 的物理像素偏移；旧壳 Windows 默认 y=4，必须在设备像素
     /// 域参与取整，才能在 125%/150% DPI 下保持同一行数。
     pub font_offset_x: f32,
@@ -244,6 +248,9 @@ impl Settings {
             font_bold_italic_family: secondary(&raw.font.bold_italic),
             font_size_px,
             base_font_size_px,
+            ui_font_size_px: runtime.ui_font_size_px.unwrap_or(base_font_size_px),
+            ui_font_family: runtime.ui_font_family.clone(),
+            ui_font_size_override: runtime.ui_font_size_px,
             font_offset_x: f32::from(offset.x),
             font_offset_y: f32::from(offset.y),
             theme_line_height,
@@ -280,6 +287,24 @@ impl Settings {
             cjk_bold_regular: runtime.cjk_bold_regular,
             shell_id: runtime.shell.clone(),
             font_family: normal_family,
+            font_cjk: Some({
+                let family = runtime
+                    .font_family_cjk
+                    .as_deref()
+                    .unwrap_or(crate::font_install::REQUIRED_FONT_FAMILY);
+                use gpui::{FontStyle, FontWeight};
+                [
+                    (FontWeight::NORMAL, FontStyle::Normal),
+                    (FontWeight::BOLD, FontStyle::Normal),
+                    (FontWeight::NORMAL, FontStyle::Italic),
+                    (FontWeight::BOLD, FontStyle::Italic),
+                ]
+                .map(|(weight, style)| gpui::Font {
+                    weight,
+                    style,
+                    ..crate::font_install::gpui_font_with_fallbacks(family)
+                })
+            }),
             load_notice,
             // 这里是唯一能正确合并「主题自带几何」与「用户显式覆盖」的地方：
             // `theme` 已是 follow_system 折算后的**生效**主题，runtime 是同一次
@@ -390,7 +415,9 @@ fn apply_resolved_theme(palette: &mut Palette, resolved: &crate::gpui_shell::the
         if let Some(selection) = exact.selection_background {
             palette.selection = rgba8(selection);
         }
-        palette.selection_foreground = exact.selection_foreground.map(rgba8);
+        if let Some(selection_foreground) = exact.selection_foreground {
+            palette.selection_foreground = Some(rgba8(selection_foreground));
+        }
         return;
     }
     if term.is_light {
@@ -686,6 +713,7 @@ fn build_palette(raw: &RawColors) -> Palette {
         // 用户显式选区色保持主应用的不透明语义。
         palette.selection = selection;
     }
+    palette.selection_foreground = raw.selection.foreground.as_deref().and_then(parse_rgb);
 
     let ansi8 = |group: &RawAnsi8| -> [Option<gpui::Rgba>; 8] {
         [
@@ -739,8 +767,9 @@ fn build_palette(raw: &RawColors) -> Palette {
 #[cfg(test)]
 mod tests {
     use super::{
-        Settings, apply_resolved_theme, apply_theme, effective_font_sizes,
-        effective_theme_line_height, resolve_ui_language, rgba8, runtime_background,
+        RawColors, Settings, apply_resolved_theme, apply_theme, build_palette,
+        effective_font_sizes, effective_theme_line_height, resolve_ui_language, rgba8,
+        runtime_background,
     };
     use crate::display::UiLanguage;
     use crate::gpui_shell::terminal::colors::Palette;
@@ -789,6 +818,68 @@ mod tests {
         assert_eq!(palette.ansi[0], rgba8([4, 5, 6]));
         assert_eq!(palette.cursor, rgba8([7, 8, 9]));
         assert_eq!(palette.selection_foreground, None);
+    }
+
+    #[test]
+    fn explicit_selection_colors_are_loaded_together() {
+        let raw: RawColors = toml::from_str(
+            r##"
+            [selection]
+            foreground = "#102030"
+            background = "0xe5e9f0"
+            "##,
+        )
+        .unwrap();
+        let palette = build_palette(&raw);
+
+        assert_eq!(palette.selection_foreground, Some(rgba8([0x10, 0x20, 0x30])));
+        assert_eq!(palette.selection, rgba8([0xe5, 0xe9, 0xf0]));
+    }
+
+    #[test]
+    fn invalid_or_relative_selection_foreground_keeps_default() {
+        for foreground in ["#invalid", "#fff", "CellForeground", "CellBackground"] {
+            let raw: RawColors = toml::from_str(&format!(
+                "[selection]\nforeground = {foreground:?}\nbackground = \"#e5e9f0\"\n"
+            ))
+            .unwrap();
+            let palette = build_palette(&raw);
+
+            assert_eq!(palette.selection_foreground, None, "{foreground}");
+            assert_eq!(palette.selection, rgba8([0xe5, 0xe9, 0xf0]));
+        }
+    }
+
+    #[test]
+    fn theme_without_selection_colors_preserves_user_foreground() {
+        let foreground = rgba8([0x10, 0x20, 0x30]);
+        let background = rgba8([0xe5, 0xe9, 0xf0]);
+        for theme in [ThemeName::Nebula, ThemeName::Paper] {
+            let mut palette = Palette {
+                selection_foreground: Some(foreground),
+                selection: background,
+                ..Palette::default()
+            };
+
+            apply_theme(&mut palette, theme);
+
+            assert_eq!(palette.selection_foreground, Some(foreground));
+            assert_eq!(palette.selection, background);
+        }
+    }
+
+    #[test]
+    fn theme_with_selection_colors_keeps_its_existing_precedence() {
+        let mut palette = Palette {
+            selection_foreground: Some(rgba8([1, 2, 3])),
+            selection: rgba8([4, 5, 6]),
+            ..Palette::default()
+        };
+
+        apply_theme(&mut palette, ThemeName::Nord);
+
+        assert_eq!(palette.selection_foreground, Some(rgba8([0x2e, 0x34, 0x40])));
+        assert_eq!(palette.selection, rgba8([0xe5, 0xe9, 0xf0]));
     }
 
     #[test]

@@ -773,7 +773,7 @@ pub struct NebulaWorkspace {
     _command_manager_subscription: Subscription,
     /// Git/SVN 提交信息输入（GPUI 输入组件）；提交动作直达共享模型
     /// `vcs_commit_message`，不经旧壳的内部输入状态机。
-    git_commit_input: Entity<InputState>,
+    git_commit_input: vcs_panel::CommitInput,
     /// Git 树"丢弃改动"的二次确认（路径）；任何其他 VCS 操作都清掉它。
     vcs_discard_confirm: Option<String>,
     /// 命令面板的行覆盖：`None` = 常规命令目录，`Some` = 某个专用列表
@@ -953,7 +953,7 @@ impl NebulaWorkspace {
                 workspace_ui_language().pick("搜索文件和文件夹…", "Search files and folders..."),
             )
         });
-        let git_commit_input = cx.new(|cx| InputState::new(window, cx).placeholder("提交信息…"));
+        let git_commit_input = vcs_panel::CommitInput::new(window, cx);
         let command_palette_subscription = cx.subscribe_in(
             &command_palette_input,
             window,
@@ -1109,7 +1109,7 @@ impl NebulaWorkspace {
                 if !runtime.restore_session
                     || !this.try_restore_session(runtime.resume_ai, window, cx)
                 {
-                    this.add_terminal(window, cx);
+                    this.add_terminal_at(std::env::current_dir().ok(), None, window, cx);
                 }
             },
             windowing::WorkspaceStartup::NewTerminal { cwd } => {
@@ -1908,24 +1908,31 @@ impl NebulaWorkspace {
         let mut panes: Vec<TerminalPane> = Vec::new();
         for (index, leaf) in layout.leaves().into_iter().enumerate() {
             let LayoutSession::Pane { cwd, agent } = leaf else { continue };
-            let launch = if index == 0 {
-                Self::terminal_launch_from_session(&saved_launch, crate::session::valid_dir(cwd))
-            } else {
-                // 共享 v4 与旧壳只把 Tab 的 launch 赋给首 Pane；其它叶子没有
-                // 独立启动身份，保持既有 Default 恢复语义。
-                crate::gpui_shell::terminal::view::TerminalLaunch::Local {
-                    cwd: crate::session::valid_dir(cwd),
-                    shell: None,
-                    shell_name: None,
-                }
-            };
+            let mut launch_session =
+                if index == 0 { saved_launch.clone() } else { Self::configured_local_launch(cx) };
+            if matches!(launch_session, LaunchSession::Default) {
+                launch_session = Self::configured_local_launch(cx);
+            }
+            let guest_directory =
+                tab_duplication::inherit_guest_directory(&mut launch_session, cwd);
+            let local_cwd = if guest_directory { None } else { crate::session::valid_dir(cwd) };
+            let launch = Self::terminal_launch_from_session(&launch_session, local_cwd);
             let command = restored_agent_command(resume_ai, agent.as_ref());
+            let resuming = command.is_some();
             let pane = self.new_pane(grid, launch, command, window, cx);
+            // Display and persist the restored location while the guest shell
+            // starts; subsequent OSC reports remain authoritative.
+            if guest_directory {
+                pane.view.update(cx, |view, cx| {
+                    view.seed_restored_cwd(cwd.clone(), cx);
+                });
+            }
             // 冷恢复已经知道这段对话的 hook 身份：种回 view，右键「分叉
             // AI 会话」不必再等下一条带 session_id 的 hook。
-            if let Some((source, session_id)) = agent
-                .as_ref()
-                .and_then(|agent| Some((agent.source.clone(), agent.session_id.clone()?)))
+            if resuming
+                && let Some((source, session_id)) = agent
+                    .as_ref()
+                    .and_then(|agent| Some((agent.source.clone(), agent.session_id.clone()?)))
             {
                 pane.view.update(cx, |view, cx| view.seed_ai_session(source, session_id, cx));
             }
@@ -1975,22 +1982,7 @@ impl NebulaWorkspace {
                     return (String::new(), None);
                 };
                 let view = pane.view.read(cx);
-                let agent = view
-                    .ai_session
-                    .as_ref()
-                    .map(|identity| AgentSession {
-                        source: identity.source.clone(),
-                        session_id: Some(identity.session_id.clone()),
-                    })
-                    .or_else(|| {
-                        view.running_program
-                            .as_deref()
-                            .filter(|program| crate::ai_agents::AgentKind::parse(program).is_some())
-                            .map(|program| AgentSession {
-                                source: program.to_owned(),
-                                session_id: None,
-                            })
-                    });
+                let agent = view.session_agent();
                 (view.cwd.clone(), agent)
             };
             let layout = crate::gpui_shell::session_restore::layout_from_tree(tree, &leaf_data);
@@ -2402,12 +2394,12 @@ impl NebulaWorkspace {
     /// 提交按钮/Enter：读 GPUI 输入框的消息直达共享模型（git 提交暂存区、
     /// svn 提交工作副本），成功入队后清空输入。
     fn submit_vcs_commit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let message = self.git_commit_input.read(cx).value().trim().to_string();
+        let message = self.git_commit_input.input.read(cx).value().trim().to_string();
         if message.is_empty() {
             return;
         }
         self.side_panel.vcs_commit_message(&message);
-        self.git_commit_input.update(cx, |input, cx| input.set_value("", window, cx));
+        self.git_commit_input.input.update(cx, |input, cx| input.set_value("", window, cx));
         cx.notify();
     }
 
@@ -3012,7 +3004,7 @@ impl NebulaWorkspace {
             // 页签——用户想看的永远是"当前这台机器上的文件"。
             crate::display::side_panel::PanelView::Files if remote => self.render_remote_files(cx),
             crate::display::side_panel::PanelView::Files => self.render_file_tree(cx),
-            crate::display::side_panel::PanelView::Git => self.render_git_tree(cx),
+            crate::display::side_panel::PanelView::Git => self.render_git_tree(window, cx),
         };
         div()
             .h_full()

@@ -458,6 +458,40 @@ impl SettingsPane {
             },
         ));
 
+        let font_family_cjk_input = cx.new(|cx| {
+            InputState::new(window, cx).default_value(
+                runtime
+                    .font_family_cjk
+                    .clone()
+                    .unwrap_or_else(|| crate::font_install::REQUIRED_FONT_FAMILY.to_owned()),
+            )
+        });
+        subscriptions.push(cx.subscribe_in(
+            &font_family_cjk_input,
+            window,
+            |this: &mut Self, input, event: &InputEvent, window, cx| {
+                if matches!(event, InputEvent::PressEnter { .. } | InputEvent::Blur) {
+                    let raw = input.read(cx).value();
+                    let normalized = crate::font_install::normalize_font_family_chain(&raw);
+                    let value = if normalized.is_empty() {
+                        crate::font_install::REQUIRED_FONT_FAMILY.to_owned()
+                    } else {
+                        normalized
+                    };
+                    let current = this
+                        .runtime
+                        .font_family_cjk
+                        .as_deref()
+                        .unwrap_or(crate::font_install::REQUIRED_FONT_FAMILY);
+                    let changed = current != value;
+                    input.update(cx, |input, cx| input.set_value(value.clone(), window, cx));
+                    if changed {
+                        this.persist(&[("font_family_cjk", value)], cx);
+                    }
+                }
+            },
+        ));
+
         let bg_picker_hsv = {
             let term = crate::gpui_shell::theme::resolved_palette(cx).term_bg;
             let rgb = runtime.background.unwrap_or([term.r, term.g, term.b]);
@@ -503,6 +537,7 @@ impl SettingsPane {
         Self {
             focus_handle: cx.focus_handle(),
             runtime,
+            launch_at_login: crate::platform::startup::launch_at_login(),
             active_section: 1,
             appearance_picker: None,
             appearance_picker_seq: 0,
@@ -574,6 +609,7 @@ impl SettingsPane {
             font_system: None,
             font_imported: Vec::new(),
             font_family_input,
+            font_family_cjk_input,
             font_picker_trigger_bounds: None,
             backup_selection: crate::encrypted_backup::BackupSelection::default(),
             backup_pass_input: cx.new(|cx| {
