@@ -74,8 +74,10 @@ class PebrelBrandingTests(unittest.TestCase):
                 self.assertIn("Stale binary:", source)
         installer = self.source("scripts/installer.iss")
         self.assertIn('#define PackageBrand "Pebrel"', installer)
-        self.assertIn("OutputBaseFilename={#PackageBrand}-v{#AppVersion}-windows-x64-setup", installer)
+        self.assertIn("OutputBaseFilename={#PackageBrand}-v{#AssetVersion}-windows-x64-setup", installer)
+        self.assertIn("#define AssetVersion AppVersion", installer)
         builder = self.source("scripts/build-installer.ps1")
+        self.assertIn('"/DAssetVersion=$assetVersion"', builder)
         self.assertIn('"/DPackageBrand=$PackageBrand"', builder)
 
     def test_update_asset_validation_shares_current_and_legacy_names(self):

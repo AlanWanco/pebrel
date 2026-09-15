@@ -188,6 +188,8 @@ def expected_asset_names(version: str, preview_id: str) -> tuple[str, ...]:
         f"Pebrel-v{release}-linux-x86_64.tar.gz",
         f"Pebrel-v{release}-macos-aarch64.dmg",
         f"Pebrel-v{release}-macos-x86_64.dmg",
+        f"Pebrel-v{release}-windows-x64.zip",
+        f"Pebrel-v{release}-windows-x64-setup.exe",
     )
 
 
@@ -200,6 +202,10 @@ def _check_magic(path: Path) -> None:
         else:
             trailer = b""
 
+    if path.suffix == ".exe" and not header.startswith(b"MZ"):
+        raise ManifestError(f"Windows installer has no PE header: {path.name}")
+    if path.suffix == ".zip" and not header.startswith((b"PK\x03\x04", b"PK\x05\x06")):
+        raise ManifestError(f"Windows ZIP has an invalid ZIP header: {path.name}")
     if path.name.endswith(".AppImage") and not header.startswith(b"\x7fELF"):
         raise ManifestError(f"AppImage is not an ELF executable: {path.name}")
     if path.suffix == ".deb" and header != b"!<arch>\n":
@@ -291,6 +297,7 @@ def preview_notes(
 
 - Added automated Preview packages for Linux x86_64: AppImage, Debian package, and portable tar archive.
 - Added native macOS Preview disk images for Apple Silicon and Intel.
+- Added Windows x64 Preview packages: a portable ZIP and an installer.
 
 ### Verification
 
@@ -311,6 +318,7 @@ def preview_notes(
 
 - 新增由 CI 自动构建的 Linux x86_64 Preview 包：AppImage、Debian 安装包和便携 tar 归档。
 - 新增 Apple Silicon 和 Intel 两种原生 macOS Preview 磁盘映像。
+- 新增 Windows x64 Preview 包：ZIP 便携包和安装器。
 
 ### 验证
 

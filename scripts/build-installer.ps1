@@ -9,6 +9,9 @@ param(
     [ValidateSet('NebulaTerminal', 'Pebrel')]
     [string] $PackageBrand = 'Pebrel',
 
+    [ValidatePattern('^[0-9A-Za-z][0-9A-Za-z.-]{0,31}$')]
+    [string] $PreviewId,
+
     [switch] $SkipBuild,
     # 与 -SkipBuild 联用：跳过「exe 必须比源码新」的陈旧检查。仅用于脚本
     # 自测；发布安装包一律走全新构建。
@@ -43,6 +46,10 @@ if ($Version -notmatch '^(?<major>[0-9]+)\.(?<minor>[0-9]+)\.(?<patch>[0-9]+)') 
     throw "Version must begin with three numeric components: $Version"
 }
 $numericVersion = "$($Matches.major).$($Matches.minor).$($Matches.patch).0"
+$assetVersion = $Version
+if (-not [string]::IsNullOrWhiteSpace($PreviewId)) {
+    $assetVersion = "${Version}-preview.${PreviewId}"
+}
 
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
     $OutputDirectory = Join-Path $repo 'dist'
@@ -57,7 +64,7 @@ if ([string]::IsNullOrWhiteSpace($TargetDirectory)) {
 }
 $cargoTargetRoot = [System.IO.Path]::GetFullPath($TargetDirectory)
 $targetRoot = Join-Path $cargoTargetRoot $Configuration
-$setupPath = Join-Path $outputRoot "$PackageBrand-v$Version-windows-x64-setup.exe"
+$setupPath = Join-Path $outputRoot "$PackageBrand-v$assetVersion-windows-x64-setup.exe"
 
 $requiredFiles = @(
     (Join-Path $targetRoot 'pebrel.exe'),
@@ -165,6 +172,7 @@ if ($ValidateOnly) {
     [PSCustomObject]@{
         InstallerScript = $installerScript
         Version = $Version
+        AssetVersion = $assetVersion
         Configuration = $Configuration
         Files = $requiredFiles.Count
     } | Format-List
@@ -223,7 +231,7 @@ if (-not $translationValid) {
 
 Push-Location $PSScriptRoot
 try {
-    & $InnoCompiler "/DAppVersion=$Version" "/DNumericVersion=$numericVersion" "/DConfiguration=$Configuration" "/DPackageBrand=$PackageBrand" "/DBuildRoot=$targetRoot" "/O$outputRoot" $installerScript
+    & $InnoCompiler "/DAppVersion=$Version" "/DAssetVersion=$assetVersion" "/DNumericVersion=$numericVersion" "/DConfiguration=$Configuration" "/DPackageBrand=$PackageBrand" "/DBuildRoot=$targetRoot" "/O$outputRoot" $installerScript
     if ($LASTEXITCODE -ne 0) {
         throw "Inno Setup compilation failed with exit code $LASTEXITCODE"
     }

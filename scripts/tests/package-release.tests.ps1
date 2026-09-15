@@ -99,6 +99,12 @@ try {
         throw "ZIP root must contain the English and Chinese READMEs and pebrel.exe"
     }
 
+    & $packageScript -Version 'unreleased' -PreviewId '42' -SkipBuild -AllowStale -OutputDirectory $resolvedOutput -TargetDirectory $TargetDirectory
+    $previewPath = Join-Path $resolvedOutput 'Pebrel-vunreleased-preview.42-windows-x64.zip'
+    if (-not (Test-Path -LiteralPath $previewPath -PathType Leaf)) {
+        throw "Packaging script did not create $previewPath"
+    }
+
     & $packageScript -Version 'unreleased' -PackageBrand NebulaTerminal -SkipBuild -AllowStale -OutputDirectory $resolvedOutput -TargetDirectory $TargetDirectory
     $legacyPath = Join-Path $resolvedOutput 'NebulaTerminal-vunreleased-windows-x64.zip'
     $legacyArchive = [System.IO.Compression.ZipFile]::OpenRead($legacyPath)

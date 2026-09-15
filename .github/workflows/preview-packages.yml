@@ -477,15 +477,30 @@ jobs:
           retention-days: 14
 
   windows:
-    name: Windows same-commit conformance baseline
+    name: Windows x64 Preview package and conformance
     needs: prepare
     runs-on: windows-2022
     timeout-minutes: 120
+    env:
+      PACKAGE_VERSION: ${{ needs.prepare.outputs.version }}
+      PREVIEW_ID: ${{ needs.prepare.outputs.preview_id }}
+      ASSET_VERSION: ${{ needs.prepare.outputs.asset_version }}
     steps:
       - uses: actions/checkout@v4
+      - name: Retain runtime preparation tool for the selected source
+        shell: pwsh
+        run: |
+          Copy-Item scripts/prepare-windows-runtime.ps1 "$env:RUNNER_TEMP/prepare-windows-runtime.ps1"
+          New-Item -ItemType Directory -Path "$env:RUNNER_TEMP/runtime-tests" -Force | Out-Null
+          Copy-Item scripts/tests/windows-runtime.tests.ps1 "$env:RUNNER_TEMP/runtime-tests/windows-runtime.tests.ps1"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+      - name: Prepare pinned Windows console runtime
+        shell: pwsh
+        run: |
+          & "$env:RUNNER_TEMP/prepare-windows-runtime.ps1" -Destination assets/windows/conhost
+          & "$env:RUNNER_TEMP/runtime-tests/windows-runtime.tests.ps1" -ArchivePath (Join-Path ([IO.Path]::GetTempPath()) 'pebrel-conpty-source-v1.5.0.zip')
       - name: Test native harness process ownership and completion markers
         run: >-
           python -m unittest
@@ -501,14 +516,40 @@ jobs:
         run: cargo test --locked --workspace
       - name: Test SSH confirmation and password dialogs
         run: cargo test --locked -p nebula --features gpui-test-support dialog
-      - name: Build GPUI comparison binary
-        run: cargo build --locked --release -p nebula --bin pebrel --features gpui-shell
+      - name: Build GPUI release binary
+        shell: pwsh
+        run: |
+          cargo build --locked --release -p nebula_hook --bin pebrel-hook
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo build --locked --release -p nebula --bin pebrel --features gpui-shell
+          exit $LASTEXITCODE
+      - name: Test Windows packaging scripts
+        shell: pwsh
+        run: |
+          ./scripts/tests/installer.tests.ps1 -TargetDirectory target
+          ./scripts/tests/package-release.tests.ps1 -TargetDirectory target
+      - name: Package Windows Preview ZIP and installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          ./scripts/package-release.ps1 -Version $env:PACKAGE_VERSION -PreviewId $env:PREVIEW_ID -PackageBrand Pebrel -OutputDirectory dist -TargetDirectory target -Force
+          ./scripts/build-installer.ps1 -Version $env:PACKAGE_VERSION -PreviewId $env:PREVIEW_ID -PackageBrand Pebrel -OutputDirectory dist -TargetDirectory target -Force
       - name: Run Windows conformance
         env:
           NEBULA_RESIZE_TRACE: "1"
         run: >-
           python scripts/conformance/run.py --app target/release/pebrel.exe
           --platform windows-x86_64 --output dist/conformance/windows-report.json
+      - name: Upload Windows Preview packages
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-package-windows-x86_64
+          path: |
+            dist/Pebrel-v${{ needs.prepare.outputs.asset_version }}-windows-x64.zip
+            dist/Pebrel-v${{ needs.prepare.outputs.asset_version }}-windows-x64-setup.exe
+          if-no-files-found: error
+          retention-days: 14
       - name: Upload Windows conformance evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -607,6 +648,8 @@ jobs:
             release-dist/*.deb \
             release-dist/*.dmg \
             release-dist/*.tar.gz \
+            release-dist/*-windows-x64.zip \
+            release-dist/*-windows-x64-setup.exe \
             release-dist/SHA256SUMS \
             --target "$GITHUB_SHA" \
             --title "$title" \

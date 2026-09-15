@@ -34,7 +34,8 @@ $requiredPatterns = [ordered]@{
     'Pebrel display name' = 'AppName=Pebrel'
     'compatible installer identity' = 'AppId=\{\{61022144-7D0A-4E54-94F2-C329A8F58656\}'
     'Pebrel default asset name' = '#define PackageBrand "Pebrel"'
-    'explicit package brand' = 'OutputBaseFilename=\{#PackageBrand\}-v\{#AppVersion\}-windows-x64-setup'
+    'explicit package brand' = 'OutputBaseFilename=\{#PackageBrand\}-v\{#AssetVersion\}-windows-x64-setup'
+    'stable asset version fallback' = '#define AssetVersion AppVersion'
     'localized Chinese context menu label' = 'chinesesimplified\.OpenInPebrel=\S.+'
     'directory background context menu' = 'Software\\Classes\\Directory\\Background\\shell\\Pebrel'
     'selected directory context menu' = 'Software\\Classes\\Directory\\shell\\Pebrel'
@@ -97,11 +98,14 @@ if ($migration -match 'DelTree\(|TerminateProcess\(|taskkill') {
     throw 'Migration must not recursively delete user data or forcefully terminate applications.'
 }
 
-$validationArguments = @{ SkipBuild = $true; AllowStale = $true; ValidateOnly = $true }
+$validationArguments = @{ SkipBuild = $true; AllowStale = $true; ValidateOnly = $true; PreviewId = '42' }
 if (-not [string]::IsNullOrWhiteSpace($TargetDirectory)) {
     $validationArguments.TargetDirectory = $TargetDirectory
 }
-& $builderPath @validationArguments
+$validationOutput = & $builderPath @validationArguments | Out-String
+if ($validationOutput -notmatch '(?m)^AssetVersion\s*:\s*.+-preview\.42\s*$') {
+    throw 'build-installer.ps1 did not derive the Preview installer asset version.'
+}
 
 $builder = Get-Content -LiteralPath $builderPath -Raw -Encoding UTF8
 if ($builder -notmatch 'Stale binary') {

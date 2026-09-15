@@ -9,6 +9,9 @@ param(
     [ValidateSet('NebulaTerminal', 'Pebrel')]
     [string] $PackageBrand = 'Pebrel',
 
+    [ValidatePattern('^[0-9A-Za-z][0-9A-Za-z.-]{0,31}$')]
+    [string] $PreviewId,
+
     [switch] $SkipBuild,
     # 与 -SkipBuild 联用：跳过「exe 必须比源码新」的陈旧检查。仅用于脚本
     # 自测；发布产物一律走全新构建。
@@ -44,9 +47,13 @@ if ([string]::IsNullOrWhiteSpace($TargetDirectory)) {
 $cargoTargetRoot = [System.IO.Path]::GetFullPath($TargetDirectory)
 $outputRoot = [System.IO.Path]::GetFullPath($OutputDirectory)
 $targetRoot = Join-Path $cargoTargetRoot $Configuration
-$stage = Join-Path $outputRoot ".stage-$Version-$PID"
-$zipPath = Join-Path $outputRoot "$PackageBrand-v$Version-windows-x64.zip"
-$temporaryZip = Join-Path $outputRoot ".$PackageBrand-v$Version-windows-x64-$PID.tmp.zip"
+$assetVersion = $Version
+if (-not [string]::IsNullOrWhiteSpace($PreviewId)) {
+    $assetVersion = "${Version}-preview.${PreviewId}"
+}
+$stage = Join-Path $outputRoot ".stage-$assetVersion-$PID"
+$zipPath = Join-Path $outputRoot "$PackageBrand-v$assetVersion-windows-x64.zip"
+$temporaryZip = Join-Path $outputRoot ".$PackageBrand-v$assetVersion-windows-x64-$PID.tmp.zip"
 
 $manifest = [ordered]@{
     'pebrel.exe'                                     = Join-Path $targetRoot 'pebrel.exe'

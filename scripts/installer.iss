@@ -2,6 +2,10 @@
   #define AppVersion "1.7.0"
 #endif
 
+#ifndef AssetVersion
+  #define AssetVersion AppVersion
+#endif
+
 #ifndef NumericVersion
   #define NumericVersion "1.7.0.0"
 #endif
@@ -50,7 +54,7 @@ LicenseFile={#RepoRoot}\LICENSE
 SetupIconFile={#RepoRoot}\nebula_app\windows\nebula.ico
 UninstallDisplayIcon={app}\pebrel.exe
 OutputDir={#RepoRoot}\dist
-OutputBaseFilename={#PackageBrand}-v{#AppVersion}-windows-x64-setup
+OutputBaseFilename={#PackageBrand}-v{#AssetVersion}-windows-x64-setup
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern

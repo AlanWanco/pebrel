@@ -30,6 +30,10 @@ def write_fake_asset(path: Path) -> None:
         header = b"!<arch>\n"
     elif path.name.endswith(".tar.gz"):
         header = b"\x1f\x8b\x08\x00\x00\x00\x00\x00"
+    elif path.suffix == ".zip":
+        header = b"PK\x03\x04\x00\x00\x00\x00"
+    elif path.suffix == ".exe":
+        header = b"MZ\x00\x00\x00\x00\x00\x00"
     else:
         header = b"\x00" * 8
 
@@ -132,7 +136,7 @@ class PreviewReleaseTests(unittest.TestCase):
             for name in expected_asset_names("1.5.0", "42"):
                 write_fake_asset(directory / name)
             assets = validate_assets(directory, "1.5.0", "42")
-            self.assertEqual(len(assets), 5)
+            self.assertEqual(len(assets), 7)
 
     def test_unexpected_asset_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as raw_directory:
@@ -153,6 +157,22 @@ class PreviewReleaseTests(unittest.TestCase):
             with self.assertRaisesRegex(ManifestError, "not an ELF"):
                 validate_assets(directory, "1.5.0", "42")
 
+    def test_windows_package_magic_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_directory:
+            directory = Path(raw_directory)
+            names = expected_asset_names("1.5.0", "42")
+            for name in names:
+                write_fake_asset(directory / name)
+            zip_name = next(name for name in names if name.endswith(".zip"))
+            (directory / zip_name).write_bytes(b"not a zip" + b"\0" * MIN_ASSET_SIZE)
+            with self.assertRaisesRegex(ManifestError, "ZIP header"):
+                validate_assets(directory, "1.5.0", "42")
+            write_fake_asset(directory / zip_name)
+            exe_name = next(name for name in names if name.endswith(".exe"))
+            (directory / exe_name).write_bytes(b"not an exe" + b"\0" * MIN_ASSET_SIZE)
+            with self.assertRaisesRegex(ManifestError, "PE header"):
+                validate_assets(directory, "1.5.0", "42")
+
     def test_notes_are_bilingual_and_disclose_preview_limits(self) -> None:
         notes = preview_notes(
             "1.5.0",
@@ -164,8 +184,23 @@ class PreviewReleaseTests(unittest.TestCase):
         self.assertIn("## English", notes)
         self.assertIn("## 中文", notes)
         self.assertIn("ad-hoc", notes)
+        self.assertIn("Windows x64 Preview packages", notes)
+        self.assertIn("Windows x64 Preview 包", notes)
         self.assertIn("不是稳定版本", notes)
         self.assertIn("deadbeef  package", notes)
+
+    def test_preview_workflow_builds_and_publishes_windows_packages(self) -> None:
+        workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/preview-packages.yml").read_text(encoding="utf-8")
+        for required in (
+            "-PreviewId $env:PREVIEW_ID",
+            "preview-package-windows-x86_64",
+            "Pebrel-v${{ needs.prepare.outputs.asset_version }}-windows-x64.zip",
+            "Pebrel-v${{ needs.prepare.outputs.asset_version }}-windows-x64-setup.exe",
+            "release-dist/*-windows-x64.zip",
+            "release-dist/*-windows-x64-setup.exe",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, workflow)
 
     def test_signed_notes_never_claim_adhoc(self) -> None:
         notes = preview_notes("1.5.0", "42", "Kuddev/nebula", "a" * 40, "hash  file", "developer-id")
