@@ -14,6 +14,7 @@ use std::time::Duration;
 
 use sha2::{Digest as _, Sha256};
 
+use crate::i18n::{Message, UiLanguage};
 use crate::update_check::UpdateAsset;
 
 const RELEASE_DOWNLOAD_PREFIX: &str = "https://github.com/Kuddev/pebrel/releases/download/";
@@ -75,8 +76,8 @@ pub(crate) fn begin(asset: &UpdateAsset) -> Result<bool, String> {
 }
 
 /// 在后台执行器线程调用；进度直接写入进程内会话，UI 以低频轮询刷新。
-pub(crate) fn run(asset: UpdateAsset) {
-    let outcome = download_and_verify(&asset);
+pub(crate) fn run(asset: UpdateAsset, language: UiLanguage) {
+    let outcome = download_and_verify(&asset, language);
     let mut current = session();
     let Some(current) = current.as_mut().filter(|current| current.asset == asset) else {
         return;
@@ -123,7 +124,10 @@ pub(crate) fn launch_ready(asset: &UpdateAsset) -> Result<(), String> {
     }
 }
 
-fn download_and_verify(asset: &UpdateAsset) -> Result<(PathBuf, u64), String> {
+fn download_and_verify(
+    asset: &UpdateAsset,
+    language: UiLanguage,
+) -> Result<(PathBuf, u64), String> {
     validate_asset(asset)?;
     let (partial_path, final_path) = download_paths(asset)?;
     let _download_lock = crate::atomic_file::try_lifetime_lock(&final_path)
@@ -136,7 +140,7 @@ fn download_and_verify(asset: &UpdateAsset) -> Result<(PathBuf, u64), String> {
         return Ok((final_path, bytes));
     }
 
-    let result = download_to_partial(asset, &partial_path).and_then(|bytes| {
+    let result = download_to_partial(asset, &partial_path, language).and_then(|bytes| {
         crate::atomic_file::replace(&partial_path, &final_path)
             .map_err(|error| format!("无法保存已校验的更新安装包：{error}"))?;
         Ok((final_path.clone(), bytes))
@@ -147,18 +151,28 @@ fn download_and_verify(asset: &UpdateAsset) -> Result<(PathBuf, u64), String> {
     result
 }
 
-fn download_to_partial(asset: &UpdateAsset, partial_path: &Path) -> Result<u64, String> {
-    let agent = ureq::config::Config::builder()
-        .timeout_global(Some(Duration::from_secs(15 * 60)))
-        .build()
-        .new_agent();
+fn download_to_partial(
+    asset: &UpdateAsset,
+    partial_path: &Path,
+    language: UiLanguage,
+) -> Result<u64, String> {
+    let agent = crate::update_proxy::agent(&asset.download_url, Duration::from_secs(15 * 60));
+    download_with_agent(asset, partial_path, language, &agent)
+}
+
+fn download_with_agent(
+    asset: &UpdateAsset,
+    partial_path: &Path,
+    language: UiLanguage,
+    agent: &ureq::Agent,
+) -> Result<u64, String> {
     let mut response = agent
         .get(&asset.download_url)
         .header("User-Agent", "pebrel-updater")
         .header("Accept", "application/octet-stream")
         .header("Accept-Encoding", "identity")
         .call()
-        .map_err(|error| format!("下载安装包失败：{error}"))?;
+        .map_err(|error| network_error_text(error, language))?;
 
     let response_size = response.body().content_length();
     if let (Some(expected), Some(actual)) = (asset.size, response_size)
@@ -183,7 +197,8 @@ fn download_to_partial(asset: &UpdateAsset, partial_path: &Path) -> Result<u64, 
     let mut pe_header = Vec::with_capacity(2);
     let mut buffer = vec![0_u8; DOWNLOAD_CHUNK_BYTES];
     loop {
-        let read = reader.read(&mut buffer).map_err(|error| format!("读取安装包失败：{error}"))?;
+        let read =
+            reader.read(&mut buffer).map_err(|error| network_error_text(error.into(), language))?;
         if read == 0 {
             break;
         }
@@ -205,6 +220,37 @@ fn download_to_partial(asset: &UpdateAsset, partial_path: &Path) -> Result<u64, 
 
     verify_download(downloaded, &pe_header, hasher.finalize(), asset)?;
     Ok(downloaded)
+}
+
+/// 网络错误用稳定类别解释；不把代理 URL、认证信息或 CDN 查询串拼进 UI。
+fn network_error_text(error: ureq::Error, language: UiLanguage) -> String {
+    use std::io::ErrorKind;
+    use ureq::Error;
+
+    let message = match error {
+        Error::HostNotFound => Message::UpdateDownloadDns,
+        Error::Tls(_) | Error::Rustls(_) | Error::TlsRequired => Message::UpdateDownloadTls,
+        Error::Timeout(_) => Message::UpdateDownloadTimeout,
+        Error::Io(ref io) if io.kind() == ErrorKind::ConnectionRefused => {
+            Message::UpdateDownloadRefused
+        },
+        Error::Io(ref io) if io.kind() == ErrorKind::TimedOut => Message::UpdateDownloadTimeout,
+        Error::Io(ref io)
+            if matches!(
+                io.kind(),
+                ErrorKind::ConnectionReset | ErrorKind::UnexpectedEof | ErrorKind::BrokenPipe
+            ) =>
+        {
+            Message::UpdateDownloadInterrupted
+        },
+        Error::ConnectProxyFailed(_) | Error::InvalidProxyUrl => Message::UpdateDownloadProxy,
+        Error::StatusCode(status) => {
+            return language
+                .format(Message::UpdateDownloadHttp, &[("status", &status.to_string())]);
+        },
+        _ => Message::UpdateDownloadNetwork,
+    };
+    language.text(message).to_owned()
 }
 
 fn verify_file(path: &Path, asset: &UpdateAsset) -> Result<u64, String> {
@@ -316,6 +362,131 @@ mod tests {
         LEGACY_RELEASE_DOWNLOAD_PREFIX, MAX_INSTALLER_BYTES, RELEASE_DOWNLOAD_PREFIX, UpdateAsset,
         validate_windows_asset_contract, verify_download,
     };
+
+    #[test]
+    fn proxy_download_follows_redirect_and_verifies_the_streamed_installer() {
+        use crate::i18n::UiLanguage;
+        use crate::update_proxy::test_support::{Server, response};
+
+        let body = "MZinstaller over a proxy";
+        let server = Server::start(vec![
+            response("302 Found", "Location: http://cdn.update.invalid/installer\r\n", ""),
+            response("200 OK", "", body),
+        ]);
+        let mut asset = branded_asset("Pebrel");
+        asset.download_url = "http://release.update.invalid/asset".into();
+        asset.size = Some(body.len() as u64);
+        asset.sha256 = Some(
+            Sha256::digest(body.as_bytes()).iter().map(|byte| format!("{byte:02x}")).collect(),
+        );
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("installer.part");
+        let bytes = super::download_with_agent(&asset, &path, UiLanguage::EnUs, &server.agent(&[]))
+            .unwrap();
+        assert_eq!(bytes, body.len() as u64);
+        assert_eq!(std::fs::read(&path).unwrap(), body.as_bytes());
+        assert!(super::verify_file(&path, &asset).is_ok());
+        let requests = server.finish();
+        assert!(requests[0].0.starts_with("CONNECT release.update.invalid:80 "));
+        assert!(requests[1].0.starts_with("CONNECT cdn.update.invalid:80 "));
+        assert!(requests[1].1.to_ascii_lowercase().contains("accept-encoding: identity"));
+    }
+
+    #[test]
+    fn redirect_to_an_excluded_host_connects_directly() {
+        use crate::i18n::UiLanguage;
+        use crate::update_proxy::test_support::{Server, response};
+
+        let body = "MZdirect CDN fixture";
+        let origin = Server::start(vec![response("200 OK", "", body)]);
+        let proxy = Server::start(vec![response(
+            "302 Found",
+            &format!("Location: http://{}/installer\r\n", origin.address),
+            "",
+        )]);
+        let mut asset = branded_asset("Pebrel");
+        asset.download_url = "http://release.update.invalid/asset".into();
+        asset.size = Some(body.len() as u64);
+        asset.sha256 = Some(
+            Sha256::digest(body.as_bytes()).iter().map(|byte| format!("{byte:02x}")).collect(),
+        );
+        let directory = tempfile::tempdir().unwrap();
+        super::download_with_agent(
+            &asset,
+            &directory.path().join("installer.part"),
+            UiLanguage::EnUs,
+            &proxy.agent(&["127.0.0.1"]),
+        )
+        .unwrap();
+        assert!(proxy.finish()[0].0.starts_with("CONNECT release.update.invalid:80 "));
+        let requests = origin.finish();
+        assert!(requests[0].0.is_empty());
+        assert!(requests[0].1.starts_with("GET /installer "));
+    }
+
+    #[test]
+    fn proxy_download_rejects_http_errors_truncated_bodies_and_bad_digests() {
+        use crate::i18n::UiLanguage;
+        use crate::update_proxy::test_support::{Server, response};
+
+        for reply in [
+            response("503 Service Unavailable", "", "unavailable"),
+            "HTTP/1.1 200 OK\r\nContent-Length: 42\r\nConnection: close\r\n\r\nMZshort".into(),
+            response("200 OK", "", &format!("MZ{}", "x".repeat(40))),
+        ] {
+            let server = Server::start(vec![reply]);
+            let mut asset = branded_asset("Pebrel");
+            asset.download_url = "http://release.update.invalid/asset".into();
+            let directory = tempfile::tempdir().unwrap();
+            let result = super::download_with_agent(
+                &asset,
+                &directory.path().join("installer.part"),
+                UiLanguage::EnUs,
+                &server.agent(&[]),
+            );
+            assert!(result.is_err());
+            server.finish();
+        }
+    }
+
+    #[test]
+    fn network_failures_have_localized_actionable_messages_without_credentials() {
+        use crate::i18n::{Message, UiLanguage};
+        use std::io::{Error as IoError, ErrorKind};
+        use ureq::Error;
+
+        for (error, message) in [
+            (Error::HostNotFound, Message::UpdateDownloadDns),
+            (Error::Tls("invalid certificate"), Message::UpdateDownloadTls),
+            (
+                Error::Io(IoError::from(ErrorKind::ConnectionRefused)),
+                Message::UpdateDownloadRefused,
+            ),
+            (Error::Io(IoError::from(ErrorKind::TimedOut)), Message::UpdateDownloadTimeout),
+            (
+                Error::from(Error::Timeout(ureq::Timeout::Global).into_io()),
+                Message::UpdateDownloadTimeout,
+            ),
+            (
+                Error::Io(IoError::from(ErrorKind::UnexpectedEof)),
+                Message::UpdateDownloadInterrupted,
+            ),
+            (
+                Error::ConnectProxyFailed("http://user:secret@proxy.local".into()),
+                Message::UpdateDownloadProxy,
+            ),
+            (Error::ConnectionFailed, Message::UpdateDownloadNetwork),
+        ] {
+            let text = super::network_error_text(error, UiLanguage::ZhCn);
+            assert_eq!(text, UiLanguage::ZhCn.text(message));
+            assert!(!text.contains("secret"));
+            assert_ne!(UiLanguage::ZhCn.text(message), UiLanguage::EnUs.text(message));
+        }
+        assert!(
+            super::network_error_text(Error::StatusCode(503), UiLanguage::EnUs)
+                .contains("HTTP 503")
+        );
+    }
 
     fn asset(url: &str, sha256: Option<&str>) -> UpdateAsset {
         UpdateAsset {

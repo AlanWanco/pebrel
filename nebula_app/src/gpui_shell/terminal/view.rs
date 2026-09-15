@@ -12,16 +12,17 @@ mod runtime;
 mod startup_command;
 #[cfg(all(test, feature = "gpui-test-support"))]
 mod startup_tests;
+mod typography;
 
 pub use broadcast::TerminalInput;
 pub use runtime::InputOrigin;
 
 use gpui::{
     App, AppContext as _, Bounds, ClipboardItem, Context, EventEmitter, FocusHandle, Focusable,
-    Font, FontFeatures, FontStyle, FontWeight, Hsla, InteractiveElement as _, IntoElement,
-    KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _,
-    Pixels, Point, Render, ScrollWheelEvent, SharedString, Size, StatefulInteractiveElement as _,
-    Styled as _, TextRun, UTF16Selection, Window, div, point, px,
+    Font, FontStyle, FontWeight, InteractiveElement as _, IntoElement, KeyDownEvent, MouseButton,
+    MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _, Pixels, Point, Render,
+    ScrollWheelEvent, Size, StatefulInteractiveElement as _, Styled as _, UTF16Selection, Window,
+    div, point, px,
 };
 use gpui_component::Sizable as _;
 use nebula_settings::CellWidthModeName;
@@ -46,18 +47,7 @@ use super::{KEY_CONTEXT, TerminalBackTab, TerminalTab};
 use crate::gpui_shell::config::Settings;
 use crate::gpui_shell::prelude::{ActiveTheme as _, Colorize as _};
 use crate::{config::UiConfig, font_install::REQUIRED_FONT_FAMILY};
-
-/// 等宽字体描述。GPUI 的 Windows 后端收到空 feature 列表会在
-/// `apply_font_features` 里提前返回，Maple 的 contextual ligature 因而不会
-/// 生效；显式给出 calt=1 会让该后端一并注册 liga/clig/calt。
-fn mono_font(family: &str, weight: FontWeight, style: FontStyle) -> Font {
-    Font {
-        weight,
-        style,
-        features: FontFeatures(Arc::new(vec![("calt".to_owned(), 1)])),
-        ..crate::font_install::gpui_font_with_fallbacks(family)
-    }
-}
+use typography::mono_font;
 
 /// Overlay 滚动条的拇指宽度、最小高度与命中放宽量（逻辑 px；旧壳
 /// `scrollbar_geometry` 的 4/24/8 设备 px 在同一 DPI 语义下等值）。4px 的细条
@@ -277,6 +267,9 @@ pub struct TerminalView {
     /// contract. They are applied after GPUI has shaped the actual face.
     font_offset_x: f32,
     font_offset_y: f32,
+    /// Optional theme line-height multiplier. `None` preserves the shaped
+    /// font metrics; a value is applied to the logical font size.
+    line_height_multiplier: Option<f32>,
     pub palette: Arc<Palette>,
     /// 把**应用写死的**颜色按当前主题矫正（最低对比度 + 旧主题表面重映射）。
     ///
@@ -466,38 +459,18 @@ impl TerminalView {
     pub const DEFAULT_GRID_COLUMNS: u16 = 116;
     pub const DEFAULT_GRID_LINES: u16 = 30;
 
-    fn effective_cell_width(
-        raw_width: f32,
-        mode: nebula_settings::CellWidthModeName,
-        scale: f32,
-        offset_x: f32,
-    ) -> Pixels {
-        // 旧壳的 crossfont 度量与取整都发生在设备像素域。若先在 GPUI
-        // 逻辑像素域取整，150% DPI 下每列会多出半个物理像素，116 列会
-        // 把启动窗口横向撑大几十像素。
-        let scale = scale.max(0.5);
-        let device_width = raw_width * scale + offset_x;
-        let device_width = match mode {
-            nebula_settings::CellWidthModeName::Compact => device_width.floor(),
-            nebula_settings::CellWidthModeName::Relaxed => device_width.round(),
-        };
-        px(device_width.max(1.0) / scale)
-    }
-
     pub(super) fn cell_width_for_advance(&self, raw_width: f32, scale: f32) -> Pixels {
-        Self::effective_cell_width(raw_width, self.cell_width_mode, scale, self.font_offset_x)
-    }
-
-    fn effective_line_height(natural_height: f32, offset_y: f32, scale: f32) -> Pixels {
-        let scale = scale.max(0.5);
-        // GPUI's shaped line exposes the platform's ascent+descent, which on
-        // DirectWrite includes the same font line gap used by crossfont. The
-        // old shell then floors natural height + offset in device pixels.
-        px(((natural_height * scale + offset_y).floor().max(1.0)) / scale)
+        typography::effective_cell_width(raw_width, self.cell_width_mode, scale, self.font_offset_x)
     }
 
     pub(super) fn line_height_for_metrics(&self, natural_height: f32, scale: f32) -> Pixels {
-        Self::effective_line_height(natural_height, self.font_offset_y, scale)
+        typography::line_height_for_view(
+            self.font_size,
+            self.line_height_multiplier,
+            natural_height,
+            self.font_offset_y,
+            scale,
+        )
     }
 
     /// 启动稳定闸的宽限期：等待开窗 resize 落地到布局的最长时间。超时
@@ -510,74 +483,17 @@ impl TerminalView {
     /// 与 legacy `config::cursor::Cursor::default().blink_interval` 保持一致。
     const CURSOR_BLINK_INTERVAL: std::time::Duration = std::time::Duration::from_millis(750);
 
-    fn measure_cell_metrics(
-        window: &Window,
-        family: &str,
-        font_size: Pixels,
-        mode: nebula_settings::CellWidthModeName,
-        offset_x: f32,
-        offset_y: f32,
-    ) -> (Pixels, Pixels) {
-        let font = mono_font(&family, FontWeight::NORMAL, FontStyle::Normal);
-        let sample = window.text_system().shape_line(
-            SharedString::new_static("M"),
-            font_size,
-            &[TextRun {
-                len: 1,
-                font,
-                color: Hsla::default(),
-                background_color: None,
-                underline: None,
-                strikethrough: None,
-            }],
-            None,
-        );
-        (
-            Self::effective_cell_width(
-                sample.width.as_f32(),
-                mode,
-                window.scale_factor(),
-                offset_x,
-            ),
-            Self::effective_line_height(
-                sample.ascent.as_f32() + sample.descent.as_f32(),
-                offset_y,
-                window.scale_factor(),
-            ),
-        )
-    }
-
     /// 首帧前的当前单元格度量（与 element prepaint 同一公式：shape "M" 的
     /// advance / ascent / descent + 配置 offset）。让 spawn 网格与首帧布局一致，避免启动
     /// 即触发一次 ConPTY resize（DA 探询与回显竞态的温床）。
     pub fn cell_metrics(window: &Window, cx: &App) -> (Pixels, Pixels) {
-        let (family, font_size, mode, offset_x, offset_y) = match cx.try_global::<Settings>() {
-            Some(settings) => (
-                settings.font_family.as_str(),
-                settings.font_size_px,
-                settings.cell_width_mode,
-                settings.font_offset_x,
-                settings.font_offset_y,
-            ),
-            None => (REQUIRED_FONT_FAMILY, 15.0, CellWidthModeName::Compact, 0.0, 0.0),
-        };
-        Self::measure_cell_metrics(window, family, px(font_size), mode, offset_x, offset_y)
+        typography::cell_metrics(window, cx)
     }
 
     /// 旧壳窗口定形使用配置基准字号，不使用持久化缩放；缩放后的字号只
     /// 影响最终能容纳的行列数。否则放大一级就会把 116 列全部加到窗宽上。
     pub fn startup_cell_metrics(window: &Window, cx: &App) -> (Pixels, Pixels) {
-        let (family, font_size, mode, offset_x, offset_y) = match cx.try_global::<Settings>() {
-            Some(settings) => (
-                settings.font_family.as_str(),
-                settings.base_font_size_px,
-                settings.cell_width_mode,
-                settings.font_offset_x,
-                settings.font_offset_y,
-            ),
-            None => (REQUIRED_FONT_FAMILY, 15.0, CellWidthModeName::Compact, 0.0, 0.0),
-        };
-        Self::measure_cell_metrics(window, family, px(font_size), mode, offset_x, offset_y)
+        typography::startup_cell_metrics(window, cx)
     }
 
     /// `spawn_grid`：PTY 出生网格（宿主已把窗口定形到该几何）。首帧布局
@@ -597,6 +513,7 @@ impl TerminalView {
             cell_width_mode,
             font_offset_x,
             font_offset_y,
+            line_height_multiplier,
             palette,
             term_config,
             copy_on_select,
@@ -613,6 +530,7 @@ impl TerminalView {
                 settings.cell_width_mode,
                 settings.font_offset_x,
                 settings.font_offset_y,
+                settings.theme_line_height,
                 Arc::new(settings.palette.clone()),
                 settings.term_config(),
                 settings.copy_on_select,
@@ -631,6 +549,7 @@ impl TerminalView {
                 CellWidthModeName::Compact,
                 0.0,
                 0.0,
+                None,
                 Arc::new(Palette::default()),
                 nebula_terminal::term::Config::default(),
                 // 旧壳的出厂默认即开。
@@ -781,6 +700,7 @@ impl TerminalView {
             cell_width_mode,
             font_offset_x,
             font_offset_y,
+            line_height_multiplier,
             palette,
             color_resolver: Default::default(),
             marked_text: None,
@@ -1208,8 +1128,8 @@ impl TerminalView {
             ));
             return;
         }
-        let theme = crate::gpui_shell::theme::effective_theme_name(cx);
-        cx.set_global(Settings::load(theme));
+        let settings = Settings::load_current(cx);
+        cx.set_global(settings);
         self.apply_settings(cx);
         cx.emit(TerminalViewEvent::FontSizeChanged);
         cx.notify();
@@ -1244,6 +1164,7 @@ impl TerminalView {
         self.cell_width_mode = settings.cell_width_mode;
         self.font_offset_x = settings.font_offset_x;
         self.font_offset_y = settings.font_offset_y;
+        self.line_height_multiplier = settings.theme_line_height;
         // 底色换了就把矫正缓存作废，并记下「旧底色 → 新底色」这一跳：应用当初
         // 按旧主题底色画的连续表面（面板、状态栏）要跟着搬过去，否则浅色主题上
         // 会留一整块旧的深色板。旧壳 `apply_nebula_theme` 同一时机做同一件事。

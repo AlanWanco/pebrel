@@ -49,6 +49,8 @@ const RESET_KEYS: &[&str] = &[
     "blur",
     "opacity",
     "background",
+    "theme_foreground",
+    "custom_theme",
     "background_image",
     "background_image_opacity",
     "background_image_fit",
@@ -143,7 +145,7 @@ mod tests {
 
     #[test]
     fn reset_removes_all_overrides_and_keeps_user_data() {
-        let text = "# preferences\r\n THEME = Nord\r\ncopy_on_select=1\nkeybind=ctrl+x:Copy\nFONT_SIZE=30\nexecutor=custom\nblur=acrylic\nopacity=0.65\nssh_hosts=saved-host\nai_provider=custom\nfuture_setting=keep\n";
+        let text = "# preferences\r\n THEME = Nord\r\ncopy_on_select=1\nkeybind=ctrl+x:Copy\nFONT_SIZE=30\nexecutor=custom\nblur=acrylic\nopacity=0.65\nbackground=#101216\ntheme_foreground=#d6dae6\ncustom_theme=my-night\nssh_hosts=saved-host\nai_provider=custom\nfuture_setting=keep\n";
         let result = default_settings_text(text);
         assert_eq!(
             result,
@@ -164,6 +166,13 @@ mod tests {
     fn duplicate_keys_and_legacy_aliases_cannot_override_the_reset() {
         let text = "theme=Nord\nTHEME=Paper\nshell=pwsh\nexecutor=cmd\nkeybind=ctrl+a:Copy\nkeybind=ctrl+b:Paste\n";
         assert_eq!(default_settings_text(text), "");
+    }
+
+    #[test]
+    fn reset_removes_theme_overrides_but_keeps_unknown_theme_data() {
+        let text =
+            "theme_foreground=#d6dae6\ncustom_theme=my-night\ncustom_theme_file=theme.json\n";
+        assert_eq!(default_settings_text(text), "custom_theme_file=theme.json\n");
     }
 
     #[test]

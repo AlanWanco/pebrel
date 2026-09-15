@@ -228,7 +228,7 @@ impl SettingsPane {
         ));
 
         let bg_hex_input = {
-            let term = crate::gpui_shell::theme::chrome_theme_resolved(cx).palette().term_bg;
+            let term = crate::gpui_shell::theme::resolved_palette(cx).term_bg;
             let rgb = runtime.background.unwrap_or([term.r, term.g, term.b]);
             let input = cx.new(|cx| {
                 InputState::new(window, cx)
@@ -248,6 +248,25 @@ impl SettingsPane {
             ));
             input
         };
+        let theme_foreground_input = cx.new(|cx| {
+            InputState::new(window, cx).placeholder("#rrggbb").default_value(
+                runtime
+                    .theme_foreground
+                    .map(format_hex_rgb)
+                    .unwrap_or_else(|| "#ffffff".to_owned()),
+            )
+        });
+        subscriptions.push(cx.subscribe_in(
+            &theme_foreground_input,
+            window,
+            |this: &mut Self,
+             _: &Entity<InputState>,
+             event: &InputEvent,
+             window: &mut Window,
+             cx: &mut Context<Self>| {
+                this.on_theme_foreground_input_event(event, window, cx);
+            },
+        ));
         let opacity_slider = cx.new(|_| {
             SliderState::new().min(0.00).max(1.00).step(0.05).default_value(runtime.opacity)
         });
@@ -474,7 +493,7 @@ impl SettingsPane {
         ));
 
         let bg_picker_hsv = {
-            let term = crate::gpui_shell::theme::chrome_theme_resolved(cx).palette().term_bg;
+            let term = crate::gpui_shell::theme::resolved_palette(cx).term_bg;
             let rgb = runtime.background.unwrap_or([term.r, term.g, term.b]);
             crate::display::rgb_to_hsv(crate::display::color::Rgb::new(rgb[0], rgb[1], rgb[2]))
         };
@@ -521,6 +540,10 @@ impl SettingsPane {
             launch_at_login: crate::platform::startup::launch_at_login(),
             active_section: 1,
             appearance_picker: None,
+            appearance_picker_seq: 0,
+            theme_editor: None,
+            theme_editor_seq: 0,
+            theme_transfer: theme_transfer::ThemeTransferState::default(),
             theme_picker_trigger: cx.focus_handle(),
             icon_picker_trigger: cx.focus_handle(),
             expanded_setting_help: std::collections::HashSet::new(),
@@ -540,6 +563,9 @@ impl SettingsPane {
             bg_picker_trigger_bounds: None,
             bg_sv_bounds: None,
             bg_hue_bounds: None,
+            theme_foreground_input,
+            theme_foreground_input_syncing: false,
+            theme_foreground_picker: theme_foreground::ThemeForegroundState::new(cx),
             opacity_slider,
             wallpaper_opacity_slider,
             proxy_url_input,

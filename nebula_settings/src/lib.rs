@@ -17,6 +17,12 @@ use std::collections::HashMap;
 
 mod app_icon;
 pub use app_icon::{AppIconName, AppIconPalette};
+mod custom_theme;
+pub use custom_theme::{
+    IndexedPalette, TerminalThemeColors, ThemeAppearance, ThemeDefinition, ThemeEffects,
+    ThemeLayout, ThemeTypography, ThemeUiColors, ThemeValidationError, foreground_recommendations,
+    meets_wcag_aa, wcag_contrast_ratio,
+};
 mod language;
 mod quick_terminal;
 mod themes;
@@ -180,6 +186,8 @@ pub fn apply_updates(text: &str, updates: &[(&str, String)]) -> String {
 }
 
 pub type Rgb8 = [u8; 3];
+/// RGBA color used where the reviewed UI palette carries an explicit alpha.
+pub type Rgba8 = [u8; 4];
 
 /// 主题标识；`nebula_settings.txt` 里 `theme=` 持久化 [`Self::prompt_name`]。
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
@@ -934,6 +942,7 @@ impl ProxyModeName {
 /// 新 UI 消费的运行时设置。字段与出厂默认逐项对照旧壳
 /// `nebula_settings_load`；`Option` 字段的 `None` = 键未设置，调用方自选
 /// 回退（如 font_family 回落 nebula.toml）。
+#[derive(Clone)]
 pub struct RuntimeSettings {
     pub language: LanguagePref,
     pub theme: ThemeName,
@@ -999,8 +1008,20 @@ pub struct RuntimeSettings {
     pub tray: bool,
     pub blur: BlurModeName,
     pub opacity: f32,
+    /// Whether the corresponding material value was explicitly present in
+    /// `nebula_settings.txt`. Theme defaults may fill an absent value, while
+    /// an explicit user value (including `none` or `1.0`) remains authoritative.
+    opacity_explicit: bool,
+    blur_explicit: bool,
     /// 终端背景覆盖色（设置页取色器写入，优先于主题背景）。
     pub background: Option<Rgb8>,
+    /// 终端主题默认文字色覆盖。与 `background` 分开持久化，切换主题时
+    /// 可由调用方清除以恢复主题内置前景色。
+    pub theme_foreground: Option<Rgb8>,
+    /// Serialized custom theme identifier or payload. The settings layer only
+    /// preserves this value; file loading and format decoding belong to the
+    /// application adapter.
+    pub custom_theme: Option<String>,
     /// 壁纸路径（空 = 无壁纸）。fit/alignment 存原文，解析归渲染层
     /// （旧壳 `renderer::image` 的 parse 是权威记号表）。
     pub background_image: Option<String>,
@@ -1075,8 +1096,10 @@ impl RuntimeSettings {
 
     pub fn from_raw(raw: &RawSettings) -> Self {
         let blur = raw.value("blur").and_then(BlurModeName::from_settings).unwrap_or_default();
+        let blur_explicit = raw.value("blur").and_then(BlurModeName::from_settings).is_some();
         // Theme colors are opaque by default. Material selection never lowers opacity.
         let opacity = raw.f32("opacity").unwrap_or(1.0).clamp(0.0, 1.0);
+        let opacity_explicit = raw.f32("opacity").is_some();
 
         Self {
             language: raw
@@ -1148,7 +1171,11 @@ impl RuntimeSettings {
             tray: raw.bool_on("tray").unwrap_or(true),
             blur,
             opacity,
+            opacity_explicit,
+            blur_explicit,
             background: raw.value("background").and_then(parse_hex_rgb),
+            theme_foreground: raw.value("theme_foreground").and_then(parse_hex_rgb),
+            custom_theme: raw.value("custom_theme").map(str::to_owned),
             background_image: raw
                 .value("background_image")
                 .map(str::trim)
@@ -1202,6 +1229,18 @@ impl RuntimeSettings {
                 .f32("pane_card_divider")
                 .map(|d| d.clamp(0.0, MAX_PANE_CARD_DIVIDER)),
         }
+    }
+
+    /// True when the user supplied a valid opacity value, including the
+    /// explicit default `1.0`.
+    pub fn opacity_is_explicit(&self) -> bool {
+        self.opacity_explicit
+    }
+
+    /// True when the user supplied a valid blur/material value, including the
+    /// explicit `none` choice.
+    pub fn blur_is_explicit(&self) -> bool {
+        self.blur_explicit
     }
 }
 
@@ -1374,6 +1413,8 @@ mod tests {
              blur=0\n\
              opacity=0.87\n\
              background=#101216\n\
+             theme_foreground=#d6dae6\n\
+             custom_theme=my-night\n\
              panel_resize=1\n\
              sidebar_w=222\n\
              ssh_proxy_mode=custom\n\
@@ -1415,6 +1456,8 @@ mod tests {
         assert_eq!(settings.blur, BlurModeName::None);
         assert!((settings.opacity - 0.87).abs() < 1e-6);
         assert_eq!(settings.background, Some([0x10, 0x12, 0x16]));
+        assert_eq!(settings.theme_foreground, Some([0xd6, 0xda, 0xe6]));
+        assert_eq!(settings.custom_theme.as_deref(), Some("my-night"));
         assert!(settings.panel_resize);
         assert_eq!(settings.sidebar_width, 222.0);
         assert_eq!(settings.ssh_proxy_mode, ProxyModeName::Custom);
@@ -1459,6 +1502,8 @@ mod tests {
         assert_eq!(settings.blur, BlurModeName::None);
         assert_eq!(settings.opacity, 1.0);
         assert_eq!(settings.background, None);
+        assert_eq!(settings.theme_foreground, None);
+        assert_eq!(settings.custom_theme, None);
         assert!(!settings.panel_resize);
         assert_eq!(settings.sidebar_width, DEFAULT_SIDEBAR_WIDTH);
         assert_eq!(settings.ssh_proxy_mode, ProxyModeName::Off);

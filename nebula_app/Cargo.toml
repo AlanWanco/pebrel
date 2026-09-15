@@ -125,7 +125,11 @@ tokio = { version = "1", features = ["fs", "io-util", "net", "process", "rt-mult
 unicode-width = "0.2.0"
 # Assistant fix requests: blocking HTTP on a background OS thread (spec 001).
 # ureq over reqwest: no tokio coupling for one short JSON POST, small tree.
-ureq = { version = "3", features = ["json"] }
+# 更新下载要能跟随用户代理：socks-proxy 让 ureq 支持 socks5:// 代理地址；
+# Windows 系统代理（注册表）由 update_proxy 模块用 winreg 解析后显式传入。
+# 刻意不启用 ureq 自带的 win-system-proxy：它对所有 ureq agent 生效，且把
+# 注册表 socks= 条目错拼成 http:// 代理。
+ureq = { version = "3", features = ["json", "socks-proxy"] }
 zeroize = "1"
 winit = { version = "0.30.9", default-features = false, features = ["rwh_06", "serde"] }
 global-hotkey = "0.8.0"
@@ -226,6 +230,9 @@ windows-sys = { version = "0.59", features = [
     "Win32_System_JobObjects",
     "Win32_System_LibraryLoader",
     "Win32_System_SystemInformation",
+    # A single process snapshot includes creation times even for protected
+    # processes, so reused parent PIDs cannot attach unrelated processes to a pane.
+    "Wdk_System_SystemInformation",
     # RtlGetVersion：系统 backdrop 只从 Windows 11 build 22621 起可用，
     # 不能依赖会受兼容清单影响的旧版本查询 API。
     "Wdk_System_SystemServices",

@@ -1,11 +1,9 @@
 //! Startup update check against GitHub Releases.
 //!
-//! Zero new dependencies: Windows 10+ ships `curl.exe`, so the release metadata
-//! probe is a short-lived child process instead of another HTTP stack.
-//! Everything is best-effort — no network, no curl, malformed JSON, or a
+//! Release metadata and installer downloads share the updater's ureq client and
+//! proxy resolver. Everything is best-effort — no network, malformed JSON, or a
 //! GitHub outage all degrade to "no banner", never to an error the user sees.
 
-use std::process::Command;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -187,7 +185,7 @@ pub fn spawn_gpui_once(sender: std::sync::mpsc::Sender<crate::gpui_shell::GpuiSh
 }
 
 /// 立即检查 GitHub 最新 release；调用方必须把它放到后台执行器，避免
-/// `curl` 的网络等待阻塞 UI 线程。
+/// 网络等待阻塞 UI 线程。
 pub fn check_now() -> Result<UpdateCheckResult, String> {
     let release = fetch_latest_release()?;
     let current = env!("CARGO_PKG_VERSION").to_owned();
@@ -260,34 +258,21 @@ pub fn skip_version(version: &str) -> Result<(), String> {
 }
 
 fn fetch_latest_release() -> Result<LatestRelease, String> {
-    let mut command = Command::new("curl");
-    command.args([
-        "-fsSL",
-        "--max-time",
-        "10",
-        "-H",
-        "User-Agent: pebrel",
-        "-H",
-        "Accept: application/vnd.github+json",
-        RELEASES_API,
-    ]);
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        command.creation_flags(CREATE_NO_WINDOW);
-    }
-    let output = command.output().map_err(|error| format!("无法启动 curl：{error}"))?;
-    if !output.status.success() {
-        let detail = String::from_utf8_lossy(&output.stderr);
-        let detail = detail.trim();
-        return Err(if detail.is_empty() {
-            format!("GitHub 请求失败（curl {}）", output.status)
-        } else {
-            format!("GitHub 请求失败：{detail}")
-        });
-    }
-    parse_latest_release(&output.stdout)
+    let agent = crate::update_proxy::agent(RELEASES_API, Duration::from_secs(10));
+    fetch_release_with_agent(&agent, RELEASES_API)
+}
+
+fn fetch_release_with_agent(agent: &ureq::Agent, url: &str) -> Result<LatestRelease, String> {
+    let bytes = agent
+        .get(url)
+        .header("User-Agent", "pebrel")
+        .header("Accept", "application/vnd.github+json")
+        .call()
+        .and_then(|mut response| {
+            response.body_mut().with_config().limit(2 * 1024 * 1024).read_to_vec()
+        })
+        .map_err(|error| format!("GitHub 请求失败：{error}"))?;
+    parse_latest_release(&bytes)
 }
 
 fn parse_latest_release(bytes: &[u8]) -> Result<LatestRelease, String> {
@@ -384,6 +369,24 @@ fn is_newer(latest: &str, current: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn release_check_uses_the_resolved_proxy_for_an_unresolvable_target() {
+        use crate::update_proxy::test_support::{Server, response};
+        let server = Server::start(vec![response(
+            "200 OK",
+            "Content-Type: application/json\r\n",
+            r#"{"tag_name":"v1.7.0","assets":[]}"#,
+        )]);
+        let result =
+            super::fetch_release_with_agent(&server.agent(&[]), "http://api.update.invalid/latest")
+                .unwrap();
+        assert_eq!(result.version, "1.7.0");
+        let requests = server.finish();
+        assert!(requests[0].0.starts_with("CONNECT api.update.invalid:80 "));
+        assert!(requests[0].1.starts_with("GET /latest "));
+        assert!(requests[0].1.to_ascii_lowercase().contains("accept: application/vnd.github+json"));
+    }
+
     use super::{
         GitHubReleaseAsset, REMIND_LATER_SECS, UpdatePromptState, checksum_from_release_body,
         is_newer, parse_latest_release, select_windows_x64_installer, windows_x64_installer_names,
