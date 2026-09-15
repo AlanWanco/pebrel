@@ -1244,12 +1244,18 @@ impl RuntimeSettings {
     }
 }
 
-/// 解析 `#rrggbb`（旧壳 `parse_hex_rgb` 同款：# 前缀可省）。
+/// 解析 `#rgb` 或 `#rrggbb`；# 前缀可省，写盘统一使用六位形式。
 pub fn parse_hex_rgb(value: &str) -> Option<Rgb8> {
     let hex = value.trim();
     let hex = hex.strip_prefix('#').unwrap_or(hex);
-    if hex.len() != 6 || !hex.is_ascii() {
+    if !matches!(hex.len(), 3 | 6) || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return None;
+    }
+    if hex.len() == 3 {
+        let r = u8::from_str_radix(&hex[0..1], 16).ok()? * 17;
+        let g = u8::from_str_radix(&hex[1..2], 16).ok()? * 17;
+        let b = u8::from_str_radix(&hex[2..3], 16).ok()? * 17;
+        return Some([r, g, b]);
     }
     let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
     let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
@@ -1686,6 +1692,18 @@ mod tests {
         assert_eq!(parse_hex_rgb("8bd5ca"), Some([0x8b, 0xd5, 0xca]));
         assert_eq!(parse_hex_rgb("#nothex"), None);
         assert_eq!(format_hex_rgb([0x8b, 0xd5, 0xca]), "#8bd5ca");
+    }
+
+    #[test]
+    fn shorthand_rgb_expands_and_rejects_non_hex_or_alpha_input() {
+        for value in ["#123", "123", "  #123  "] {
+            assert_eq!(parse_hex_rgb(value), Some([0x11, 0x22, 0x33]), "{value:?}");
+        }
+        assert_eq!(parse_hex_rgb("#aBc"), Some([0xaa, 0xbb, 0xcc]));
+        assert_eq!(format_hex_rgb(parse_hex_rgb("#aBc").unwrap()), "#aabbcc");
+        for value in ["", "#", "#12", "#1234", "#12345", "#12345678", "#12g", "+1b2c3", "中文"] {
+            assert_eq!(parse_hex_rgb(value), None, "{value:?}");
+        }
     }
 
     #[test]
