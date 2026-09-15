@@ -74,14 +74,17 @@ runs:
       id: downloads
       uses: actions/cache/restore@v4
       with:
-        # Keep the immutable archives/Git objects once per native platform.
-        # Cargo recreates checkouts and extracted registry sources from these.
+        # Preserve Git source checkouts with their mtimes. Recreating them from
+        # git/db can make timestamp-based dependency fingerprints dirty even
+        # after compiled targets were restored. Registry crates remain immutable
+        # archives: Cargo can recreate their extracted sources without this risk.
         path: |
           ${{ steps.identity.outputs.cargo-home }}/registry/index
           ${{ steps.identity.outputs.cargo-home }}/registry/cache
           ${{ steps.identity.outputs.cargo-home }}/git/db
-        key: cargo-downloads-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', '**/Cargo.toml') }}
-        restore-keys: cargo-downloads-v1-${{ runner.os }}-${{ runner.arch }}-
+          ${{ steps.identity.outputs.cargo-home }}/git/checkouts
+        key: cargo-downloads-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', '**/Cargo.toml') }}
+        restore-keys: cargo-downloads-v2-${{ runner.os }}-${{ runner.arch }}-
     - name: Restore compiled targets
       id: target
       uses: actions/cache/restore@v4
@@ -116,4 +119,5 @@ runs:
           ${{ steps.identity.outputs.cargo-home }}/registry/index
           ${{ steps.identity.outputs.cargo-home }}/registry/cache
           ${{ steps.identity.outputs.cargo-home }}/git/db
+          ${{ steps.identity.outputs.cargo-home }}/git/checkouts
         key: ${{ steps.downloads.outputs.cache-primary-key }}
