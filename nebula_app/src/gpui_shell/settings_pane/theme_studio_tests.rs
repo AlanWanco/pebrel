@@ -37,6 +37,85 @@ fn test_runtime() -> RuntimeSettings {
     RuntimeSettings::from_raw(&RawSettings::from_text(TEST_SETTINGS))
 }
 
+#[gpui::test]
+fn scrolling_controls_persist_dropdown_and_slider_without_changing_existing_history(
+    cx: &mut TestAppContext,
+) {
+    use crate::gpui_shell::config::Settings;
+    use nebula_terminal::event::VoidListener;
+    use nebula_terminal::grid::Dimensions;
+    use nebula_terminal::term::{Term, test::TermSize};
+
+    let _fixture_guard = lock_theme_studio();
+    let _settings_guard = SettingsBytesGuard::capture();
+    std::fs::create_dir_all(nebula_settings::settings_dir()).unwrap();
+    std::fs::write(nebula_settings::settings_path(), TEST_SETTINGS).unwrap();
+    let (pane, mut window) = open_settings(cx);
+    pane.update(&mut window, |pane, cx| {
+        pane.active_section = 1;
+        cx.notify();
+    });
+    window.simulate_resize(size(px(1280.0), px(1800.0)));
+    draw(&mut window);
+    let old_config = window.read(|cx| cx.global::<Settings>().term_config());
+    let mut existing = Term::new(old_config, &TermSize::new(80, 24), VoidListener);
+    existing.grid_mut().initialize_all();
+    assert_eq!(existing.grid().history_size(), 10_000);
+
+    assert_eq!(
+        localized_select_labels(
+            "scrollback_lines",
+            nebula_settings::SCROLLBACK_VALUES,
+            crate::display::UiLanguage::ZhCn
+        ),
+        ["1,000", "2,000", "5,000", "10,000", "20,000", "50,000", "100,000"]
+            .map(SharedString::from)
+    );
+    click("settings-select-scrollback_lines", &mut window);
+    for _ in 0..3 {
+        press("down", &mut window);
+    }
+    press("enter", &mut window);
+    assert_eq!(RuntimeSettings::load().scrollback_lines, 100_000);
+    assert_eq!(window.read(|cx| cx.global::<Settings>().term_config().scrolling_history), 100_000);
+    assert_eq!(existing.grid().history_size(), 10_000);
+
+    let bounds = window.debug_bounds("scroll-speed-control").expect("scroll speed hitbox");
+    let point = gpui::point(bounds.origin.x + px(80.0), bounds.center().y);
+    window.simulate_mouse_down(point, MouseButton::Left, Modifiers::default());
+    draw(&mut window);
+    let preview = pane.read_with(&mut window, |pane, _| pane.runtime.scroll_speed);
+    assert_ne!(preview, 1.0);
+    assert_eq!(window.read(|cx| cx.global::<Settings>().scroll_speed), preview);
+    assert_eq!(
+        RuntimeSettings::load().scroll_speed,
+        1.0,
+        "dragging does not write settings on every frame"
+    );
+    window.simulate_mouse_up(point, MouseButton::Left, Modifiers::default());
+    draw(&mut window);
+    assert_eq!(RuntimeSettings::load().scroll_speed, preview);
+    press("home", &mut window);
+    assert_eq!(RuntimeSettings::load().scroll_speed, 0.25);
+    press("right", &mut window);
+    assert_eq!(RuntimeSettings::load().scroll_speed, 0.5);
+
+    let reopened = window.update(|window, cx| cx.new(|cx| SettingsPane::new(window, cx)));
+    reopened.read_with(&mut window, |pane, cx| {
+        assert_eq!(pane.runtime.scrollback_lines, 100_000);
+        assert_eq!(pane.scroll_speed_slider.read(cx).value().start(), 0.5);
+        assert_eq!(
+            pane.select_of("scrollback_lines").unwrap().read(cx).selected_value().unwrap().as_ref(),
+            "100,000"
+        );
+    });
+    pane.update_in(&mut window, |pane, window, cx| {
+        pane.commit_scrollback_lines("1000", window, cx)
+    });
+    assert_eq!(RuntimeSettings::load().scrollback_lines, 1_000);
+    assert_eq!(existing.grid().history_size(), 10_000);
+}
+
 fn draw(cx: &mut VisualTestContext) {
     cx.run_until_parked();
     cx.update(|window, cx| {

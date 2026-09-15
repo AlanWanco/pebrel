@@ -100,12 +100,10 @@ impl TerminalView {
                 // 和 PATH 描述的是另一台机器。
                 let suggest_env = effective
                     .as_ref()
-                    .and_then(|shell| {
-                        crate::shell_detect::wsl_launch_distro(shell.program(), shell.args())
+                    .map(|shell| {
+                        crate::completion_context::launch_environment(shell.program(), shell.args())
                     })
-                    .map_or(crate::display::SuggestEnv::Local, |distro| {
-                        crate::display::SuggestEnv::Wsl { distro: distro.to_owned() }
-                    });
+                    .unwrap_or_default();
                 let snapshot_shell = crate::platform::shell::snapshot_shell(effective.clone());
                 let session_launch = snapshot_shell.as_ref().map_or(
                     crate::session::LaunchSession::Default,

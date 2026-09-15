@@ -32,7 +32,11 @@ impl SettingsPane {
                     if let SelectEvent::Confirm(Some(_)) = event {
                         let row = entity.read(cx).selected_index(cx).map(|path| path.row);
                         if let Some(value) = row.and_then(|row| values.get(row)) {
-                            this.persist(&[(key, (*value).to_string())], cx);
+                            if key == "scrollback_lines" {
+                                this.commit_scrollback_lines(value, window, cx);
+                            } else {
+                                this.persist(&[(key, (*value).to_string())], cx);
+                            }
                             if key == "language" {
                                 this.refresh_localized_controls(window, cx);
                                 cx.refresh_windows();
@@ -117,6 +121,13 @@ impl SettingsPane {
             "cell_width_mode",
             &["compact", "relaxed"],
             runtime.cell_width_mode.settings_value(),
+            window,
+            cx,
+        );
+        add_select(
+            "scrollback_lines",
+            nebula_settings::SCROLLBACK_VALUES,
+            &runtime.scrollback_lines.to_string(),
             window,
             cx,
         );
@@ -270,6 +281,9 @@ impl SettingsPane {
         let opacity_slider = cx.new(|_| {
             SliderState::new().min(0.00).max(1.00).step(0.05).default_value(runtime.opacity)
         });
+        let scroll_speed_slider =
+            Self::create_scroll_speed_slider(&runtime, window, cx, &mut subscriptions);
+        let scroll_speed_focus = cx.focus_handle().tab_stop(true);
         subscriptions.push(cx.subscribe(&opacity_slider, |this, _, event: &SliderEvent, cx| {
             if let SliderEvent::Change(value) = event {
                 this.set_opacity(value.start(), cx);
@@ -568,6 +582,8 @@ impl SettingsPane {
             theme_foreground_picker: theme_foreground::ThemeForegroundState::new(cx),
             opacity_slider,
             wallpaper_opacity_slider,
+            scroll_speed_slider,
+            scroll_speed_focus,
             proxy_url_input,
             proxy_protocol_select,
             proxy_test_seq: 0,

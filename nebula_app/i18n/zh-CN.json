@@ -6,6 +6,12 @@
     "en_us": "English"
   },
   "settings": {
+    "scrolling": {
+      "history": "回滚行数",
+      "history_description": "每个窗格保留的历史行数。仅适用于新窗格。",
+      "speed": "滚动速度",
+      "speed_description": "鼠标滚轮滚动的倍率。即时生效，不影响触控板滚动。"
+    },
     "sidebar": {
       "application": "应用",
       "appearance": "外观",

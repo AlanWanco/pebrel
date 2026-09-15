@@ -103,6 +103,25 @@ pub fn uses_legacy_pty_bootstrap(id: &str) -> bool {
     }
 }
 
+/// Resolve the same default distro that wsl.exe launches, without starting a
+/// subprocess on the pane-spawn path.
+pub(crate) fn default_wsl_distro() -> Option<String> {
+    #[cfg(windows)]
+    {
+        use winreg::{RegKey, enums::HKEY_CURRENT_USER};
+        let lxss = RegKey::predef(HKEY_CURRENT_USER)
+            .open_subkey(r"Software\Microsoft\Windows\CurrentVersion\Lxss")
+            .ok()?;
+        let guid: String = lxss.get_value("DefaultDistribution").ok()?;
+        let distro: String = lxss.open_subkey(guid).ok()?.get_value("DistributionName").ok()?;
+        (!distro.is_empty()).then_some(distro)
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

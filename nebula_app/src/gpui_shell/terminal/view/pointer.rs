@@ -857,12 +857,11 @@ impl TerminalView {
             cx.stop_propagation();
             return;
         }
-        self.scroll_px += delta_y;
-        let lines = (self.scroll_px / self.line_height.as_f32().max(1.0)).trunc() as i32;
+        let speed = cx.try_global::<Settings>().map_or(1.0, |settings| settings.scroll_speed);
+        let lines = wheel_scroll_lines(&mut self.scroll_px, event.delta, self.line_height, speed);
         if lines == 0 {
             return;
         }
-        self.scroll_px -= lines as f32 * self.line_height.as_f32();
         let mode = self.term_mode();
         // 应用接管鼠标时滚轮也归应用（htop 列表滚动）；Shift 旁路回本地回滚。
         if !event.modifiers.shift && mode.intersects(TermMode::MOUSE_MODE) {
@@ -893,5 +892,82 @@ impl TerminalView {
             session.term.lock().scroll_display(Scroll::Delta(lines));
         }
         cx.notify();
+    }
+}
+
+/// Preserve fractional deltas across events. Wheel speed must not rescale
+/// pixel-precise trackpad input, font zoom, or completion-list scrolling.
+fn wheel_scroll_lines(
+    remainder: &mut f32,
+    delta: gpui::ScrollDelta,
+    line_height: Pixels,
+    speed: f32,
+) -> i32 {
+    let pixels = delta.pixel_delta(line_height).y.as_f32();
+    let pixels = match delta {
+        gpui::ScrollDelta::Lines(_) => pixels * speed,
+        gpui::ScrollDelta::Pixels(_) => pixels,
+    };
+    if !pixels.is_finite() {
+        return 0;
+    }
+    let height = line_height.as_f32().max(1.0);
+    *remainder += pixels;
+    let lines = (*remainder / height).trunc() as i32;
+    *remainder -= lines as f32 * height;
+    lines
+}
+
+#[cfg(test)]
+mod scrolling_tests {
+    use super::wheel_scroll_lines;
+    use gpui::{ScrollDelta, point, px};
+
+    #[test]
+    fn normal_wheel_speed_preserves_existing_steps() {
+        let mut remainder = 0.0;
+        assert_eq!(
+            wheel_scroll_lines(&mut remainder, ScrollDelta::Lines(point(0.0, 3.0)), px(20.0), 1.0),
+            3
+        );
+        assert_eq!(
+            wheel_scroll_lines(&mut remainder, ScrollDelta::Lines(point(0.0, -3.0)), px(20.0), 2.0),
+            -6
+        );
+        assert_eq!(remainder, 0.0);
+    }
+
+    #[test]
+    fn slow_wheel_accumulates_without_dropping_small_inputs() {
+        let mut remainder = 0.0;
+        let lines: Vec<_> = (0..4)
+            .map(|_| {
+                wheel_scroll_lines(
+                    &mut remainder,
+                    ScrollDelta::Lines(point(0.0, 1.0)),
+                    px(20.0),
+                    0.25,
+                )
+            })
+            .collect();
+        assert_eq!(lines, [0, 0, 0, 1]);
+        assert_eq!(remainder, 0.0);
+    }
+
+    #[test]
+    fn trackpad_pixels_are_independent_of_wheel_speed_and_keep_direction() {
+        for speed in [0.25, 1.0, 4.0] {
+            let mut remainder = 0.0;
+            let delta = ScrollDelta::Pixels(point(px(0.0), px(5.0)));
+            assert_eq!(
+                (0..4)
+                    .map(|_| wheel_scroll_lines(&mut remainder, delta, px(20.0), speed))
+                    .sum::<i32>(),
+                1
+            );
+            let delta = ScrollDelta::Pixels(point(px(0.0), px(-20.0)));
+            assert_eq!(wheel_scroll_lines(&mut remainder, delta, px(20.0), speed), -1);
+            assert_eq!(remainder, 0.0);
+        }
     }
 }

@@ -18,6 +18,9 @@ pub mod windows;
 #[cfg(windows)]
 pub use self::windows::*;
 
+/// Shared SSH/WSL execution reports for local and bootstrapped bash/zsh shells.
+pub const CONNECTION_SHELL: &str = include_str!("connection.sh");
+
 /// Configuration for the `Pty` interface.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct Options {

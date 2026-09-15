@@ -6,6 +6,12 @@
     "en_us": "English"
   },
   "settings": {
+    "scrolling": {
+      "history": "Scrollback lines",
+      "history_description": "History lines retained per terminal. Applies to new terminals only.",
+      "speed": "Scrolling speed",
+      "speed_description": "Mouse wheel multiplier. Takes effect immediately; trackpad scrolling is unchanged."
+    },
     "sidebar": {
       "application": "Application",
       "appearance": "Appearance",
