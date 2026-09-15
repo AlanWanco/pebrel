@@ -1,6 +1,6 @@
 use super::*;
 
-fn wait_for_result(
+pub(super) fn wait_for_result(
     index: &EmbeddedFileIndex,
     matches: impl Fn(&FileSearchResult) -> bool,
 ) -> FileSearchResult {
@@ -17,7 +17,7 @@ fn wait_for_result(
     panic!("file search did not publish the expected result");
 }
 
-fn start(root: &Path, query: &str) -> EmbeddedFileIndex {
+pub(super) fn start(root: &Path, query: &str) -> EmbeddedFileIndex {
     let index = EmbeddedFileIndex::new();
     index.rebuild(
         Some(FileIndexRoot::Local(root.to_owned())),

@@ -28,6 +28,8 @@ struct SearchState {
     #[cfg(test)]
     scans: AtomicUsize,
     #[cfg(test)]
+    lock_deferrals: AtomicUsize,
+    #[cfg(test)]
     retained_bytes: AtomicUsize,
     #[cfg(test)]
     allocations: Mutex<CacheAllocations>,
@@ -73,6 +75,8 @@ impl EmbeddedFileIndex {
             truncated: AtomicBool::new(false),
             #[cfg(test)]
             scans: AtomicUsize::new(0),
+            #[cfg(test)]
+            lock_deferrals: AtomicUsize::new(0),
             #[cfg(test)]
             retained_bytes: AtomicUsize::new(0),
             #[cfg(test)]
@@ -205,6 +209,9 @@ fn run_search_worker(state: Arc<SearchState>) {
     let mut root = None;
     let mut epoch = 0;
     let mut refresh = 0;
+    // Watch events do not change the query revision. Retain their work until
+    // publication, including retries while another search owns SEARCH_WORK.
+    let mut refresh_pending = false;
     loop {
         if state.stopped.load(Ordering::Acquire) {
             return;
@@ -214,23 +221,23 @@ fn run_search_worker(state: Arc<SearchState>) {
             (desired.clone(), state.revision.load(Ordering::Acquire))
         };
         let changed = root != desired.root || epoch != desired.epoch || refresh != desired.refresh;
-        let dirty = cache.watches.dirty.swap(false, Ordering::AcqRel)
-            || {
-                #[cfg(any(target_os = "macos", target_os = "windows"))]
-                {
-                    cache.watches.fallback_dirty()
-                }
-                #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-                {
-                    false
-                }
-            };
+        let dirty = cache.watches.dirty.swap(false, Ordering::AcqRel) || {
+            #[cfg(any(target_os = "macos", target_os = "windows"))]
+            {
+                cache.watches.fallback_dirty()
+            }
+            #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+            {
+                false
+            }
+        };
         if changed || dirty {
+            refresh_pending = true;
             cache = FileCache::new();
             root = desired.root.clone();
             epoch = desired.epoch;
             refresh = desired.refresh;
-        } else if revision == state.processed.load(Ordering::Acquire) {
+        } else if !refresh_pending && revision == state.processed.load(Ordering::Acquire) {
             wait_for_work(&state, WATCH_DEBOUNCE);
             continue;
         }
@@ -245,6 +252,7 @@ fn run_search_worker(state: Arc<SearchState>) {
             record_allocations(&state, &cache);
             state.processed.store(revision, Ordering::Release);
             state.wake.notify_all();
+            refresh_pending = false;
             continue;
         };
         wait_for_work(&state, SEARCH_DEBOUNCE);
@@ -255,6 +263,8 @@ fn run_search_worker(state: Arc<SearchState>) {
             Ok(work) => work,
             Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
             Err(std::sync::TryLockError::WouldBlock) => {
+                #[cfg(test)]
+                state.lock_deferrals.fetch_add(1, Ordering::AcqRel);
                 wait_for_work(&state, WATCH_DEBOUNCE);
                 continue;
             },
@@ -271,6 +281,7 @@ fn run_search_worker(state: Arc<SearchState>) {
                     false,
                     true,
                 );
+                refresh_pending = false;
                 continue;
             },
         };
@@ -287,6 +298,7 @@ fn run_search_worker(state: Arc<SearchState>) {
             && (!cache.watches.unwatched || cache.finished.elapsed() < Duration::from_secs(2));
         if reusable {
             publish(&state, revision, request, &best, None, false, true);
+            refresh_pending = false;
             continue;
         }
         if !cache.entries.is_empty() {
@@ -358,14 +370,12 @@ fn run_search_worker(state: Arc<SearchState>) {
                     false
                 }
             };
-            if cancelled()
-                || cache.watches.dirty.load(Ordering::Acquire)
-                || fallback_dirty
-            {
+            if cancelled() || cache.watches.dirty.load(Ordering::Acquire) || fallback_dirty {
                 continue;
             }
         }
         publish(&state, revision, request, &best, outcome.error, outcome.limited, true);
+        refresh_pending = false;
     }
 }
 
@@ -393,4 +403,34 @@ fn publish(
     }
     drop(desired);
     state.wake.notify_all();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::tests::{start, wait_for_result};
+    use super::*;
+
+    #[test]
+    fn watched_refresh_survives_search_lock_contention() {
+        let temp = tempfile::tempdir().unwrap();
+        let index = start(temp.path(), "needle");
+        wait_for_result(&index, |result| result.total == 0);
+
+        // Hold the production search lock until the watcher-triggered refresh
+        // has actually tried and failed to acquire it. No query/revision change
+        // may rescue a dropped invalidation after the lock becomes available.
+        let work = SEARCH_WORK.lock().unwrap_or_else(|e| e.into_inner());
+        let before = index.state.lock_deferrals.load(Ordering::Acquire);
+        std::fs::write(temp.path().join("needle.txt"), b"").unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while index.state.lock_deferrals.load(Ordering::Acquire) == before {
+            assert!(Instant::now() < deadline, "watch refresh never reached the search lock");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        drop(work);
+
+        wait_for_result(&index, |result| result.total == 1);
+        assert!(index.scans() >= 2);
+        index.release_for_test();
+    }
 }
