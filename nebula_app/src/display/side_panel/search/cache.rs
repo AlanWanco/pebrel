@@ -160,15 +160,12 @@ impl DirectoryWatches {
     }
 
     #[cfg(target_os = "macos")]
-    pub fn observe(&mut self, path: &Path, is_dir: bool) {
-        let Some(parent) = path.parent() else { return };
-        let Some(fingerprint) = self.fingerprints.get_mut(parent) else { return };
-        let Some(name) = path.file_name() else { return };
-        fingerprint.add(name, is_dir);
-    }
-
-    #[cfg(target_os = "macos")]
     pub fn start_fallback(&mut self) {
+        for (directory, fingerprint) in &mut self.fingerprints {
+            if let Ok(current) = DirectoryFingerprint::read(directory) {
+                *fingerprint = current;
+            }
+        }
         self.fallback_until = Some(Instant::now() + Duration::from_secs(2));
     }
 

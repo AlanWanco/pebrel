@@ -302,8 +302,6 @@ fn run_search_worker(state: Arc<SearchState>) {
         #[cfg(test)]
         state.scans.fetch_add(1, Ordering::AcqRel);
         let mut visit = |entry: IndexedPath| {
-            #[cfg(target_os = "macos")]
-            watches.observe(&entry.path, entry.is_dir);
             cache.record(position, &entry);
             position += 1;
             if matcher.matches(&entry) {
