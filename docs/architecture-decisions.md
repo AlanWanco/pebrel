@@ -420,3 +420,40 @@ settings files.
 - **Replacement condition:** Revisit the budgets or an OS-backed index only with
   measured query latency, completeness and sustained allocation evidence. Do not
   restore eager full-tree indexing to improve a synthetic latency number.
+
+## ADR-0014 — Native font ownership and terminal resource reclamation
+
+- **Status:** Existing local fixes selected for commit at the maintainer's request,
+  2026-09-15. This records ownership contracts, not a release or process-memory claim.
+- **Context:** Registering immutable font bytes without a DirectWrite owner creates
+  a full private copy. Retained caller-side ConPTY pipe handles prevent output EOF
+  after a terminal closes, leaving reader tasks and buffers alive. Process-ID reuse
+  can also attach an unrelated older process to a newly created terminal's tree.
+- **Font decision:** Pin the existing GPUI fork and its component consumers to the
+  matching font-owner revisions. A COM owner retains borrowed static bytes or the
+  original owned buffer until the last native consumer releases it. Preserve font
+  data, fallback behavior and lifetime; do not remove CJK coverage to reduce memory.
+  All GPUI dependency edges retain one source identity and exact revision.
+- **PTY decision:** Close caller-owned pipe ends after ConPTY has duplicated them.
+  Own the process handle, primary-thread handle, process attribute list and loaded
+  console library separately. Keep output draining during teardown and failed spawn.
+  Wait for cancellation and completion of native exit callbacks before releasing
+  their context; an unconfirmed cancellation retains the context and reports an
+  error instead of permitting native code to access freed memory.
+- **Process boundary:** The platform adapter reads identifiers and creation times
+  in one bounded Windows snapshot, without opening protected processes. The shared
+  process-tree rules reject an older child's edge to a younger reused parent PID.
+  Unknown creation times preserve the edge and existing busy-process protection.
+  Unix retains its existing process listing behavior. No resident polling service,
+  persistence change or additional production crate is introduced.
+- **Validation:** Native font regressions cover borrowed and owned buffers, original
+  pointers, final-reference release and invalid lengths. Terminal regressions cover
+  idle and busy close, failed launch, in-flight callbacks and native handle recovery
+  using the packaged console host. Process tests cover PID reuse, real busy children,
+  unknown timestamps and malformed native records. The maintained memory stress
+  tool distinguishes peak, warmup and retained growth, and fails incomplete runs or
+  forced cleanup. Historical native results and new checks must be reported with
+  their actual source/build identities; budgets are not whole-process guarantees.
+- **Revisit condition:** Remove the font fork patch when upstream provides the same
+  ownership contract. Revisit native adapters when supported platform interfaces
+  provide equivalent process identity and resource-lifetime guarantees.
