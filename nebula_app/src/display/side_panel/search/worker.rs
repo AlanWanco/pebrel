@@ -327,6 +327,17 @@ fn run_search_worker(state: Arc<SearchState>) {
         state.indexed_count.store(outcome.visited, Ordering::Release);
         #[cfg(test)]
         record_allocations(&state, &cache);
+        if cache.complete && !cache.watches.unwatched {
+            // Do not expose the first snapshot until the newly installed
+            // watcher has had one scheduling interval to settle. Otherwise a
+            // caller can create a file immediately after the result and race
+            // the watch backend's startup.
+            drop(_work);
+            wait_for_work(&state, WATCH_DEBOUNCE);
+            if cancelled() || cache.watches.dirty.load(Ordering::Acquire) {
+                continue;
+            }
+        }
         publish(&state, revision, request, &best, outcome.error, outcome.limited, true);
     }
 }
