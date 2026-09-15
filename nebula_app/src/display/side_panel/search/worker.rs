@@ -214,7 +214,17 @@ fn run_search_worker(state: Arc<SearchState>) {
             (desired.clone(), state.revision.load(Ordering::Acquire))
         };
         let changed = root != desired.root || epoch != desired.epoch || refresh != desired.refresh;
-        let dirty = cache.watches.dirty.swap(false, Ordering::AcqRel);
+        let dirty = cache.watches.dirty.swap(false, Ordering::AcqRel)
+            || {
+                #[cfg(target_os = "macos")]
+                {
+                    cache.watches.fallback_dirty()
+                }
+                #[cfg(not(target_os = "macos"))]
+                {
+                    false
+                }
+            };
         if changed || dirty {
             cache = FileCache::new();
             root = desired.root.clone();
@@ -292,6 +302,8 @@ fn run_search_worker(state: Arc<SearchState>) {
         #[cfg(test)]
         state.scans.fetch_add(1, Ordering::AcqRel);
         let mut visit = |entry: IndexedPath| {
+            #[cfg(target_os = "macos")]
+            watches.observe(&entry.path, entry.is_dir);
             cache.record(position, &entry);
             position += 1;
             if matcher.matches(&entry) {
@@ -323,6 +335,10 @@ fn run_search_worker(state: Arc<SearchState>) {
             cache.finish_prefix(position);
         }
         cache.complete = !cancelled() && !outcome.limited && outcome.error.is_none() && !cache.full;
+        #[cfg(target_os = "macos")]
+        if cache.complete && !cache.watches.unwatched {
+            cache.watches.start_fallback();
+        }
         cache.finished = Instant::now();
         state.indexed_count.store(outcome.visited, Ordering::Release);
         #[cfg(test)]
@@ -334,7 +350,20 @@ fn run_search_worker(state: Arc<SearchState>) {
             // the watch backend's startup.
             drop(_work);
             wait_for_work(&state, WATCH_DEBOUNCE);
-            if cancelled() || cache.watches.dirty.load(Ordering::Acquire) {
+            let fallback_dirty = {
+                #[cfg(target_os = "macos")]
+                {
+                    cache.watches.fallback_dirty()
+                }
+                #[cfg(not(target_os = "macos"))]
+                {
+                    false
+                }
+            };
+            if cancelled()
+                || cache.watches.dirty.load(Ordering::Acquire)
+                || fallback_dirty
+            {
                 continue;
             }
         }
