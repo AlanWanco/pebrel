@@ -61,6 +61,12 @@ impl SettingsPane {
             ));
         let interface = self
             .group(language.pick("界面", "Interface"), cx)
+            .child(self.select_row(
+                "ui_scale",
+                language.text(crate::i18n::Message::SettingsUiScale),
+                language.text(crate::i18n::Message::SettingsUiScaleHint),
+                cx,
+            ))
             .child(self.font_size_row(true, cx))
             .child(self.switch_row(
                 "dim_inactive_panes",

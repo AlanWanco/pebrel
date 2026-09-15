@@ -151,12 +151,6 @@ impl SettingsPane {
         let selectors = v_flex()
             .w_full()
             .gap(ui(24.0))
-            .child(self.select_row(
-                "ui_scale",
-                language.text(crate::i18n::Message::SettingsUiScale),
-                language.text(crate::i18n::Message::SettingsUiScaleHint),
-                cx,
-            ))
             .child(
                 h_flex()
                     .w_full()

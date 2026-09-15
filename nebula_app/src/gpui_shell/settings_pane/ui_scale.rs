@@ -31,7 +31,7 @@ impl SettingsPane {
 #[cfg(all(test, feature = "gpui-test-support"))]
 mod tests {
     use super::*;
-    use gpui::{Modifiers, TestAppContext};
+    use gpui::{Modifiers, ScrollDelta, ScrollWheelEvent, TestAppContext, TouchPhase, point};
     use gpui_component::{Root, Theme};
 
     #[gpui::test]
@@ -74,15 +74,39 @@ mod tests {
             cx.update(|window, cx| {
                 let _ = window.draw(cx);
             });
-            let bounds =
-                cx.debug_bounds("settings-select-ui_scale").expect("scale control on Appearance");
+            let mut bounds =
+                cx.debug_bounds("settings-select-ui_scale").expect("scale control in Interface");
             let nav = cx.debug_bounds("settings-navigation").expect("settings navigation");
             assert!(bounds.left() >= nav.right(), "control must not overlap navigation");
             assert!(
                 bounds.right() <= px(width),
                 "control must remain inside the window at {percent}%"
             );
-            assert!(bounds.top() >= px(0.0) && bounds.bottom() <= px(height));
+            // At large scales the Interface group is below the initial viewport.
+            // Exercise the real settings scroll container before clicking it.
+            for _ in 0..16 {
+                if bounds.top() >= px(0.0) && bounds.bottom() <= px(height) {
+                    break;
+                }
+                let delta = if bounds.bottom() > px(height) { -400.0 } else { 400.0 };
+                cx.simulate_event(ScrollWheelEvent {
+                    position: point(px(width * 0.75), px(height * 0.75)),
+                    delta: ScrollDelta::Pixels(point(px(0.0), px(delta))),
+                    modifiers: Modifiers::default(),
+                    touch_phase: TouchPhase::Moved,
+                });
+                cx.run_until_parked();
+                cx.update(|window, cx| {
+                    let _ = window.draw(cx);
+                });
+                bounds = cx
+                    .debug_bounds("settings-select-ui_scale")
+                    .expect("scale control remains rendered after scrolling");
+            }
+            assert!(
+                bounds.top() >= px(0.0) && bounds.bottom() <= px(height),
+                "scale control is not reachable at {percent}%: bounds={bounds:?}, viewport={width}x{height}"
+            );
             cx.simulate_click(bounds.center(), Modifiers::default());
             cx.run_until_parked();
             cx.simulate_keystrokes("escape");
