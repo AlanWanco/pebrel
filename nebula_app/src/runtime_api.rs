@@ -28,6 +28,7 @@ pub(crate) use command::{
 };
 #[cfg(feature = "legacy-shell")]
 pub use server::dispatch_prompt;
+pub(crate) use server::{ENDPOINT_ENV, apply_child_endpoint};
 use server::{Endpoint, endpoint_addr, read_endpoint};
 pub use server::{
     RuntimeServer, try_open_default_tab_existing, try_open_directory_existing,

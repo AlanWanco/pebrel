@@ -307,7 +307,177 @@ unrelated feature's growth. Remote approval/enforcement is not implied by this l
 - **Revisit condition:** Add separate system-notification or per-agent controls
   only when requested, rather than expanding the meaning of this persisted key.
 
-## ADR-0010 — Persistent pane names and independent GPUI chrome scale
+## ADR-0010 — Administrator shells hosted by the GPUI product
+
+- **Status:** Requested by the maintainer and implemented, 2026-09-13. Native
+  Windows behavior tests passed; interactive UAC acceptance remains manual.
+- **Context:** Elevating a shell executable directly opens an external console.
+  Elevating Pebrel without preserving the explicit startup command can instead
+  reach the ordinary resident process and lose both privilege and Shell selection.
+- **Decision:** The launcher requests Windows UAC for the current Pebrel executable
+  on a worker. It passes the selected Shell's argument vector and working directory
+  through the existing CLI, using Windows argument quoting without a command shell.
+  GPUI startup consumes that command as its first terminal. An already elevated
+  process creates the terminal in its current workspace.
+- **Ownership:** A process-token check separates elevated instances from ordinary
+  resident forwarding. Elevated instances use the existing loopback API transport
+  with a private endpoint supplied only in local PTY child environments, including
+  WSL passthrough. They do not publish a privileged bearer token in `runtime.port`,
+  acquire its ownership lock, restore/write the shared session, or hide on close.
+  Ordinary discovery files and settings formats remain compatible. Token-query
+  failure uses the isolated policy; launch failure remains visible to the user.
+- **Lifetime and cost:** UAC runs off the UI thread, one request per workspace at
+  a time. Completion updates only a still-live workspace and does not dismiss a
+  subsequently opened picker. Token status is cached; endpoint injection runs only
+  during PTY creation. No application dependency or additional server is added.
+- **Validation:** Tests cover native argument parsing, explicit-command startup,
+  ordinary-session exclusion, private discovery/authentication, right-click versus
+  launch, keyboard dismissal, and SSH target stability. Automated coverage does not
+  imply a completed UAC desktop acceptance test.
+- **Revisit condition:** Supporting an elevated pane inside an existing ordinary
+  process requires a separately reviewed broker and authenticated PTY transport.
+  A future privileged-residency feature must have explicit recovery/discovery.
+
+The two pane preferences in the same request reuse `nebula_settings`: mouse focus
+has an optional GUI override of the compatible TOML setting (default off), while
+inactive-pane dimming defaults on to preserve the existing appearance. Both are
+cached by the GPUI settings adapter; pointer movement and rendering do not read
+settings files.
+
+## ADR-0012 — Bounded background images and explicit atlas retirement
+
+- **Status:** Requested by the maintainer, 2026-09-14; implementation and validation in progress.
+- **Evidence:** With blur disabled, twenty window size changes retained an additional
+  84 MiB (card) / 190 MiB (window-cover) of dedicated GPU memory on the local Windows
+  QA binary. The pinned GPUI atlas does not retire image IDs when Rust Arcs drop.
+- **Decision:** Keep one bounded CPU RenderImage shared by the background layers and
+  windows. Use the existing renderer authority for fit/alignment and GPUI image
+  bounds for GPU sampling; resizing no longer produces new images. Opacity is a
+  layer property. Explicitly retire replaced image IDs across window atlases and
+  invalidate replayed scenes. Platform atlas copies remain per window.
+- **Loading and ownership:** The App visual-effects state owns one active background
+  executor job and one latest desired source. Generation checks cancel superseded
+  work before expensive stages and prevent stale publication; dropping the owner
+  invalidates outstanding work. Metadata and decoding run off the UI thread. There
+  is no new service, thread pool, dependency, persisted format or AI lifecycle change.
+- **Memory policy:** Retained BGRA is limited to 8 MiB and an edge of 2048 pixels;
+  encoded input is streamed with a 64 MiB file limit, and decoder/output admission
+  is limited to 128 MiB. Integer thumbnailing precedes RGBA conversion and avoids
+  a full-image floating-point resize buffer. These are owned-resource limits, not
+  a whole-process or undocumented decoder-scratch guarantee. Existing native-fit
+  geometry remains independent of reduced texture resolution.
+- **Tradeoff:** High-resolution wallpaper detail is reduced and inputs over the
+  admission limits receive a visible error. The window can appear with its normal
+  base color while the background loads. These favor the user's explicit memory
+  and responsiveness priorities.
+- **Validation:** Targeted decode/lifetime/geometry tests, Windows GPUI build,
+  repeated-size memory probes and real card/crop/opacity visual checks are required.
+  Results are recorded separately and are not implied by this decision.
+- **Revisit condition:** Replace manual atlas retirement if upstream introduces
+  equivalent ownership-aware image resources. Adopt target-size native decoding
+  only with verified peak accounting and compatibility evidence.
+
+## ADR-0013 — Bounded, on-demand filename search
+
+- **Date:** 2026-09-14
+- **Context:** Opening Files previously crawled up to 500,000 paths even with an
+  empty query. The index retained its full array and several strings per path.
+  Users requested approximately 10–15 MiB of sustained browsing/search overhead,
+  unchanged matching options and reuse during repeated panel use.
+- **Decision:** Keep filename matching in the shared side-panel model. Empty
+  queries only enumerate the visible tree. Nonempty queries reuse one bounded
+  cache and stream uncached paths through the same matcher/ranker. Cache capacity
+  never determines search coverage. Plain, case-sensitive, whole-word and regex
+  matching retain their existing semantics and best-first ordering.
+- **Ownership and budgets:** Each existing worker owns one root cache (6 MiB);
+  all caches share an 8 MiB allocation quota. Published rows carry a lease into
+  their consuming view (512 KiB per snapshot, 2 MiB shared). One process-wide
+  execution lock bounds simultaneous traversal/ranking buffers; UI threads never
+  acquire it. Ranking retains at most 1,000 candidates and 1 MiB. Query regex and
+  path parsing have independent bounds. These are allocation budgets, not a
+  promise that OS working set or total application memory equals those values.
+- **Lifecycle:** A latest-request mailbox replaces the unbounded command queue.
+  Revisions cancel obsolete traversal and reject stale publication. Clearing or
+  closing Files releases result rows, while a bounded warm cache survives reopening.
+  Root changes replace that cache. Local nonrecursive watches are installed before
+  enumeration, capped at 128 directories / 64 KiB of path storage. Caches with
+  incomplete watch coverage (including WSL) expire after two seconds. WSL search
+  executes `find` directly with `wsl.exe --exec`, streams NUL records through a
+  four-record channel and terminates its owned command on cancellation/timeout.
+  Direct execution preserves paths and `find` arguments containing shell syntax.
+  It never terminates terminal sessions.
+- **Tradeoff:** Unchanged directories that fit in the watched cache avoid repeat
+  walks. Larger trees reuse a prefix for early results but require streaming for
+  full coverage. Search reports partial results at its existing 500,000-entry
+  ceiling, depth 64, inaccessible paths or result limits. Explicit refresh remains
+  available. No new dependency, persisted index or daemon is introduced.
+- **Validation:** Matching, watch changes, cancellation, panel reopening, root
+  replacement, bounded ranking and allocation ownership have focused regressions.
+  An opt-in Windows stress test drives the production panel through multiple
+  directories, clear/query/reopen cycles and records actual Vec/String capacities,
+  the Windows array heap block and process private commit after allocator warmup.
+  Runtime evidence must accompany any claim about the sustained memory target.
+- **Replacement condition:** Revisit the budgets or an OS-backed index only with
+  measured query latency, completeness and sustained allocation evidence. Do not
+  restore eager full-tree indexing to improve a synthetic latency number.
+
+## ADR-0014 — Parallel release validation with one product build graph
+
+- **Date:** 2026-09-14
+- **Context:** The 1.7.0 Windows release job took 41m28s despite a full dependency
+  cache hit. Its logs show three application test compilations (4m44s, 9m16s and
+  4m07s), a 15m08s release build, and 4m16s of additional dependency compilation
+  during packaging. The user requested a slowest-job target of ten minutes.
+- **Decision:** Run the complete Rust workspace with the product interaction
+  feature enabled in one unfiltered invocation. Run native tests independently
+  from package construction; asset aggregation depends on both. Each native
+  platform still runs the complete Python helper and harness suites. Separate
+  test and release cache keys prevent concurrent jobs from replacing one another's
+  compiled workload. Dependency archives and Git objects are shared within each
+  platform; each workload saves only the profiles it uses (native tests also keep
+  release-check metadata). A fallback
+  reads existing combined caches during migration. Cargo still validates source,
+  profile and feature fingerprints before reuse. Each source revision saves an
+  immutable entry while restoring compatible earlier revisions; a partially built
+  cache from a failed revision cannot prevent later successful cache updates.
+- **Scheduling:** Stable releases call the same complete four-platform native
+  workflow used for contributions, including architecture, translation allocation
+  contracts and the release-workspace check. Release branch pushes omit a duplicate
+  automatic invocation; the release aggregation still requires the called suite.
+- **Test profile:** An explicit CI-only profile removes developer-preview
+  optimization and debug information from test compilation, including named
+  dependency overrides. It retains debug assertions and overflow checks. The
+  native suite also checks the actual product feature configuration, since GPUI
+  test support changes dependency features. Release optimization is unaffected.
+- **Product compilation:** The application keeps O3 and Thin LTO and uses 16
+  codegen units to parallelize its large translation unit. Other package settings
+  retain their existing values. Both Windows packagers call one explicit builder
+  for the product and its packaged hook, preserving the same feature graph.
+  Packaging still invokes Cargo and validates source freshness and binary identity.
+- **Contract clarification:** The old packaging test required the literal
+  `--workspace --exclude nebula`, rejecting a valid explicit selection of the two
+  shipped binaries. It now verifies the actual selected packages, binaries and
+  product feature, plus failure propagation and restoration of the caller's target.
+  No test filtering, freshness bypass, size-budget increase or dependency change
+  is part of this decision.
+- **Validation:** The release pipeline runs native tests, packaging fixtures,
+  package-size/identity checks and installed or mounted conformance on all four
+  platforms. Actual job timings determine whether the target is met; cache input
+  changes and first compilation must be reported separately. A configured timeout
+  or parallel scheduling alone is not evidence of a ten-minute successful build.
+- **Windows host privileges:** The first hosted run exposed administrator-token
+  dependence in ordinary-window persistence fixtures and runtime discovery.
+  Persistence tests now explicitly select ordinary-window state while retaining
+  privileged isolation tests. Native conformance launches under a restricted copy
+  of the runner's own token, verifies that elevation was removed and preserves
+  the desktop, environment and child exit status. It does not weaken the product's
+  administrator isolation or create a separate user account. Native launch tests
+  cover elevation, literal argument passing and successful/failed child exit.
+- **Revisit condition:** Retain only changes whose complete CI run and package
+  checks pass. Reconsider codegen partitioning if artifact size or runtime
+  measurements regress, and remove redundant caches if restore/save cost grows.
+
+## ADR-0015 — Persistent pane names and independent GPUI chrome scale
 
 - **Status:** Implemented in the working tree, 2026-09-15; focused validation passed,
   with native UI inspection and normal repository review pending.

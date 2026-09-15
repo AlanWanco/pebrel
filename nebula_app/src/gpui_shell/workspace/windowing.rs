@@ -44,6 +44,7 @@ use crate::runtime_api::{
 pub(crate) enum WorkspaceStartup {
     RestoreOrDefault,
     NewTerminal { cwd: Option<PathBuf> },
+    LaunchTerminal { cwd: Option<PathBuf>, launch: crate::session::LaunchSession },
     Empty,
 }
 
@@ -251,11 +252,13 @@ pub(crate) fn open_initial_window(
     ai_events: std::sync::mpsc::Receiver<crate::ai_hook::AiHookEvent>,
     shell_events: std::sync::mpsc::Receiver<GpuiShellEvent>,
     initial_cwd: Option<PathBuf>,
+    initial_command: Option<crate::config::ui_config::Program>,
 ) {
-    let startup = match initial_cwd {
-        Some(cwd) => WorkspaceStartup::NewTerminal { cwd: Some(cwd) },
-        None => WorkspaceStartup::RestoreOrDefault,
-    };
+    let startup = initial_startup(
+        initial_cwd,
+        initial_command,
+        crate::platform::elevation::requires_isolation(),
+    );
     open_workspace_window(
         cx,
         startup,
@@ -265,6 +268,67 @@ pub(crate) fn open_initial_window(
         WindowRole::Regular,
     )
     .expect("failed to open Pebrel GPUI window");
+}
+
+fn initial_startup(
+    cwd: Option<PathBuf>,
+    command: Option<crate::config::ui_config::Program>,
+    isolated: bool,
+) -> WorkspaceStartup {
+    if let Some(command) = command {
+        let program = command.program().to_owned();
+        let name = program.rsplit(['/', '\\']).next().unwrap_or(&program).to_owned();
+        return WorkspaceStartup::LaunchTerminal {
+            cwd,
+            launch: crate::session::LaunchSession::Shell {
+                name,
+                program,
+                args: command.args().to_vec(),
+            },
+        };
+    }
+    if cwd.is_some() || isolated {
+        WorkspaceStartup::NewTerminal { cwd }
+    } else {
+        WorkspaceStartup::RestoreOrDefault
+    }
+}
+
+#[cfg(test)]
+mod startup_tests {
+    use super::*;
+
+    #[test]
+    fn explicit_program_is_kept_with_its_arguments_and_directory() {
+        let command = crate::config::ui_config::Program::WithArgs {
+            program: "shell.exe".into(),
+            args: vec!["--literal=two words".into()],
+        };
+        let cwd = Some(PathBuf::from("C:/work area"));
+        let WorkspaceStartup::LaunchTerminal { launch, cwd: actual_cwd } =
+            initial_startup(cwd.clone(), Some(command), true)
+        else {
+            panic!("explicit launch was discarded");
+        };
+        assert_eq!(actual_cwd, cwd);
+        assert_eq!(
+            launch,
+            crate::session::LaunchSession::Shell {
+                name: "shell.exe".into(),
+                program: "shell.exe".into(),
+                args: vec!["--literal=two words".into()]
+            }
+        );
+    }
+
+    #[test]
+    fn privileged_startup_never_restores_the_ordinary_session() {
+        assert!(matches!(initial_startup(None, None, false), WorkspaceStartup::RestoreOrDefault));
+        assert!(matches!(
+            initial_startup(None, None, true),
+            WorkspaceStartup::NewTerminal { cwd: None }
+        ));
+    }
 }
 
 pub(super) fn open_recipe_window(session: crate::session::Session, cx: &mut App) {
@@ -376,7 +440,14 @@ fn open_workspace_window(
     role: WindowRole,
 ) -> gpui::Result<(u64, Entity<NebulaWorkspace>)> {
     let (runtime_window_id, runtime_hub) = allocate_window(cx);
-    let options = workspace_window_options(cx, focus, role);
+    let start_hidden = shell_events.is_some()
+        && matches!(startup, WorkspaceStartup::RestoreOrDefault)
+        && crate::platform::startup::start_hidden(&nebula_settings::RuntimeSettings::load());
+    let mut options = workspace_window_options(cx, focus, role);
+    if start_hidden {
+        options.show = false;
+        options.focus = false;
+    }
     let workspace_slot = Rc::new(RefCell::new(None));
     let hwnd_slot = Rc::new(RefCell::new(0isize));
     let workspace_out = workspace_slot.clone();
@@ -399,6 +470,7 @@ fn open_workspace_window(
                 cx,
             )
         });
+        workspace.update(cx, |workspace, _| workspace.window_hidden = start_hidden);
         if runtime_window_id == 1
             && let Ok(path) = std::env::var("NEBULA_GPUI_OPEN_DOC")
             && !path.is_empty()
@@ -1484,6 +1556,9 @@ impl NebulaWorkspace {
         } else {
             let _ = source_handle.update(cx, move |_, source_window, cx| {
                 let _ = source.update(cx, |source, cx| {
+                    if source.tabs.is_empty() && source.settings_tab_open {
+                        source.open_settings(source_window, cx);
+                    }
                     source.reveal_active_tab();
                     source.focus_active(source_window, cx);
                     source.sync_side_panel_to_active(true, cx);
@@ -1515,7 +1590,7 @@ impl NebulaWorkspace {
         self.tab_menu = None;
         self.tab_rename = None;
         self.active = active_index_after_detach(self.active, ix, self.tabs.len());
-        let source_became_empty = self.tabs.is_empty();
+        let source_became_empty = self.tabs.is_empty() && !self.settings_tab_open;
         Some(DetachedTerminalTab {
             tab,
             meta,

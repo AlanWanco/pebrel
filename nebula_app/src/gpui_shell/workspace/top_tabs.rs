@@ -170,8 +170,12 @@ impl NebulaWorkspace {
         let items_running = std::cell::Cell::new(false);
         let items = (0..self.top_tab_count())
             .map(|ix| {
-                let settings_navigation = self.settings_open && ix == self.tabs.len();
-                let active = settings_navigation || (!self.settings_open && ix == self.active);
+                let settings_navigation = self.settings_tab_open && ix == self.tabs.len();
+                let active = if settings_navigation {
+                    self.settings_open
+                } else {
+                    !self.settings_open && ix == self.active
+                };
                 let TabPresentation {
                     title,
                     is_settings,
@@ -186,6 +190,14 @@ impl NebulaWorkspace {
                 let hover_group: SharedString = format!("top-tab-hover-{ix}").into();
                 let cross_window_drag = self.cross_window_drag_payload(ix, cx);
                 let status_color = if active { active_fg } else { muted };
+                let status_width = Self::shell_status_width(
+                    window,
+                    shell_tag.as_ref(),
+                    &chrome_family,
+                    label_px * 0.8,
+                    TOP_TAB_STATUS_W * scale,
+                    tab_w * 0.4,
+                );
                 let resting_status: Option<gpui::AnyElement> = match activity {
                     SidebarActivity::Running => {
                         items_running.set(true);
@@ -238,6 +250,9 @@ impl NebulaWorkspace {
                     ),
                     SidebarActivity::Idle => shell_tag.map(|tag| {
                         div()
+                            .w_full()
+                            .min_w_0()
+                            .truncate()
                             .font_family(chrome_family.clone())
                             .text_size(px(label_px * 0.8))
                             .font_weight(FontWeight::NORMAL)
@@ -265,6 +280,7 @@ impl NebulaWorkspace {
 
                 let row = h_flex()
                     .id(("top-tab", ix))
+                    .debug_selector(|| format!("top-tab-{ix}"))
                     .group(hover_group.clone())
                     .relative()
                     .w(px(tab_w))
@@ -460,8 +476,9 @@ impl NebulaWorkspace {
                     .child(
                         div()
                             .relative()
-                            .w(ui(TOP_TAB_STATUS_W))
+                            .w(px(status_width))
                             .h_full()
+                            .overflow_hidden()
                             .flex_shrink_0()
                             .when_some(resting_status, |slot, status| {
                                 slot.child(

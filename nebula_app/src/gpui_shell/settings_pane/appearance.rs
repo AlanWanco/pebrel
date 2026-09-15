@@ -88,45 +88,51 @@ impl SettingsPane {
             .into_any_element()
     }
 
-    pub(super) fn terminal_font_size_row(&self, cx: &Context<Self>) -> gpui::AnyElement {
+    pub(super) fn font_size_row(&self, interface: bool, cx: &Context<Self>) -> gpui::AnyElement {
         let language = crate::gpui_shell::config::ui_language(cx);
-        let size = self.terminal_font_size_px(cx);
+        let size = if interface { self.font_size_px(cx) } else { self.terminal_font_size_px(cx) };
+        let (key, min, max) =
+            if interface { ("ui_font_size", 10.0, 24.0) } else { ("font_size", 4.0, 96.0) };
         let stepper = h_flex()
             .w(ui(142.0))
             .h(ui(36.0))
             .items_center()
             .child(
-                Button::new("appearance-font-smaller")
+                Button::new(SharedString::from(format!("{key}-smaller")))
                     .icon(IconName::Minus)
                     .ghost()
                     .size(ui(34.0))
-                    .disabled(size <= 4.0)
+                    .disabled(size <= min)
                     .tooltip(language.pick("减小字号", "Decrease font size"))
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.set_font_size(
-                            (this.terminal_font_size_px(cx).ceil() - 1.0).round(),
-                            cx,
-                        );
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        let next = (size.ceil() - 1.0).clamp(min, max);
+                        this.persist(&[(key, format!("{next:.2}"))], cx);
                     })),
             )
             .child(div().flex_1().text_center().child(format!("{size:.0} px")))
             .child(
-                Button::new("appearance-font-larger")
+                Button::new(SharedString::from(format!("{key}-larger")))
                     .icon(IconName::Plus)
                     .ghost()
                     .size(ui(34.0))
-                    .disabled(size >= 96.0)
+                    .disabled(size >= max)
                     .tooltip(language.pick("增大字号", "Increase font size"))
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.set_font_size(
-                            (this.terminal_font_size_px(cx).floor() + 1.0).round(),
-                            cx,
-                        );
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        let next = (size.floor() + 1.0).clamp(min, max);
+                        this.persist(&[(key, format!("{next:.2}"))], cx);
                     })),
             );
         self.row(
-            language.pick("终端字号（Ctrl+滚轮缩放）", "Terminal font size (Ctrl+wheel)"),
-            language.pick("只调整终端文字大小。", "Changes only the terminal text size."),
+            if interface {
+                language.text(crate::i18n::Message::SettingsFontUiSize)
+            } else {
+                language.pick("终端字号（Ctrl+滚轮缩放）", "Terminal font size (Ctrl+wheel)")
+            },
+            if interface {
+                language.text(crate::i18n::Message::SettingsFontUiSizeDescription)
+            } else {
+                language.pick("只调整终端文字大小。", "Changes only the terminal text size.")
+            },
             stepper,
             cx,
         )

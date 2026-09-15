@@ -76,7 +76,10 @@ pub(crate) enum GpuiShellEvent {
 ///
 /// GPUI 拥有自己的消息循环：主窗形态从主线程调用（winit 不启动）；
 /// spike 形态从专用线程调用。一个进程内只允许调用一次。
-pub fn run_shell(initial_cwd: Option<std::path::PathBuf>) {
+pub fn run_shell(
+    initial_cwd: Option<std::path::PathBuf>,
+    initial_command: Option<crate::config::ui_config::Program>,
+) {
     let (shell_tx, shell_rx) = std::sync::mpsc::channel();
     crate::notify::init_gpui_activation(shell_tx.clone());
     crate::ssh_prompt::install({
@@ -112,16 +115,20 @@ pub fn run_shell(initial_cwd: Option<std::path::PathBuf>) {
         },
         runtime_hub.clone(),
     );
-    if runtime_server.is_none() {
+    if runtime_server.is_none()
+        && initial_command.is_none()
+        && !crate::platform::elevation::requires_isolation()
+    {
         // 与另一份进程同时启动时，对方可能已经拿到 owner lock、但尚未来得及
         // 发布 endpoint。短暂等待并交接，避免继续打开一个无控制面的空窗口。
+        let handover_cwd = initial_cwd.clone().or_else(|| std::env::current_dir().ok());
         for _ in 0..40 {
             let behavior = nebula_settings::RuntimeSettings::load().windowing_behavior;
             let handed_over = match behavior {
                 nebula_settings::WindowingBehaviorName::UseNew => {
-                    crate::runtime_api::try_open_window_existing(initial_cwd.as_deref())
+                    crate::runtime_api::try_open_window_existing(handover_cwd.as_deref())
                 },
-                _ => initial_cwd.as_deref().map_or_else(
+                _ => handover_cwd.as_deref().map_or_else(
                     crate::runtime_api::try_open_default_tab_existing,
                     crate::runtime_api::try_open_directory_existing,
                 ),
@@ -147,8 +154,12 @@ pub fn run_shell(initial_cwd: Option<std::path::PathBuf>) {
             #[cfg(windows)]
             crate::ai_hook::spawn_config_guard();
             init(cx);
-            cx.activate(true);
-            open_main_window(cx, ai_events, shell_rx, runtime_hub, initial_cwd);
+            if initial_cwd.is_some()
+                || !crate::platform::startup::start_hidden(&nebula_settings::RuntimeSettings::load())
+            {
+                cx.activate(true);
+            }
+            open_main_window(cx, ai_events, shell_rx, runtime_hub, initial_cwd, initial_command);
         });
     crate::tray::shutdown();
 }
@@ -184,9 +195,10 @@ fn register_bundled_fonts(cx: &App) {
     // GPUI resolves a family through the system collection first and silently
     // falls back when it is absent. Add Maple before any component/window can
     // resolve a font so the default remains the same private face as winit.
-    if let Err(error) =
-        cx.text_system().add_fonts(vec![Cow::Borrowed(crate::font_install::REQUIRED_FONT_BYTES)])
-    {
+    if let Err(error) = cx.text_system().add_fonts(vec![
+        Cow::Borrowed(crate::font_install::REQUIRED_FONT_BYTES),
+        Cow::Borrowed(include_bytes!("../../../assets/fonts/MapleMonoNormal-NF-CN-Regular.ttf")),
+    ]) {
         try_write_stderr(format_args!(
             "[nebula:gpui] failed to register bundled Maple font: {error}"
         ));
@@ -221,9 +233,16 @@ fn open_main_window(
     shell_events: std::sync::mpsc::Receiver<GpuiShellEvent>,
     runtime_hub: crate::runtime_api::RuntimeHub,
     initial_cwd: Option<std::path::PathBuf>,
+    initial_command: Option<crate::config::ui_config::Program>,
 ) {
     workspace::windowing::initialize(cx, runtime_hub);
-    workspace::windowing::open_initial_window(cx, ai_events, shell_events, initial_cwd);
+    workspace::windowing::open_initial_window(
+        cx,
+        ai_events,
+        shell_events,
+        initial_cwd,
+        initial_command,
+    );
 }
 
 /// 按 `tray` 设置挂上或摘掉系统托盘图标（旧壳 `tray::set_enabled`）。

@@ -80,6 +80,13 @@
       "background_cover_description": "The image will extend beneath the title bar, window buttons, tabs, and SSH sidebar. Low-contrast images may make controls harder to see; the interface retains a minimum-opacity safeguard."
     },
     "font": {
+      "ui_family": "Interface font",
+      "ui_family_description": "Enter an installed font family; leave empty for the default. Applies on Enter or leaving the field.",
+      "ui_size": "Interface font size",
+      "ui_size_description": "Changes interface text and component sizing independently of terminal text.",
+      "english": "English terminal font",
+      "chinese": "Chinese terminal font",
+      "chinese_description": "Used for Chinese and other full-width characters. Enter a font family or comma-separated families; leave empty to use Maple Mono NF CN. Applies on Enter or leaving the field.",
       "fallback_description": "The first family is preferred; missing glyphs fall back through the remaining families, with bundled Maple as the final safe fallback.",
       "group_description": "The first family is primary; the rest are used in fallback order.",
       "loading": "Enumerating system fonts...",
@@ -112,7 +119,25 @@
       "dedicated": "Dedicated window",
       "existing": "Show existing window"
     },
-    "search_empty": "No matching settings"
+    "search_empty": "No matching settings",
+    "mouse": {
+      "focus_follows_mouse": "Focus follows mouse",
+      "focus_follows_mouse_description": "Focus a terminal pane when the pointer moves over it. Off by default."
+    },
+    "panes": {
+      "dim_inactive": "Dim inactive panes",
+      "dim_inactive_description": "Darken other split panes to make the active pane easier to identify."
+    },
+    "save_failed": "Could not save settings: {error}",
+    "reset_title": "Restore default settings?",
+    "reset_description": "This will reset your settings and keyboard shortcuts. SSH hosts, credentials and history will be kept, and your current settings will be backed up. Continue?",
+    "startup": {
+      "launch_at_login": "Start at login",
+      "launch_at_login_help": "Start Pebrel when you sign in to Windows. Uses the same startup shortcut as the installer.",
+      "silent_start": "Start silently",
+      "silent_start_help": "Start in the background without showing a window. Enables the system tray; click its icon to reopen. Applies while the tray is enabled, except when opening a directory explicitly.",
+      "save_failed": "Could not change startup settings: {error}"
+    }
   },
   "provider": {
     "test": {
@@ -516,5 +541,33 @@
     "following_directory": "The selected directory is unavailable; following the current directory",
     "command_failed": "{program} failed",
     "task_start_failed": "Could not start the version control task: {error}"
-  }
+  },
+  "launcher": {
+    "open_admin": "Open as administrator",
+    "set_default": "Set as default Shell",
+    "current_default": "Current default Shell",
+    "connect": "Connect",
+    "edit": "Edit",
+    "delete": "Delete",
+    "default_saved": "{shell} is now the default Shell.",
+    "admin_started": "Requested {shell} in a new administrator Pebrel window.",
+    "admin_cancelled": "Administrator launch cancelled.",
+    "admin_failed": "Could not open an administrator terminal: {error}"
+  },
+  "wallpaper": {
+    "load_failed": "Could not load the background image. Choose a readable PNG, JPEG, WebP, GIF or BMP image.",
+    "too_large": "The background image exceeds the memory limit. Choose a smaller image."
+  },
+  "files.search_failed": "Unable to complete search",
+  "files.search_running": "Searching…",
+  "files.search_limited": "Showing {count} results · narrow the search for more",
+  "files.search_count": "{count} results",
+  "files.search_retry": "Check the directory and query, or turn off the search options and try again.",
+  "files.search_progress": "Matching files appear as the search progresses.",
+  "files.search_continue": "You can continue typing or switch directories.",
+  "files.search_incomplete": "Search is incomplete",
+  "files.search_limit_reason": "The search reached a limit or some directories could not be read.",
+  "files.search_narrow": "Choose a smaller directory or use a more specific query.",
+  "files.search_empty": "No matching files",
+  "files.search_empty_reason": "No files or folders match this query in the current directory."
 }

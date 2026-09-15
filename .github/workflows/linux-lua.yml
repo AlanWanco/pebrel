@@ -2,7 +2,15 @@ name: Full native tests
 
 on:
   workflow_dispatch:
+    inputs:
+      windows_diagnostics_run:
+        description: Diagnose a previous Windows runtime without running a release validation
+        type: string
+        default: ""
+  workflow_call:
   push:
+    # Releases call this entire workflow instead of duplicating branch-push jobs.
+    branches-ignore: ["release/**"]
     paths:
       - "**/*.rs"
       - "scripts/**/*.py"
@@ -10,6 +18,8 @@ on:
       - "Cargo.lock"
       - "rust-toolchain.toml"
       - ".github/workflows/linux-lua.yml"
+      - ".github/ci-profile.toml"
+      - ".github/actions/rust-cache/action.yml"
   pull_request:
     paths:
       - "**/*.rs"
@@ -18,12 +28,22 @@ on:
       - "Cargo.lock"
       - "rust-toolchain.toml"
       - ".github/workflows/linux-lua.yml"
+      - ".github/ci-profile.toml"
+      - ".github/actions/rust-cache/action.yml"
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
+  windows-diagnostics:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.windows_diagnostics_run != '' }}
+    uses: ./.github/workflows/windows-conformance.yml
+    with:
+      runtime_run: ${{ inputs.windows_diagnostics_run }}
+
   native-tests:
+    if: ${{ inputs.windows_diagnostics_run == '' }}
     name: Tests (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -34,6 +54,8 @@ jobs:
     env:
       PYTHONUTF8: "1"
       CARGO_TERM_COLOR: always
+      RUST_BACKTRACE: "1"
+      RUST_TOOLCHAIN: "1.97.1"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -60,23 +82,21 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.97.1"
-      - uses: Swatinem/rust-cache@v2
-      - name: Test native titlebar alignment
-        if: runner.os == 'macOS'
-        run: >-
-          cargo test --locked -p nebula --bin pebrel --features gpui-test-support platform::window_chrome::macos::tests::
-      - name: Test all Python helpers
-        if: ${{ !cancelled() }}
-        run: python -m unittest discover -s scripts/tests -v
-      - name: Test all conformance harness helpers
-        if: ${{ !cancelled() }}
-        run: python -m unittest discover -s scripts/conformance/tests -v
-      - name: Test the full Rust workspace
-        if: ${{ !cancelled() }}
-        run: cargo test --locked --workspace
-      - name: Test all GPUI product and interaction cases
-        if: ${{ !cancelled() }}
-        run: cargo test --locked -p nebula --bin pebrel --features gpui-test-support
+      - uses: ./.github/actions/rust-cache
+        id: rust-cache
+        with:
+          key: native
+          extra-key: -release-check-v2
+          target: |
+            target/ci
+            target/release
+          legacy-key: ${{ runner.os == 'Windows' && 'windows' || runner.os == 'Linux' && 'linux' || 'macos' }}
+      - name: Prepare pinned Windows console runtime
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/prepare-windows-runtime.ps1 -Destination assets/windows/conhost
+      - name: Test complete workspace and native harness
+        run: python scripts/ci_native_tests.py
       - name: Check source architecture
         if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: python scripts/check_architecture.py
@@ -86,3 +106,20 @@ jobs:
       - name: Check the release workspace
         if: ${{ !cancelled() }}
         run: cargo check --locked --workspace --release
+      - name: Save compiled workload
+        if: ${{ always() && steps.rust-cache.outcome == 'success' && steps.rust-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            target/ci
+            target/release
+          key: ${{ steps.rust-cache.outputs.cache-key }}
+      - name: Upload native compilation timings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-timings-${{ matrix.os }}
+          path: target/cargo-timings
+          if-no-files-found: warn
+          compression-level: 0
+          retention-days: 14

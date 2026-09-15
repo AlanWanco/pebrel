@@ -49,10 +49,14 @@ mod agents;
 mod closing;
 mod command_manager;
 mod keyboard_bindings;
-use keyboard_bindings::custom_workspace_binding;
+#[cfg(test)]
+use keyboard_bindings::{
+    STATIC_DEFAULT_COMBOS, custom_workspace_binding, default_workspace_bindings, gpui_binding_combo,
+};
 mod documents;
 mod file_tree;
 mod key_actions;
+mod launcher_menu;
 mod notifications;
 mod palette;
 mod pane_header;
@@ -159,162 +163,9 @@ fn title_bar_panel_controls() -> gpui::Div {
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
 }
 
-/// 工作区静态默认绑定的 combo 集（[`init`] 的镜像）。撤销已失效的自定义
-/// 注入时要排除：gpui 的 NoAction 打在静态默认键上会误杀基础功能。
-const STATIC_DEFAULT_COMBOS: &[&str] = &[
-    "ctrl-shift-t",
-    "ctrl-shift-e",
-    "ctrl-shift-w",
-    "ctrl-shift-b",
-    "ctrl-,",
-    "ctrl-shift-p",
-    "ctrl-k",
-    "ctrl-shift-f",
-    "escape",
-    "ctrl-shift-d",
-    "ctrl-alt-shift-s",
-    "f2",
-    "ctrl-shift-enter",
-    "ctrl-alt-left",
-    "ctrl-alt-right",
-    "ctrl-alt-up",
-    "ctrl-alt-down",
-    "ctrl-tab",
-    "ctrl-shift-tab",
-    "ctrl-shift-pageup",
-    "ctrl-shift-pagedown",
-    "ctrl-shift-g",
-    "ctrl-=",
-    "ctrl-+",
-    "ctrl--",
-    "ctrl-0",
-    "ctrl-shift-c",
-    #[cfg(not(target_os = "macos"))]
-    "ctrl-c",
-    "ctrl-v",
-    "ctrl-shift-v",
-    "alt-enter",
-    "ctrl-shift-o",
-];
-
-/// `keybind=` 自定义表（两壳共读）中 config::Action → GPUI 工作区动作的
-/// 映射。仍跳过未接线的动作（prompt 跳转、搜索）：编辑器可读写，这里不
-/// 注入。`CreateNewWindow` 复用同一个 GPUI App 和进程级 hook/runtime。
-
-/// 存储格式 combo（`ctrl+shift+t`）→ gpui 绑定串（`ctrl-shift-t`）。键名
-/// 两套体系同构（小写命名键 + 单字符）；digitN 折回数字，plus/minus 折回
-/// `+`/`-`（`+` 是存储分隔符，必须先占位再替换）。
-fn gpui_binding_combo(combo: &str) -> String {
-    combo
-        .replace("plus", "\u{1}")
-        .replace("minus", "\u{2}")
-        .replace('+', "-")
-        .replace("digit", "")
-        .replace('\u{1}', "+")
-        .replace('\u{2}', "-")
-}
-
 /// 注册工作区快捷键；在 `gpui_component::init` 之后调用一次。
 pub fn init(cx: &mut App) {
-    cx.bind_keys(default_workspace_bindings());
-    #[cfg(target_os = "macos")]
-    bind_macos_command_keys(cx);
-}
-
-/// 工作区静态默认键位表；与 [`STATIC_DEFAULT_COMBOS`] 互为镜像。
-fn default_workspace_bindings() -> Vec<KeyBinding> {
-    [
-        KeyBinding::new("ctrl-shift-t", NewTerminal, None),
-        KeyBinding::new("ctrl-alt-shift-s", recipes::OpenLayoutRecipes, None),
-        KeyBinding::new("ctrl-shift-e", NewWindow, None),
-        KeyBinding::new("ctrl-shift-w", CloseActiveTerminal, None),
-        KeyBinding::new("ctrl-shift-b", ToggleSidebar, None),
-        KeyBinding::new("ctrl-,", OpenSettings, None),
-        KeyBinding::new("ctrl-shift-p", ToggleCommandPalette, None),
-        KeyBinding::new("ctrl-k", ToggleShellPicker, None),
-        KeyBinding::new("ctrl-shift-f", ToggleFileTree, None),
-        // Esc 只在命令/Shell 面板打开时关面板。绑成 `None` 会在终端聚焦时
-        // 抢走按键，CC/Codex 收不到 0x1b（旧壳无 overlay 时 Esc 一定进 PTY）。
-        KeyBinding::new("escape", CloseCommandPalette, Some(PALETTE_KEY_CONTEXT)),
-        // 分屏（旧壳 nebula_key_bindings 同键位）：ctrl+shift+d 左右、
-        // ctrl+shift+s 上下、ctrl+shift+enter 缩放、ctrl+alt+方向切聚焦。
-        KeyBinding::new("ctrl-shift-d", SplitRight, None),
-        KeyBinding::new("ctrl-shift-s", SplitDown, None),
-        // F2 重命名活动标签（旧壳同键位）；右键菜单的键帽读的就是这条。
-        KeyBinding::new("f2", RenameActiveTab, None),
-        KeyBinding::new("ctrl-shift-enter", ToggleZoom, None),
-        KeyBinding::new("ctrl-alt-left", FocusPaneLeft, None),
-        KeyBinding::new("ctrl-alt-right", FocusPaneRight, None),
-        KeyBinding::new("ctrl-alt-up", FocusPaneUp, None),
-        KeyBinding::new("ctrl-alt-down", FocusPaneDown, None),
-        KeyBinding::new("ctrl-tab", SelectNextTab, None),
-        KeyBinding::new("ctrl-shift-tab", SelectPreviousTab, None),
-        // 标签位置左右移动（WT 的 moveTab forward/backward；键位取 VS Code
-        // 的「移动编辑器」同构）。我们自己的回滚翻页只吃**不带 ctrl** 的
-        // shift+pageup（view.rs 的滚动分支），两者不冲突。
-        KeyBinding::new("ctrl-shift-pageup", MoveTabLeft, None),
-        KeyBinding::new("ctrl-shift-pagedown", MoveTabRight, None),
-        KeyBinding::new("ctrl-shift-g", ToggleGitPanel, None),
-        KeyBinding::new("ctrl-=", IncreaseFontSize, None),
-        KeyBinding::new("ctrl-+", IncreaseFontSize, None),
-        KeyBinding::new("ctrl--", DecreaseFontSize, None),
-        KeyBinding::new("ctrl-0", ResetFontSize, None),
-        KeyBinding::new("ctrl-shift-c", CopySelection, None),
-        // 复制优先（WT 语义）：终端聚焦时有选区复制并清选区，无选区经 handler
-        // 的 `cx.propagate()` 落成 ^C。带终端上下文，重命名/输入框聚焦时
-        // ctrl+c 归输入框自己（Input -> Copy）。
-        #[cfg(not(target_os = "macos"))]
-        KeyBinding::new("ctrl-c", CopySelection, Some(crate::gpui_shell::terminal::KEY_CONTEXT)),
-        // 终端粘贴只在终端焦点路径命中。Input 自己带 `Input -> Paste`；这里若
-        // 无上下文，会因注册更晚而抢走弹窗/设置页输入框的 Ctrl+V。
-        KeyBinding::new("ctrl-v", PasteClipboard, Some(crate::gpui_shell::terminal::KEY_CONTEXT)),
-        KeyBinding::new(
-            "ctrl-shift-v",
-            PasteClipboard,
-            Some(crate::gpui_shell::terminal::KEY_CONTEXT),
-        ),
-        KeyBinding::new("ctrl-shift-v", gpui_component::input::Paste, Some("Input")),
-        KeyBinding::new("alt-enter", ToggleFullscreen, None),
-        KeyBinding::new("ctrl-shift-o", OpenQuickJump, None),
-    ]
-    .into()
-}
-
-/// macOS 的原生修饰键是 ⌘：在 Ctrl 绑定之外**追加**一套 ⌘ 绑定，不替换。
-/// 追加而非替换有两个原因：Ctrl+Shift 组合在 Mac 终端里没有别的含义，留着
-/// 不碍事；而 ⌘C/⌘V 必须存在，否则 Mac 用户第一反应就是「复制粘贴坏了」。
-/// 终端里的 Ctrl+C 仍然是 SIGINT——这里只绑 ⌘，不碰 Ctrl 的语义。
-#[cfg(target_os = "macos")]
-fn bind_macos_command_keys(cx: &mut App) {
-    cx.bind_keys([
-        KeyBinding::new("cmd-t", NewTerminal, None),
-        KeyBinding::new("cmd-n", NewWindow, None),
-        KeyBinding::new("cmd-w", CloseActiveTerminal, None),
-        KeyBinding::new("cmd-b", ToggleSidebar, None),
-        KeyBinding::new("cmd-,", OpenSettings, None),
-        KeyBinding::new("cmd-shift-p", ToggleCommandPalette, None),
-        KeyBinding::new("cmd-k", ToggleShellPicker, None),
-        KeyBinding::new("cmd-shift-f", ToggleFileTree, None),
-        KeyBinding::new("cmd-d", SplitRight, None),
-        KeyBinding::new("cmd-shift-d", SplitDown, None),
-        KeyBinding::new("cmd-shift-enter", ToggleZoom, None),
-        KeyBinding::new("cmd-alt-left", FocusPaneLeft, None),
-        KeyBinding::new("cmd-alt-right", FocusPaneRight, None),
-        KeyBinding::new("cmd-alt-up", FocusPaneUp, None),
-        KeyBinding::new("cmd-alt-down", FocusPaneDown, None),
-        KeyBinding::new("cmd-shift-]", SelectNextTab, None),
-        KeyBinding::new("cmd-shift-[", SelectPreviousTab, None),
-        KeyBinding::new("cmd-shift-g", ToggleGitPanel, None),
-        KeyBinding::new("cmd-=", IncreaseFontSize, None),
-        KeyBinding::new("cmd-+", IncreaseFontSize, None),
-        KeyBinding::new("cmd--", DecreaseFontSize, None),
-        KeyBinding::new("cmd-0", ResetFontSize, None),
-        KeyBinding::new("cmd-c", CopySelection, Some(crate::gpui_shell::terminal::KEY_CONTEXT)),
-        KeyBinding::new("cmd-v", PasteClipboard, Some(crate::gpui_shell::terminal::KEY_CONTEXT)),
-        KeyBinding::new("cmd-v", gpui_component::input::Paste, Some("Input")),
-        KeyBinding::new("cmd-ctrl-f", ToggleFullscreen, None),
-        KeyBinding::new("cmd-shift-o", OpenQuickJump, None),
-    ]);
+    keyboard_bindings::init(cx);
 }
 
 /// 一个终端 pane：视图实体 + 宿主订阅。id 即 `TerminalView::pane_id`
@@ -856,6 +707,8 @@ pub struct NebulaWorkspace {
     /// Window-level Settings surface. It intentionally lives outside `tabs`:
     /// opening preferences must not alter tab order, session state, or PTYs.
     settings_surface: Option<(Entity<SettingsPane>, Subscription)>,
+    /// Presence of the singleton Settings tab, independent of the active page.
+    settings_tab_open: bool,
     settings_open: bool,
     /// Sidebar state sampled on entry. `None` means top-tab mode, where there
     /// is no left rail to fold and the setting must remain untouched.
@@ -935,6 +788,8 @@ pub struct NebulaWorkspace {
     /// 三点 / Ctrl+K 打开的是旧壳 `PaletteMode::Profiles`，要画
     /// 全部/SSH/Shell 芯片；Ctrl+Shift+P 的命令目录不走这条。
     shell_picker_open: bool,
+    launcher_menu: Option<launcher_menu::LauncherContextMenu>,
+    launcher_admin_task: Option<gpui::Task<()>>,
     launcher_filter: crate::display::command_palette::LauncherFilter,
     /// `Some` 表示当前是统一 Quick Jump；值就是 provider scope。
     /// 命令面板与 Shell picker 必须保持 `None`，避免跨入口泄漏筛选状态。
@@ -1163,6 +1018,7 @@ impl NebulaWorkspace {
                 .saturating_add(1),
             active: 0,
             settings_surface: None,
+            settings_tab_open: false,
             settings_open: false,
             settings_restore_sidebar_collapsed: None,
             settings_restore_side_panel_open: false,
@@ -1205,6 +1061,8 @@ impl NebulaWorkspace {
             vcs_discard_confirm: None,
             palette_override: None,
             shell_picker_open: false,
+            launcher_menu: None,
+            launcher_admin_task: None,
             launcher_filter: crate::display::command_palette::LauncherFilter::All,
             quick_jump_filter: None,
             command_palette_scroll: gpui::ScrollHandle::new(),
@@ -1258,11 +1116,14 @@ impl NebulaWorkspace {
                 if !runtime.restore_session
                     || !this.try_restore_session(runtime.resume_ai, window, cx)
                 {
-                    this.add_terminal(window, cx);
+                    this.add_terminal_at(std::env::current_dir().ok(), None, window, cx);
                 }
             },
             windowing::WorkspaceStartup::NewTerminal { cwd } => {
                 this.add_terminal_at(cwd, None, window, cx);
+            },
+            windowing::WorkspaceStartup::LaunchTerminal { launch, cwd } => {
+                this.add_terminal_with(launch, cwd, None, window, cx);
             },
             windowing::WorkspaceStartup::Empty => {},
         }
@@ -1988,59 +1849,6 @@ impl NebulaWorkspace {
         }
     }
 
-    /// Open Settings as a window-level page while preserving the active tab.
-    /// Side-tab mode folds its real left rail; top-tab mode has no such rail,
-    /// so touching `sidebar_collapsed` there would only create hidden state.
-    fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.settings_open {
-            if let Some((view, _)) = self.settings_surface.as_ref() {
-                let focus = view.read(cx).focus_handle(cx);
-                window.defer(cx, move |window, cx| window.focus(&focus, cx));
-            }
-            return;
-        }
-
-        if self.settings_surface.is_none() {
-            let view = cx.new(|cx| SettingsPane::new(window, cx));
-            let subscription = cx.subscribe_in(&view, window, Self::on_settings_event);
-            self.settings_surface = Some((view, subscription));
-        }
-
-        self.settings_open = true;
-        self.sync_settings_layout();
-
-        self.settings_restore_side_panel_open = self.side_panel.open;
-        if self.side_panel.open {
-            self.side_panel.open = false;
-            self.side_panel_anim_armed = true;
-            self.file_tree_menu = None;
-        }
-
-        if let Some((view, _)) = self.settings_surface.as_ref() {
-            let focus = view.read(cx).focus_handle(cx);
-            window.defer(cx, move |window, cx| window.focus(&focus, cx));
-        }
-        cx.notify();
-    }
-
-    fn close_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.settings_open {
-            return;
-        }
-        self.leave_settings(window, cx);
-        if self.tabs.is_empty() {
-            windowing::close_empty_workspace_window(self.runtime_window_id, window, cx);
-        }
-    }
-
-    fn toggle_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.settings_open {
-            self.close_settings(window, cx);
-        } else {
-            self.open_settings(window, cx);
-        }
-    }
-
     /// 按视图实体反查 (tab 下标, pane id)。
     fn locate_pane(&self, entity_id: gpui::EntityId) -> Option<(usize, u64)> {
         self.tabs.iter().enumerate().find_map(|(ix, tab)| match tab {
@@ -2210,9 +2018,13 @@ impl NebulaWorkspace {
             }
         }
 
-        if self.tabs.is_empty() && !self.settings_open {
-            windowing::close_empty_workspace_window(self.runtime_window_id, window, cx);
-            return;
+        if self.tabs.is_empty() {
+            if self.settings_tab_open {
+                self.open_settings(window, cx);
+            } else {
+                windowing::close_empty_workspace_window(self.runtime_window_id, window, cx);
+                return;
+            }
         }
         if ix < self.active {
             self.active -= 1;
@@ -2231,9 +2043,10 @@ impl NebulaWorkspace {
     }
 
     fn activate_tab(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
-        if self.settings_open {
-            self.close_settings(window, cx);
+        if ix >= self.tabs.len() {
+            return;
         }
+        self.leave_settings(window, cx);
         if ix < self.tabs.len() && ix != self.active {
             self.clear_reader_focus(cx);
             self.active = ix;
@@ -2610,6 +2423,7 @@ impl NebulaWorkspace {
     }
 
     fn dismiss_palette_state(&mut self) {
+        self.launcher_menu = None;
         self.command_palette_open = false;
         self.palette_override = None;
         self.shell_picker_open = false;
@@ -3366,7 +3180,13 @@ impl NebulaWorkspace {
                             // 与旧壳一致：不用焦点描边，仅给非活动 pane 覆 30%
                             // 黑色 veil。veil 只盖终端区——压暗标题条会把四个
                             // pane 的标题一起糊成灰。
-                            .when(!is_focused, |pane| pane.child(veil)),
+                            .when(
+                                !is_focused
+                                    && cx
+                                        .try_global::<crate::gpui_shell::config::Settings>()
+                                        .is_none_or(|settings| settings.dim_inactive_panes),
+                                |pane| pane.child(veil),
+                            ),
                     )
                     .into_any_element()
             },
@@ -3868,6 +3688,7 @@ impl Render for NebulaWorkspace {
             .on_action(cx.listener(|this, _: &FocusPaneDown, window, cx| {
                 this.navigate_pane(SplitNav::Down, window, cx);
             }))
+            .on_action(cx.listener(Self::select_tab))
             .on_action(cx.listener(|this, _: &SelectNextTab, window, cx| {
                 this.select_adjacent_tab(true, window, cx);
             }))
@@ -3911,17 +3732,8 @@ impl Render for NebulaWorkspace {
             .child(
                 // 用户显式配置的背景图画在 chrome 之下；系统 Mica/Aero/Acrylic
                 // 位于整个 GPUI 内容层下方，由 DWM 合成，不能在这里读取壁纸仿画。
-                // 卡外区域由这层负责，卡内切片由终端元素在卡底色之上重画。
-                gpui::canvas(
-                    |_, _, _| (),
-                    |bounds, _, window, cx| {
-                        crate::gpui_shell::wallpaper::paint_wallpaper_under_chrome(
-                            bounds, window, cx,
-                        );
-                    },
-                )
-                .absolute()
-                .inset_0(),
+                // 拓展模式只在此绘图，壳/卡衬底在其上保留原有文字对比度。
+                crate::gpui_shell::wallpaper::window_layer(cx),
             )
             .child(
                 self.render_window_title_bar(
@@ -4030,18 +3842,9 @@ impl Render for NebulaWorkspace {
                                 .overflow_hidden()
                                 .child(
                                     // 壁纸层（卡底色之上、内容之下，覆盖整卡含
-                                    // 内边距带）：卡模式按卡定位，铺满整窗模式画
-                                    // 窗口锚定的卡内切片。
-                                    gpui::canvas(
-                                        |_, _, _| (),
-                                        |bounds, _, window, cx| {
-                                            crate::gpui_shell::wallpaper::paint_wallpaper_card(
-                                                bounds, window, cx,
-                                            );
-                                        },
-                                    )
-                                    .absolute()
-                                    .inset_0(),
+                                    // 内边距带）：卡模式按卡定位；拓展模式由
+                                    // 窗口底层统一绘图，此处不覆盖原有衬底。
+                                    crate::gpui_shell::wallpaper::card_layer(cx),
                                 )
                                 .children(content),
                         )
@@ -4178,6 +3981,7 @@ impl Render for NebulaWorkspace {
                 root.child(menu)
             })
             .when_some(self.render_tab_context_menu(cx), |root, menu| root.child(menu))
+            .when_some(self.render_launcher_context_menu(), |root, menu| root.child(menu))
             .when_some(self.render_selection_context_menu(cx), |root, menu| {
                 root.child(menu)
             })

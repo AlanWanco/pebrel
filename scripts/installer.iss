@@ -1,5 +1,5 @@
-#ifndef AppVersion
-  #define AppVersion "1.7.0"
+﻿#ifndef AppVersion
+  #define AppVersion "1.8.0"
 #endif
 
 #ifndef AssetVersion
@@ -7,7 +7,7 @@
 #endif
 
 #ifndef NumericVersion
-  #define NumericVersion "1.7.0.0"
+  #define NumericVersion "1.8.0.0"
 #endif
 
 #ifndef Configuration

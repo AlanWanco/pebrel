@@ -10,11 +10,16 @@ const RESET_KEYS: &[&str] = &[
     "app_icon",
     "follow_system_theme",
     "font_family",
+    "font_family_cjk",
+    "ui_font_family",
+    "ui_font_size",
     "font_size",
     "ui_scale",
     "cursor_shape",
     "cursor_blink",
     "copy_on_select",
+    "focus_follows_mouse",
+    "dim_inactive_panes",
     "multiline_paste_confirm",
     "tab_close_visible",
     "terminal_proxy",
@@ -41,6 +46,7 @@ const RESET_KEYS: &[&str] = &[
     "restore_session",
     "resume_ai",
     "tray",
+    "silent_start",
     "blur",
     "opacity",
     "background",
@@ -116,6 +122,16 @@ fn restore_defaults_at(path: &Path) -> io::Result<Option<PathBuf>> {
 mod tests {
     use super::*;
     use crate::{RawSettings, RuntimeSettings};
+
+    #[test]
+    fn reset_restores_split_dimming_and_removes_mouse_override() {
+        let restored =
+            default_settings_text("focus_follows_mouse=1\ndim_inactive_panes=0\ncustom=keep\n");
+        assert_eq!(restored, "custom=keep\n");
+        let settings = RuntimeSettings::from_raw(&RawSettings::from_text(&restored));
+        assert_eq!(settings.focus_follows_mouse, None);
+        assert!(settings.dim_inactive_panes);
+    }
 
     #[test]
     fn resetting_preferences_reenables_ai_toasts_without_erasing_other_data() {

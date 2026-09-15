@@ -42,6 +42,7 @@ pub struct Settings {
     /// 已解析的界面语言。GPUI 组件只读这个内存全局，渲染路径不得重复读盘。
     pub ui_language: UiLanguage,
     pub font_family: String,
+    pub font_cjk: Option<[gpui::Font; 4]>,
     pub font_bold_family: String,
     pub font_italic_family: String,
     pub font_bold_italic_family: String,
@@ -50,6 +51,9 @@ pub struct Settings {
     /// 配置文件的基准字号，不含设置页/Ctrl+滚轮持久化的终端缩放。
     /// 启动窗口按它定形，和旧壳的 `window_size` 契约一致。
     pub base_font_size_px: f32,
+    /// Explicit interface text size before the product-wide chrome scale.
+    pub ui_font_size_px: f32,
+    /// Product-wide chrome scale, independent of terminal font size and DPI.
     pub ui_scale: nebula_settings::UiScale,
     /// 字体 cell 的物理像素偏移；旧壳 Windows 默认 y=4，必须在设备像素
     /// 域参与取整，才能在 125%/150% DPI 下保持同一行数。
@@ -60,6 +64,9 @@ pub struct Settings {
     pub cursor_blink: Option<bool>,
     /// 选区完成即复制（旧壳 `copy_on_select` 设置）。
     pub copy_on_select: bool,
+    /// Pointer handlers and split rendering only read these cached preferences.
+    pub focus_follows_mouse: bool,
+    pub dim_inactive_panes: bool,
     /// Cached in-app toast preference, independent of native system notifications.
     pub ai_toasts: bool,
     /// 标签关闭按钮与标签插入动画都在渲染热路径读取，必须随全局设置驻留内存。
@@ -105,8 +112,9 @@ fn resolve_ui_language(preference: nebula_settings::LanguagePref) -> UiLanguage 
 }
 
 impl Settings {
+    /// Effective interface text size after the independent chrome scale.
     pub fn ui_font_size_px(&self) -> f32 {
-        self.base_font_size_px * self.ui_scale.factor()
+        self.ui_font_size_px * self.ui_scale.factor()
     }
 
     /// `theme`：**生效**主题（follow_system 折算后，见
@@ -170,6 +178,7 @@ impl Settings {
             font_bold_italic_family: secondary(&raw.font.bold_italic),
             font_size_px,
             base_font_size_px,
+            ui_font_size_px: runtime.ui_font_size_px.unwrap_or(base_font_size_px),
             ui_scale: runtime.ui_scale,
             font_offset_x: f32::from(offset.x),
             font_offset_y: f32::from(offset.y),
@@ -182,6 +191,10 @@ impl Settings {
             }),
             cursor_blink: runtime.cursor_blink,
             copy_on_select: runtime.copy_on_select,
+            focus_follows_mouse: runtime
+                .focus_follows_mouse
+                .unwrap_or(raw.mouse.focus_follows_mouse),
+            dim_inactive_panes: runtime.dim_inactive_panes,
             ai_toasts: runtime.ai_toasts,
             tab_close_visible: runtime.tab_close_visible,
             tab_reveal: runtime.tab_reveal,
@@ -199,6 +212,24 @@ impl Settings {
             cjk_bold_regular: runtime.cjk_bold_regular,
             shell_id: runtime.shell.clone(),
             font_family: normal_family,
+            font_cjk: Some({
+                let family = runtime
+                    .font_family_cjk
+                    .as_deref()
+                    .unwrap_or(crate::font_install::REQUIRED_FONT_FAMILY);
+                use gpui::{FontStyle, FontWeight};
+                [
+                    (FontWeight::NORMAL, FontStyle::Normal),
+                    (FontWeight::BOLD, FontStyle::Normal),
+                    (FontWeight::NORMAL, FontStyle::Italic),
+                    (FontWeight::BOLD, FontStyle::Italic),
+                ]
+                .map(|(weight, style)| gpui::Font {
+                    weight,
+                    style,
+                    ..crate::font_install::gpui_font_with_fallbacks(family)
+                })
+            }),
             load_notice,
             // 这里是唯一能正确合并「主题自带几何」与「用户显式覆盖」的地方：
             // `theme` 已是 follow_system 折算后的**生效**主题，runtime 是同一次
@@ -437,6 +468,13 @@ fn merge_values(base: toml::Value, other: toml::Value) -> toml::Value {
 struct RawConfig {
     font: RawFont,
     colors: RawColors,
+    mouse: RawMouse,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct RawMouse {
+    focus_follows_mouse: bool,
 }
 
 #[derive(Deserialize, Default)]

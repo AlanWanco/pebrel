@@ -114,12 +114,11 @@ pub use context_menu_model::{ContextMenuAction, ContextMenuHit, ContextMenuTarge
 pub(crate) use file_operations::send_to_recycle_bin;
 pub(crate) use input_state::{
     nebula_clear_line, nebula_input_backspace, nebula_input_char, nebula_input_delete_word,
-    nebula_input_text, nebula_shell_prompt_restored_from_raw_grid,
+    nebula_input_text, nebula_prompt_line_from_raw_grid,
+    nebula_shell_prompt_restored_from_raw_grid, nebula_shell_ready_from_raw_grid,
 };
 #[cfg(windows)]
-pub(crate) use input_state::{
-    nebula_input_from_raw_grid, nebula_prompt_line_from_raw_grid, nebula_raw_grid_row_preview,
-};
+pub(crate) use input_state::{nebula_input_from_raw_grid, nebula_raw_grid_row_preview};
 pub use program_identity::AiLogo;
 pub(crate) use program_identity::{
     ai_logo, ai_logo_for_program, prepare_ai_logo_texture, program_icon,
@@ -2412,12 +2411,11 @@ impl Display {
         let grok_uses_light_mark =
             u32::from(ink.r) * 299 + u32::from(ink.g) * 587 + u32::from(ink.b) * 114 >= 128_000;
         let key = match logo {
-            AiLogo::Claude | AiLogo::Antigravity => (logo, [0, 0, 0], target_size),
             AiLogo::Grok if grok_uses_light_mark => (logo, [255, 255, 255], target_size),
-            AiLogo::Grok => (logo, [0, 0, 0], target_size),
             AiLogo::OpenAi | AiLogo::OpenCode | AiLogo::Pi => {
                 (logo, [ink.r, ink.g, ink.b], target_size)
             },
+            _ => (logo, [0, 0, 0], target_size),
         };
         if let Some(cached) = self.nebula_ai_logo_cache.get(&key) {
             return Some(cached.clone());
@@ -2432,11 +2430,7 @@ impl Display {
             },
         };
         logo.tint_pixels(&mut rgba, [ink.r, ink.g, ink.b]);
-        let (rgba, width, height) = if matches!(logo, AiLogo::Grok | AiLogo::Antigravity) {
-            prepare_ai_logo_texture(&rgba, width, height, target_size)
-        } else {
-            (rgba, width, height)
-        };
+        let (rgba, width, height) = prepare_ai_logo_texture(&rgba, width, height, target_size);
         let id = AI_LOGO_ID_BASE + self.nebula_ai_logo_cache.len() as u64;
         let entry = (id, std::sync::Arc::new(rgba), (width, height));
         self.nebula_ai_logo_cache.insert(key, entry.clone());
