@@ -216,11 +216,11 @@ fn run_search_worker(state: Arc<SearchState>) {
         let changed = root != desired.root || epoch != desired.epoch || refresh != desired.refresh;
         let dirty = cache.watches.dirty.swap(false, Ordering::AcqRel)
             || {
-                #[cfg(target_os = "macos")]
+                #[cfg(any(target_os = "macos", target_os = "windows"))]
                 {
                     cache.watches.fallback_dirty()
                 }
-                #[cfg(not(target_os = "macos"))]
+                #[cfg(not(any(target_os = "macos", target_os = "windows")))]
                 {
                     false
                 }
@@ -333,7 +333,7 @@ fn run_search_worker(state: Arc<SearchState>) {
             cache.finish_prefix(position);
         }
         cache.complete = !cancelled() && !outcome.limited && outcome.error.is_none() && !cache.full;
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
         if cache.complete && !cache.watches.unwatched {
             cache.watches.start_fallback();
         }
@@ -349,11 +349,11 @@ fn run_search_worker(state: Arc<SearchState>) {
             drop(_work);
             wait_for_work(&state, WATCH_DEBOUNCE);
             let fallback_dirty = {
-                #[cfg(target_os = "macos")]
+                #[cfg(any(target_os = "macos", target_os = "windows"))]
                 {
                     cache.watches.fallback_dirty()
                 }
-                #[cfg(not(target_os = "macos"))]
+                #[cfg(not(any(target_os = "macos", target_os = "windows")))]
                 {
                     false
                 }
