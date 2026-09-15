@@ -25,9 +25,11 @@
 #[cfg(windows)]
 const REMOTE_BASH: &str = r#"
 [ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"
+__pebrel_shell_token=$(printf '%s' "bash:${HOSTNAME:-remote}:${BASHPID:-$$}:$RANDOM" | base64 | tr -d '\r\n')
 __nebula_branch=""
 __nebula_at_prompt=0
 __nebula_precmd() {
+    printf '\033]1337;SetUserVar=pebrel_shell=%s\007' "$__pebrel_shell_token"
     printf '\033]133;D\007'
     if command -v git >/dev/null 2>&1; then
         __nebula_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
@@ -67,8 +69,10 @@ const REMOTE_ZSH: &str = r#"
 [ -f "$HOME/.zshenv" ] && source "$HOME/.zshenv"
 [ -f "$HOME/.zshrc" ] && source "$HOME/.zshrc"
 autoload -Uz add-zsh-hook 2>/dev/null
+__pebrel_shell_token=$(printf '%s' "zsh:${HOST:-remote}:$$:$RANDOM" | base64 | tr -d '\r\n')
 __nebula_branch=""
 __nebula_precmd() {
+    printf '\033]1337;SetUserVar=pebrel_shell=%s\007' "$__pebrel_shell_token"
     printf '\033]133;D\007'
     if command -v git >/dev/null 2>&1; then
         __nebula_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
@@ -122,10 +126,16 @@ pub const SAVE_CONNECTED_AFTER: std::time::Duration = std::time::Duration::from_
 /// session (`-N`/`-f`/`-G`/`-T`/`-V`/`-W`), or an explicit remote command
 /// (`ssh host ls`): none of those confirm as "connected to this host".
 pub fn ssh_destination(line: &str) -> Option<String> {
-    let mut tokens = line.split_whitespace();
+    let words = command_words(line)?;
+    ssh_destination_words(&words)
+}
+
+pub(crate) fn ssh_destination_words(words: &[String]) -> Option<String> {
+    let mut tokens = words.iter().map(String::as_str);
     // Program identity, path/extension-normalized (`/usr/bin/ssh`,
     // `ssh.exe`); `nebula ssh …` counts too — same wrapper, same semantics.
-    let mut program = crate::display::extract_program(tokens.next()?)?;
+    let executable = tokens.next()?.rsplit(['/', '\\']).next()?;
+    let mut program = crate::display::extract_program(executable)?;
     if matches!(program.as_str(), "pebrel" | "nebula") {
         if tokens.next() != Some("ssh") {
             return None;
@@ -175,6 +185,39 @@ pub fn ssh_destination(line: &str) -> Option<String> {
         };
     }
     None
+}
+
+/// Literal argv for an individual entered command. Preserve quoted executable
+/// paths and option values; a compound shell expression is not one SSH login.
+pub(crate) fn command_words(line: &str) -> Option<Vec<String>> {
+    let line = line.trim().strip_prefix("& ").unwrap_or(line.trim());
+    let mut words = Vec::new();
+    let mut word = String::new();
+    let mut quote = None;
+    for c in line.chars() {
+        if quote == Some(c) {
+            quote = None;
+        } else if quote.is_some() {
+            word.push(c);
+        } else if matches!(c, '\'' | '"') {
+            quote = Some(c);
+        } else if matches!(c, ';' | '|' | '&' | '\n' | '\r') {
+            return None;
+        } else if c.is_whitespace() {
+            if !word.is_empty() {
+                words.push(std::mem::take(&mut word));
+            }
+        } else {
+            word.push(c);
+        }
+    }
+    if quote.is_some() {
+        return None;
+    }
+    if !word.is_empty() {
+        words.push(word);
+    }
+    (!words.is_empty()).then_some(words)
 }
 
 /// Fold `-l user` / `-p port` into a destination string that reconnects when
@@ -581,7 +624,11 @@ pub fn run(args: Vec<String>) -> i32 {
         },
         SshPlan::Inject => {
             let b64 = base64::engine::general_purpose::STANDARD;
-            let bootstrap = build_bootstrap(&b64.encode(REMOTE_BASH), &b64.encode(REMOTE_ZSH));
+            let shell = nebula_terminal::tty::CONNECTION_SHELL;
+            let bootstrap = build_bootstrap(
+                &b64.encode(format!("{REMOTE_BASH}\n{shell}")),
+                &b64.encode(format!("{REMOTE_ZSH}\n{shell}")),
+            );
             // Keepalive: long-idle managed sessions (claude/codex runs) were
             // dropped by NAT/firewall idle timeouts. Application-level pings
             // every 30s survive those; 6 missed replies ≈ 3 min before the
@@ -690,6 +737,11 @@ mod tests {
         assert_eq!(d("ssh user@host"), Some("user@host".into()));
         assert_eq!(d("  ssh.exe   user@host  "), Some("user@host".into()));
         assert_eq!(d("/usr/bin/ssh host"), Some("host".into()));
+        assert_eq!(
+            d(r#"& 'C:\Program Files\OpenSSH\ssh.exe' -i 'key file' host"#),
+            Some("host".into())
+        );
+        assert_eq!(d(r#"ssh -o 'ProxyCommand=ssh -W %h:%p jump' host"#), Some("host".into()));
         assert_eq!(d("nebula ssh host"), Some("host".into()));
         assert_eq!(d("pebrel ssh host"), Some("host".into()));
         assert_eq!(d("pebrel.exe ssh -- user@host"), Some("user@host".into()));
@@ -726,6 +778,9 @@ mod tests {
         assert_eq!(d("ssh -fN host"), None);
         assert_eq!(d("ssh -W target:22 jump"), None);
         assert_eq!(d("ssh -V"), None);
+        assert_eq!(d("ssh host; echo done"), None);
+        assert_eq!(d("ssh host | cat"), None);
+        assert_eq!(d("ssh 'host"), None);
     }
 
     #[test]

@@ -50,6 +50,7 @@ mod chemistry;
 mod cli;
 mod clipboard;
 mod codex_config;
+mod completion_context;
 mod config;
 mod config_cli;
 mod daemon;

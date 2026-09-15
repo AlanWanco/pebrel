@@ -555,8 +555,7 @@ impl WindowContext {
             event_proxy.send_event(TerminalEvent::CursorBlinkingChange.into());
         }
 
-        let mut nebula_state = NebulaPaneState::default();
-        nebula_state.cwd = initial_cwd;
+        let nebula_state = crate::completion_context::initial_state(&pty_config, initial_cwd);
 
         Ok(Pane {
             terminal,

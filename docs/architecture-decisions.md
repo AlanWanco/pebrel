@@ -514,3 +514,56 @@ settings files.
 - **Revisit condition:** Remove the font fork patch when upstream provides the same
   ownership contract. Revisit native adapters when supported platform interfaces
   provide equivalent process identity and resource-lifetime guarantees.
+
+
+## ADR-0015 — Completion ownership follows the active connection
+
+- **Date:** 2026-09-15
+- **Context:** Launch-time Local/WSL/SSH pools do not follow a typed SSH/WSL
+  connection. History and directory candidates consequently retain the outer
+  pane's source. A remote command-done marker does not mean SSH has exited.
+- **Decision:** Keep one shared completion context for both UI adapters. Record
+  the connection command in the parent scope, then select a separate connection
+  scope for subsequent commands. A known parent shell's prompt restores its scope.
+  Clear ghost/popup candidates, dismissal state, input mirrors, cwd and pending
+  directory requests on scope changes. Every cache/result retains its environment.
+  Local directory history only accepts local reports. Empty/unreadable input and
+  ordinary shell commands do not disable completion or learning.
+- **Shell adapter:** Reuse OSC 1337 SetUserVar. `pebrel_shell` identifies a shell
+  instance at its prompt. `pebrel_command` carries that instance and PSReadLine's
+  accepted command, including simple PowerShell alias resolution. This handles
+  recall and completed input that the key mirror cannot reconstruct. The SSH/WSL
+  execution wrapper reports expanded argv as NUL-separated `pebrel_connection`
+  fields, then restores the owner when the actual process returns. Thus a variable
+  such as `$targetHost` does not merge different destinations, and return inside a
+  compound command does not wait for the next prompt. PowerShell invokes the
+  native application; bash/zsh share one payload and preserve user wrappers and
+  redirected command output. Integration tokens are generated once per shell and remain unexported. Existing local
+  PowerShell/bash/zsh, WSL bash hooks and SSH bootstrap hooks carry these signals.
+  Preserve terminal event order across chunks so a cwd cannot move past the
+  parent-context report. A new shell on the same host keeps that host's history.
+- **Connection identity:** Existing JSONL files/schema remain authoritative. Typed
+  SSH/WSL contexts use a `typed:` SHA-256 key in their respective history category,
+  incorporating the parent history scope and argument boundaries. This separates
+  bastion/config/port routes without reusing an outer SFTP channel for an inner
+  host. Typed-connection path completion stays with the native shell. WSL launch
+  resolves the default distro from Windows' Lxss registry; an unavailable name
+  stays a distinct WSL scope, never Local, and its shell report can supply the
+  actual distro. No new service or dependency is added.
+- **Native completion:** Preserve PSReadLine prediction settings. The existing
+  grid reconciliation yields when shell text occupies the space after the cursor,
+  so native inline predictions keep their own acceptance keys. The Pebrel toggle
+  only controls its candidates; it does not reconfigure the shell editor.
+- **Scope:** This change addresses connection history and candidate ownership.
+  It adds no deletion, exit-status filtering, command blacklist or input-quality
+  learning switch. Existing records without provenance are retained. Return from
+  nested connections is verified with parent shell integration; it is not inferred
+  from an untagged exit code or claimed to cover arbitrary uninstrumented wrappers.
+- **Validation:** Regressions cover local/SSH/WSL entry, parent return, nested
+  reported shells, failed connections, options/ancestry separation, native accepted
+  commands, same-host shells and candidate invalidation. Test delayed directory
+  results against a changed context and parser order at every byte split. Native
+  PowerShell hook tests validate emitted identity, accepted alias text and native
+  prediction preservation. A Windows integration test sends execution/return
+  reports through the production ConPTY and parses the resulting byte stream. Report
+  actual executed checks separately from live remote-server validation.
