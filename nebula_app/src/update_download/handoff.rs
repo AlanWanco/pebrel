@@ -2,11 +2,12 @@
 //! Files under one transaction are durable evidence; only commit authorizes setup.
 use std::io::{self, Read as _};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::Child;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
+use crate::platform::update_installation::{canonical, current_process_created, spawn_helper};
 use crate::session::Session;
 use crate::update_check::UpdateAsset;
 
@@ -75,21 +76,6 @@ impl Drop for PreparedUpdate {
     }
 }
 
-fn canonical(path: &Path) -> io::Result<PathBuf> {
-    let path = std::fs::canonicalize(path)?;
-    #[cfg(windows)]
-    {
-        let text = path.to_string_lossy();
-        if let Some(unc) = text.strip_prefix(r"\\?\UNC\") {
-            return Ok(PathBuf::from(format!(r"\\{unc}")));
-        }
-        if let Some(local) = text.strip_prefix(r"\\?\") {
-            return Ok(PathBuf::from(local));
-        }
-    }
-    Ok(path)
-}
-
 fn guard_base(executable: &Path) -> PathBuf {
     // All configurations of the same installed binary share this lock. A
     // settings-directory override must not bypass an installation in progress.
@@ -112,124 +98,84 @@ pub(crate) fn prepare(asset: &UpdateAsset) -> Result<PreparedUpdate, String> {
                 .into(),
         );
     }
-    #[cfg(not(windows))]
-    {
-        let _ = asset;
+    if !crate::platform::CAPABILITIES.self_update_install {
         return Err("In-app installation is unavailable on this platform".into());
     }
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt as _;
-        use windows_sys::Win32::Foundation::FILETIME;
-        use windows_sys::Win32::System::Threading::{GetCurrentProcess, GetProcessTimes};
-
-        let installer = super::ready_path(asset)?;
-        let executable = canonical(&std::env::current_exe().map_err(|error| error.to_string())?)
-            .map_err(|error| error.to_string())?;
-        let installation =
-            executable.parent().ok_or("Application directory is missing")?.to_owned();
-        if !installation.join("unins000.exe").is_file() {
+    let installer = super::ready_path(asset)?;
+    let executable = canonical(&std::env::current_exe().map_err(|error| error.to_string())?)
+        .map_err(|error| error.to_string())?;
+    let installation = executable.parent().ok_or("Application directory is missing")?.to_owned();
+    if !installation.join("unins000.exe").is_file() {
+        return Err("This copy is portable. Use the download page to replace its package.".into());
+    }
+    let transaction = format!(
+        "{}-{}",
+        std::process::id(),
+        SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos()
+    );
+    let directory = nebula_settings::settings_dir().join("updates/handoffs").join(&transaction);
+    std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+    // Detect an unwritable target while all windows are still available.
+    let probe = installation.join(format!(".pebrel-update-{transaction}"));
+    let probe_file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&probe)
+        .map_err(|error| format!("Installation directory is not writable: {error}"))?;
+    drop(probe_file);
+    std::fs::remove_file(probe).map_err(|error| error.to_string())?;
+    let created = current_process_created().map_err(|error| error.to_string())?;
+    let base = guard_base(&executable);
+    let plan = Plan {
+        schema: 1,
+        asset: asset.clone(),
+        transaction: transaction.clone(),
+        installation,
+        executable,
+        config_directory: canonical(&nebula_settings::settings_dir())
+            .map_err(|error| error.to_string())?,
+        installer: canonical(&installer).map_err(|error| error.to_string())?,
+        sha256: asset.sha256.clone().ok_or("Missing package digest")?,
+        bytes: std::fs::metadata(installer).map_err(|error| error.to_string())?.len(),
+        version: asset.version.clone(),
+        original_version: env!("CARGO_PKG_VERSION").into(),
+        guard_path: base.with_extension("nebula-lock"),
+        participants: vec![Participant { pid: std::process::id(), created: created.to_string() }],
+    };
+    let plan_path = directory.join("plan.json");
+    crate::atomic_file::write(
+        &plan_path,
+        &serde_json::to_vec(&plan).map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| error.to_string())?;
+    crate::atomic_file::write(
+        &nebula_settings::settings_dir().join("updates/last-handoff.json"),
+        &serde_json::to_vec(&plan_path).map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| error.to_string())?;
+    let helper = directory.join("handoff.ps1");
+    crate::atomic_file::write(&helper, include_bytes!("handoff.ps1"))
+        .map_err(|error| error.to_string())?;
+    let child = spawn_helper(&helper, &plan_path).map_err(|error| error.to_string())?;
+    let mut prepared = PreparedUpdate { directory, transaction, child, committed: false };
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        if prepared.child.try_wait().map_err(|error| error.to_string())?.is_some() {
+            let result = read_json::<serde_json::Value>(&prepared.directory.join("result.json"))
+                .and_then(|result| result["error"].as_str().map(str::to_owned));
             return Err(
-                "This copy is portable. Use the download page to replace its package.".into()
+                result.unwrap_or_else(|| "The update helper could not prepare installation".into())
             );
         }
-        let transaction = format!(
-            "{}-{}",
-            std::process::id(),
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos()
-        );
-        let directory = nebula_settings::settings_dir().join("updates/handoffs").join(&transaction);
-        std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
-        // Detect an unwritable target while all windows are still available.
-        let probe = installation.join(format!(".pebrel-update-{transaction}"));
-        let probe_file = std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&probe)
-            .map_err(|error| format!("Installation directory is not writable: {error}"))?;
-        drop(probe_file);
-        std::fs::remove_file(probe).map_err(|error| error.to_string())?;
-        let mut created: FILETIME = unsafe { std::mem::zeroed() };
-        let mut exited = created;
-        let mut kernel = created;
-        let mut user = created;
-        if unsafe {
-            GetProcessTimes(GetCurrentProcess(), &mut created, &mut exited, &mut kernel, &mut user)
-        } == 0
+        if let Some(ready) = read_json::<serde_json::Value>(&prepared.directory.join("ready.json"))
+            && ready["transaction"] == prepared.transaction
         {
-            return Err(io::Error::last_os_error().to_string());
+            return Ok(prepared);
         }
-        let created = (u64::from(created.dwHighDateTime) << 32) | u64::from(created.dwLowDateTime);
-        let base = guard_base(&executable);
-        let plan = Plan {
-            schema: 1,
-            asset: asset.clone(),
-            transaction: transaction.clone(),
-            installation,
-            executable,
-            config_directory: canonical(&nebula_settings::settings_dir())
-                .map_err(|error| error.to_string())?,
-            installer: canonical(&installer).map_err(|error| error.to_string())?,
-            sha256: asset.sha256.clone().ok_or("Missing package digest")?,
-            bytes: std::fs::metadata(installer).map_err(|error| error.to_string())?.len(),
-            version: asset.version.clone(),
-            original_version: env!("CARGO_PKG_VERSION").into(),
-            guard_path: base.with_extension("nebula-lock"),
-            participants: vec![Participant {
-                pid: std::process::id(),
-                created: created.to_string(),
-            }],
-        };
-        let plan_path = directory.join("plan.json");
-        crate::atomic_file::write(
-            &plan_path,
-            &serde_json::to_vec(&plan).map_err(|error| error.to_string())?,
-        )
-        .map_err(|error| error.to_string())?;
-        crate::atomic_file::write(
-            &nebula_settings::settings_dir().join("updates/last-handoff.json"),
-            &serde_json::to_vec(&plan_path).map_err(|error| error.to_string())?,
-        )
-        .map_err(|error| error.to_string())?;
-        let helper = directory.join("handoff.ps1");
-        crate::atomic_file::write(&helper, include_bytes!("handoff.ps1"))
-            .map_err(|error| error.to_string())?;
-        let powershell = std::env::var_os("SystemRoot")
-            .map(PathBuf::from)
-            .ok_or("Windows directory is unavailable")?
-            .join("System32/WindowsPowerShell/v1.0/powershell.exe");
-        let child = Command::new(powershell)
-            .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"])
-            .arg(helper)
-            .arg("-PlanPath")
-            .arg(plan_path)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .creation_flags(0x0800_0000)
-            .spawn()
-            .map_err(|error| error.to_string())?;
-        let mut prepared = PreparedUpdate { directory, transaction, child, committed: false };
-        let deadline = Instant::now() + Duration::from_secs(30);
-        loop {
-            if prepared.child.try_wait().map_err(|error| error.to_string())?.is_some() {
-                let result =
-                    read_json::<serde_json::Value>(&prepared.directory.join("result.json"))
-                        .and_then(|result| result["error"].as_str().map(str::to_owned));
-                return Err(result
-                    .unwrap_or_else(|| "The update helper could not prepare installation".into()));
-            }
-            if let Some(ready) =
-                read_json::<serde_json::Value>(&prepared.directory.join("ready.json"))
-                && ready["transaction"] == prepared.transaction
-            {
-                return Ok(prepared);
-            }
-            if Instant::now() >= deadline {
-                return Err("The update helper did not become ready".into());
-            }
-            std::thread::sleep(Duration::from_millis(50));
+        if Instant::now() >= deadline {
+            return Err("The update helper did not become ready".into());
         }
+        std::thread::sleep(Duration::from_millis(50));
     }
 }
 

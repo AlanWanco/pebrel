@@ -49,6 +49,19 @@ pub fn interactive_args(id: &str) -> Vec<String> {
     }
 }
 
+/// Preserve the actual Windows PTY default in a pane's durable launch snapshot.
+/// Unix keeps an unspecified shell unspecified so the login-shell policy applies.
+pub(crate) fn snapshot_shell(
+    configured: Option<nebula_terminal::tty::Shell>,
+) -> Option<nebula_terminal::tty::Shell> {
+    #[cfg(windows)]
+    {
+        configured.or_else(|| Some(nebula_terminal::tty::resolved_default_shell()))
+    }
+    #[cfg(not(windows))]
+    configured
+}
+
 #[cfg(target_os = "macos")]
 const fn default_unix_shell_id() -> &'static str {
     "zsh"

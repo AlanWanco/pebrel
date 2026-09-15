@@ -106,12 +106,7 @@ impl TerminalView {
                     .map_or(crate::display::SuggestEnv::Local, |distro| {
                         crate::display::SuggestEnv::Wsl { distro: distro.to_owned() }
                     });
-                #[cfg(windows)]
-                let snapshot_shell = effective
-                    .clone()
-                    .or_else(|| Some(nebula_terminal::tty::resolved_default_shell()));
-                #[cfg(not(windows))]
-                let snapshot_shell = effective.clone();
+                let snapshot_shell = crate::platform::shell::snapshot_shell(effective.clone());
                 let session_launch = snapshot_shell.as_ref().map_or(
                     crate::session::LaunchSession::Default,
                     |shell| crate::session::LaunchSession::Shell {

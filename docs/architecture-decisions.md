@@ -614,6 +614,9 @@ settings files.
   block competing installation/startup and cannot remain owned after a crash.
   Upgrade restore state and installation failures survive process exit. Inno
   in-place installation is not claimed to provide arbitrary mid-install rollback.
+  Native path normalization, process creation time and hidden helper spawning
+  belong to `platform::update_installation`; transaction state and commit authority
+  remain in the updater. UI startup consults the existing installation capability.
 - **Validation boundary:** Provider bridge execution, serialization/failure cases,
   actual GPUI lifecycle tests and native simulated upgrades are separate evidence.
   Metadata compilation alone does not validate restoration or installer behavior.
@@ -621,3 +624,17 @@ settings files.
   it permits an exact-version reinstall, never a downgrade. Such a reinstall
   must replace the executable bytes; an unchanged executable after setup exits
   zero is a failure. This does not substitute for a full packaged upgrade test.
+
+## ADR-0017 — Optional release contributor section
+
+- **Status:** Approved by the maintainer on 2026-09-15.
+- **Context:** A release without new PR contributors previously failed validation
+  unless it listed a contributor. This encouraged crediting maintainers or issue
+  reporters in the PR contributor area, contrary to the maintainer's policy.
+- **Decision:** Omit Contributors when there are no PR contributors to credit.
+  When present, the section still requires GitHub links, occurs once after both
+  languages, and precedes SHA256. PR eligibility is checked against GitHub during
+  release review; the local Markdown checker cannot establish it from a link.
+- **Validation:** A bilingual release without Contributors passes. Empty,
+  duplicated, unlinked or misplaced contributor sections fail; language and
+  asset checksum contracts remain required.
