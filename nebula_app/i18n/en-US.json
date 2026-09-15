@@ -615,6 +615,18 @@
     "load_failed": "Could not load the background image. Choose a readable PNG, JPEG, WebP, GIF or BMP image.",
     "too_large": "The background image exceeds the memory limit. Choose a smaller image."
   },
+  "update": {
+    "download": {
+      "dns": "Could not resolve the update server or proxy address. Check your network and proxy settings, then retry.",
+      "tls": "Could not establish a secure connection for the update. Check your system clock and whether a proxy is intercepting TLS.",
+      "refused": "The update connection was refused. Check your network; if you use a proxy, make sure it is running on the configured port.",
+      "timeout": "The update download timed out. Check your network and proxy connection, then retry.",
+      "interrupted": "The update download was interrupted. Check your connection and retry the download.",
+      "proxy": "Could not connect through the update proxy. Check its address, protocol and authentication, then retry.",
+      "http": "The update server returned HTTP {status}. Retry later or download the installer from the Releases page.",
+      "network": "Could not download the update. Check your network and proxy settings, or use the Releases page."
+    }
+  },
   "files.search_failed": "Unable to complete search",
   "files.search_running": "Searching…",
   "files.search_limited": "Showing {count} results · narrow the search for more",

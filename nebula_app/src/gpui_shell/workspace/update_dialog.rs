@@ -74,8 +74,9 @@ fn start_update_download(
     }
 
     let background_asset = asset.clone();
+    let language = workspace_ui_language();
     cx.background_executor()
-        .spawn(async move { crate::update_download::run(background_asset) })
+        .spawn(async move { crate::update_download::run(background_asset, language) })
         .detach();
 
     let window_handle = window.window_handle();
