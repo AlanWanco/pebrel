@@ -6,8 +6,8 @@
 
 use super::*;
 use crate::theme_library::{ThemeDocument, ThemeFormat, ThemeLibraryStore};
-use gpui::{Modifiers, TestAppContext, VisualTestContext, size};
-use gpui_component::Root;
+use gpui::{Modifiers, TestAppContext, VisualTestContext, px, size};
+use gpui_component::{Root, Theme};
 use nebula_settings::{RawSettings, RuntimeSettings, ThemeDefinition, ThemeName};
 
 const TEST_SETTINGS: &str =
@@ -193,6 +193,9 @@ impl Render for ThemeStudioHost {
 fn open_settings(cx: &mut TestAppContext) -> (Entity<SettingsPane>, VisualTestContext) {
     cx.update(|cx| {
         gpui_component::init(cx);
+        // `ui(...)` dimensions are resolved against the product's 14px root REM.
+        // TestAppContext otherwise keeps gpui-component's 16px default.
+        Theme::global_mut(cx).font_size = px(crate::gpui_shell::ui_scale::BASE_REM);
         cx.set_reduce_motion(true);
         let runtime = test_runtime();
         cx.set_global(crate::gpui_shell::config::Settings::load_with_runtime(
@@ -202,6 +205,7 @@ fn open_settings(cx: &mut TestAppContext) -> (Entity<SettingsPane>, VisualTestCo
     });
     let mut pane = None;
     let (_, mut window) = cx.add_window_view(|window, cx| {
+        window.set_rem_size(px(crate::gpui_shell::ui_scale::BASE_REM));
         let view = cx.new(|cx| SettingsPane::new(window, cx));
         view.update(cx, |pane, _| {
             pane.runtime = test_runtime();
