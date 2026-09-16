@@ -28,6 +28,8 @@ struct SearchState {
     #[cfg(test)]
     scans: AtomicUsize,
     #[cfg(test)]
+    work_deferrals: AtomicUsize,
+    #[cfg(test)]
     retained_bytes: AtomicUsize,
     #[cfg(test)]
     allocations: Mutex<CacheAllocations>,
@@ -73,6 +75,8 @@ impl EmbeddedFileIndex {
             truncated: AtomicBool::new(false),
             #[cfg(test)]
             scans: AtomicUsize::new(0),
+            #[cfg(test)]
+            work_deferrals: AtomicUsize::new(0),
             #[cfg(test)]
             retained_bytes: AtomicUsize::new(0),
             #[cfg(test)]
@@ -216,6 +220,9 @@ fn run_search_worker(state: Arc<SearchState>) {
         let changed = root != desired.root || epoch != desired.epoch || refresh != desired.refresh;
         let dirty = cache.watches.dirty.swap(false, Ordering::AcqRel);
         if changed || dirty {
+            // A watch event can invalidate an already-processed query. Keep
+            // it pending if debounce or the shared work lock defers this scan.
+            state.processed.store(0, Ordering::Release);
             cache = FileCache::new();
             root = desired.root.clone();
             epoch = desired.epoch;
@@ -245,6 +252,8 @@ fn run_search_worker(state: Arc<SearchState>) {
             Ok(work) => work,
             Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
             Err(std::sync::TryLockError::WouldBlock) => {
+                #[cfg(test)]
+                state.work_deferrals.fetch_add(1, Ordering::Release);
                 wait_for_work(&state, WATCH_DEBOUNCE);
                 continue;
             },
@@ -355,4 +364,43 @@ fn publish(
     }
     drop(desired);
     state.wake.notify_all();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::tests::wait_for_result;
+    use super::*;
+
+    #[test]
+    fn watched_change_stays_pending_while_another_search_owns_the_work_lock() {
+        let directory = tempfile::tempdir().unwrap();
+        let nested = directory.path().join("nested");
+        std::fs::create_dir(&nested).unwrap();
+        let index = EmbeddedFileIndex::new();
+        index.rebuild(
+            Some(FileIndexRoot::Local(directory.path().to_owned())),
+            1,
+            Some((1, "needle".to_owned(), FileSearchOptions::default())),
+        );
+        wait_for_result(&index, |result| result.total == 0);
+
+        let work = SEARCH_WORK.lock().unwrap_or_else(|error| error.into_inner());
+        let scans = index.scans();
+        let revision = index.state.revision.load(Ordering::Acquire);
+        let deferrals = index.state.work_deferrals.load(Ordering::Acquire);
+        std::fs::write(nested.join("needle.txt"), b"").unwrap();
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while index.state.work_deferrals.load(Ordering::Acquire) == deferrals {
+            assert!(Instant::now() < deadline, "watch invalidation did not reach the held work lock");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(index.scans(), scans, "the contending worker cannot scan under the held lock");
+        assert_ne!(index.state.processed.load(Ordering::Acquire), revision);
+        drop(work);
+
+        let result = wait_for_result(&index, |result| result.total == 1);
+        assert_eq!(result.rows[0].path, nested.join("needle.txt"));
+        assert!(index.scans() > scans);
+        index.release_for_test();
+    }
 }
