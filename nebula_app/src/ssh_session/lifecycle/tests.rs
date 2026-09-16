@@ -529,15 +529,7 @@ fn ssh_resize_updates_grid_and_remote_pty() {
         let pump_terminal = Arc::clone(&terminal);
         let pump_events = events.clone();
         let mut running = tokio::spawn(async move {
-            pump(
-                &mut channel,
-                token,
-                size(),
-                &pump_terminal,
-                &pump_events,
-                &mut input,
-            )
-            .await
+            pump(&mut channel, token, size(), &pump_terminal, &pump_events, &mut input).await
         });
 
         let grid_size = WindowSize { num_cols: 100, num_lines: 30, ..size() };
