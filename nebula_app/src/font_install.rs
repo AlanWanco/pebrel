@@ -2,13 +2,13 @@ use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 
-pub const REQUIRED_FONT_FAMILY: &str = "Maple Mono NF CN";
+pub const REQUIRED_FONT_FAMILY: &str = "Maple Mono Normal NF CN";
 
 /// The bundled face is shared by the legacy rasterizer and the GPUI text
 /// system. Keeping one static byte slice avoids letting the two shells drift
 /// to different font revisions.
 pub static REQUIRED_FONT_BYTES: &[u8] =
-    include_bytes!("../../assets/fonts/MapleMono-NF-CN-Regular.ttf");
+    include_bytes!("../../assets/fonts/MapleMonoNormal-NF-CN-Regular.ttf");
 
 /// 一个系统已安装字体族，连同平台给出的等宽判定。
 ///
@@ -214,7 +214,7 @@ pub fn gpui_font_with_fallbacks(value: &str) -> gpui::Font {
     }
     font
 }
-pub const REQUIRED_FONT_FILE: &str = "MapleMono-NF-CN-Regular.ttf";
+pub const REQUIRED_FONT_FILE: &str = "MapleMonoNormal-NF-CN-Regular.ttf";
 
 /// 枚举系统已安装字体族，带 DirectWrite 的权威等宽判定（`IsMonospacedFont`）。
 ///
@@ -382,6 +382,19 @@ pub fn ensure_bundled_font_on_disk() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn default_face_matches_the_1_7_regular_font_asset() {
+        assert_eq!(REQUIRED_FONT_FAMILY, "Maple Mono Normal NF CN");
+        assert_eq!(REQUIRED_FONT_FILE, "MapleMonoNormal-NF-CN-Regular.ttf");
+        assert_eq!(
+            Sha256::digest(REQUIRED_FONT_BYTES)
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>(),
+            "9ae0c348a44a681fa8fa20a34e782e95316cec880102295a128b65760944c0f5"
+        );
+    }
 
     fn sys(name: &str, monospaced: bool) -> SystemFontFamily {
         SystemFontFamily { name: name.to_owned(), monospaced }

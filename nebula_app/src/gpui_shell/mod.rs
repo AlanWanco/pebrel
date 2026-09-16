@@ -42,8 +42,8 @@ pub mod ssh_hosts;
 pub mod ssh_settings;
 pub mod terminal;
 pub mod theme;
-mod ui_scale;
 pub mod toast;
+mod ui_scale;
 pub mod wallpaper;
 pub mod widgets;
 pub mod workspace;
@@ -80,6 +80,23 @@ pub fn run_shell(
     initial_cwd: Option<std::path::PathBuf>,
     initial_command: Option<crate::config::ui_config::Program>,
 ) {
+    if crate::platform::CAPABILITIES.self_update_install {
+        match crate::update_download::handoff::installation_in_progress() {
+            Ok(true) => {
+                log::info!("Installation is being updated; resident startup deferred");
+                return;
+            },
+            Err(error) => {
+                log::warn!("Could not inspect installation ownership: {error}");
+            },
+            Ok(false) => {},
+        }
+    }
+    if crate::platform::CAPABILITIES.self_update_install
+        && crate::update_download::handoff::apply_scheduled()
+    {
+        return;
+    }
     let (shell_tx, shell_rx) = std::sync::mpsc::channel();
     crate::notify::init_gpui_activation(shell_tx.clone());
     crate::ssh_prompt::install({
@@ -179,15 +196,21 @@ fn init(cx: &mut App) {
     // 网络图片加载：gpui 默认 NullHttpClient，markdown 文档里的 http(s)
     // 图源全部失败；换成 ureq 实现（跑在后台 executor）。
     http::register(cx);
-    terminal::init(cx);
-    workspace::init(cx);
-
-    // 用户 nebula.toml + nebula_settings.txt，启动读一次；失败回退默认，
-    // 具体错误由 config 的 notice 上浮，并在可用时写入 stderr。
-    let settings = config::Settings::load(theme::effective_theme_name(cx));
+    // Read one runtime snapshot before installing any renderer. The resolved
+    // custom theme, terminal palette and chrome therefore start from the same
+    // immutable value and cannot diverge during bootstrap.
+    let runtime = nebula_settings::RuntimeSettings::load();
+    let theme = theme::resolve_theme_name(
+        runtime.theme,
+        runtime.follow_system_theme,
+        theme::system_is_light(cx),
+    );
+    let settings = config::Settings::load_with_runtime(theme, runtime);
     gpui_component::set_locale(settings.ui_language.gpui_component_locale());
     cx.set_global(settings);
     theme::apply_chrome_theme(cx);
+    terminal::init(cx);
+    workspace::init(cx);
     toast::init(cx);
 }
 
@@ -197,7 +220,7 @@ fn register_bundled_fonts(cx: &App) {
     // resolve a font so the default remains the same private face as winit.
     if let Err(error) = cx.text_system().add_fonts(vec![
         Cow::Borrowed(crate::font_install::REQUIRED_FONT_BYTES),
-        Cow::Borrowed(include_bytes!("../../../assets/fonts/MapleMonoNormal-NF-CN-Regular.ttf")),
+        Cow::Borrowed(include_bytes!("../../../assets/fonts/MapleMono-NF-CN-Regular.ttf")),
     ]) {
         try_write_stderr(format_args!(
             "[nebula:gpui] failed to register bundled Maple font: {error}"

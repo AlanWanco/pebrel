@@ -24,7 +24,7 @@ use gpui::{
 };
 use gpui_component::input::InputEvent;
 use gpui_component::select::{SelectEvent, SelectItem};
-use nebula_settings::{RuntimeSettings, ThemeName, format_hex_rgb, persist_keys};
+use nebula_settings::{RuntimeSettings, ThemeName, format_hex_rgb, parse_hex_rgb, persist_keys};
 
 use design::GROUP_GAP;
 use setting_help::{SettingHelp, help};
@@ -47,6 +47,7 @@ mod design;
 mod font_picker;
 mod providers;
 mod reset;
+mod scrolling;
 mod search_header;
 mod setting_help;
 mod theme_picker;
@@ -61,6 +62,13 @@ mod shell_picker;
 #[cfg(all(test, feature = "gpui-test-support"))]
 mod shell_picker_tests;
 mod status;
+mod theme_advanced;
+mod theme_editor;
+mod theme_foreground;
+#[cfg(all(test, feature = "gpui-test-support"))]
+mod theme_studio_tests;
+mod theme_transfer;
+mod theme_transfer_view;
 
 use localization::*;
 use navigation::*;
@@ -94,6 +102,10 @@ pub struct SettingsPane {
     /// 当前分区（`SECTIONS` 下标）；默认落在应用主页。
     active_section: usize,
     appearance_picker: Option<appearance_picker::AppearancePicker>,
+    appearance_picker_seq: u64,
+    pub(super) theme_editor: Option<theme_editor::ThemeEditor>,
+    theme_editor_seq: u64,
+    pub(super) theme_transfer: theme_transfer::ThemeTransferState,
     theme_picker_trigger: FocusHandle,
     icon_picker_trigger: FocusHandle,
     expanded_setting_help: std::collections::HashSet<&'static str>,
@@ -118,8 +130,16 @@ pub struct SettingsPane {
     bg_picker_trigger_bounds: Option<gpui::Bounds<gpui::Pixels>>,
     bg_sv_bounds: Option<gpui::Bounds<gpui::Pixels>>,
     bg_hue_bounds: Option<gpui::Bounds<gpui::Pixels>>,
+    /// Text-color input used by the theme picker custom swatch. It is kept as
+    /// a normal entity so the dialog can update the preview while typing;
+    /// nothing is persisted until the outer theme picker is applied.
+    pub(super) theme_foreground_input: Entity<InputState>,
+    pub(super) theme_foreground_input_syncing: bool,
+    pub(super) theme_foreground_picker: theme_foreground::ThemeForegroundState,
     opacity_slider: Entity<SliderState>,
     wallpaper_opacity_slider: Entity<SliderState>,
+    scroll_speed_slider: Entity<SliderState>,
+    scroll_speed_focus: FocusHandle,
     pub(super) proxy_url_input: Entity<InputState>,
     pub(super) proxy_protocol_select: SharedSelect,
     pub(super) proxy_test_seq: u64,
@@ -228,10 +248,34 @@ impl SettingsPane {
         cx: &mut Context<Self>,
     ) -> std::io::Result<()> {
         persist_keys(updates)?;
-        self.runtime = RuntimeSettings::load();
-        let settings = crate::gpui_shell::config::Settings::load(
-            crate::gpui_shell::theme::effective_theme_name(cx),
+        self.apply_persisted_runtime(updates, cx);
+        Ok(())
+    }
+
+    /// Persist a related group of preferences against the bytes observed just
+    /// before the editor action. Theme application uses this boundary so an
+    /// external settings writer cannot be silently overwritten after the
+    /// theme document has been saved.
+    pub(super) fn try_persist_checked(
+        &mut self,
+        updates: &[(&str, String)],
+        cx: &mut Context<Self>,
+    ) -> std::io::Result<()> {
+        let revision = crate::theme_library::preferences::load()?;
+        crate::theme_library::preferences::save(&revision, updates)?;
+        self.apply_persisted_runtime(updates, cx);
+        Ok(())
+    }
+
+    fn apply_persisted_runtime(&mut self, updates: &[(&str, String)], cx: &mut Context<Self>) {
+        let runtime = RuntimeSettings::load();
+        let theme = crate::gpui_shell::theme::resolve_theme_name(
+            runtime.theme,
+            runtime.follow_system_theme,
+            crate::gpui_shell::theme::system_is_light(cx),
         );
+        self.runtime = runtime.clone();
+        let settings = crate::gpui_shell::config::Settings::load_with_runtime(theme, runtime);
         gpui_component::set_locale(settings.ui_language.gpui_component_locale());
         cx.set_global(settings);
         if updates.iter().any(|(key, _)| matches!(*key, "ssh_proxy_mode" | "ssh_proxy_url")) {
@@ -239,7 +283,6 @@ impl SettingsPane {
         }
         cx.emit(SettingsPaneEvent::Changed);
         cx.notify();
-        Ok(())
     }
 
     /// 语言切换不重建输入/下拉实体：重建会丢焦点、编辑值、undo 和订阅。
@@ -716,6 +759,10 @@ impl SettingsPane {
             "new_tab_position" => pick!(new_tab_position),
             "windowing_behavior" => pick!(windowing_behavior),
             "cell_width_mode" => pick!(cell_width_mode),
+            "scrollback_lines" => Some((
+                cur.scrollback_lines != def.scrollback_lines,
+                def.scrollback_lines.to_string(),
+            )),
             "vcs_display" => pick!(vcs_display),
             "bell" => pick!(bell),
             "blur" => pick!(blur),
@@ -769,6 +816,10 @@ impl SettingsPane {
                     desc,
                     dirty,
                     move |this, window, cx| {
+                        if key == "scrollback_lines" {
+                            this.commit_scrollback_lines(&factory, window, cx);
+                            return;
+                        }
                         this.persist(&[(key, factory.clone())], cx);
                         // 开关行读 `runtime`，notify 就够；下拉框自己存索引，
                         // 必须显式拉回，否则撤销只改了值不改显示。
@@ -1372,6 +1423,8 @@ impl Render for SettingsPane {
         let bg_dragging = self.bg_picker_drag.is_some();
         let ssh_editor_modal = self.ssh_editor_modal(window, cx);
         let appearance_picker_modal = self.appearance_picker_modal(window, cx);
+        let theme_editor_modal = self.theme_editor_modal(window, cx);
+        let theme_transfer_modal = self.theme_transfer_modal(window, cx);
         let application_page = self.active_section == 0;
         let header = self.render_search_header(window, cx);
 
@@ -1483,6 +1536,8 @@ impl Render for SettingsPane {
             )
             .when_some(ssh_editor_modal, |root, modal| root.child(modal))
             .when_some(appearance_picker_modal, |root, modal| root.child(modal))
+            .when_some(theme_editor_modal, |root, modal| root.child(modal))
+            .when_some(theme_transfer_modal, |root, modal| root.child(modal))
             .when(font_picker_open, |root| {
                 root
                     // 搜索框是当前焦点时 Escape 仍沿元素树冒泡到设置根；

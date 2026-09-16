@@ -4,6 +4,9 @@
 //! `NebulaWorkspace`。所有外部启动和 runtime 命令先在这里选择窗口，再把
 //! 变更投递到对应 workspace，避免多个 receiver 竞争消费同一事件流。
 
+mod shutdown;
+pub(crate) use shutdown::{quit_all, quit_for_update};
+
 #[cfg(windows)]
 mod quick_window;
 #[cfg(windows)]
@@ -43,6 +46,7 @@ use crate::runtime_api::{
 /// 明确创建一个新终端或暂时保持空白，不能把同一份 session 重放多次。
 pub(crate) enum WorkspaceStartup {
     RestoreOrDefault,
+    RestoreUpdate(crate::session::Session),
     NewTerminal { cwd: Option<PathBuf> },
     LaunchTerminal { cwd: Option<PathBuf>, launch: crate::session::LaunchSession },
     Empty,
@@ -218,7 +222,9 @@ pub(crate) fn initialize(cx: &mut App, runtime_hub: crate::runtime_api::RuntimeH
     let quit_subscription = cx.on_app_quit(|cx| {
         #[cfg(windows)]
         quick_window::persist_quick_size(cx);
-        save_combined_session(cx, true);
+        if let Err(error) = save_combined_session(cx, true) {
+            log::warn!("Final session write: {error}");
+        }
         async {}
     });
     let closed_subscription = cx.on_window_closed(|cx, _window_id| {
@@ -231,7 +237,9 @@ pub(crate) fn initialize(cx: &mut App, runtime_hub: crate::runtime_api::RuntimeH
             .iter()
             .any(|entry| entry.role == WindowRole::Regular)
         {
-            save_combined_session(cx, false);
+            if let Err(error) = save_combined_session(cx, false) {
+                log::warn!("Session checkpoint: {error}");
+            }
         }
     });
     cx.global_mut::<WindowRegistry>()
@@ -254,6 +262,35 @@ pub(crate) fn open_initial_window(
     initial_cwd: Option<PathBuf>,
     initial_command: Option<crate::config::ui_config::Program>,
 ) {
+    if !crate::platform::elevation::requires_isolation()
+        && let Some(sessions) = crate::update_download::handoff::restore_ticket()
+    {
+        let mut sessions = sessions.into_iter();
+        if let Some(first) = sessions.next() {
+            open_workspace_window(
+                cx,
+                WorkspaceStartup::RestoreUpdate(first),
+                Some(ai_events),
+                Some(shell_events),
+                true,
+                WindowRole::Regular,
+            )
+            .expect("failed to reopen updated workspace");
+            for session in sessions {
+                if let Err(error) = open_workspace_window(
+                    cx,
+                    WorkspaceStartup::RestoreUpdate(session),
+                    None,
+                    None,
+                    true,
+                    WindowRole::Regular,
+                ) {
+                    log::warn!("Could not reopen an updated window: {error}");
+                }
+            }
+            return;
+        }
+    }
     let startup = initial_startup(
         initial_cwd,
         initial_command,
@@ -1294,7 +1331,28 @@ pub(crate) fn publish_runtime_snapshot_with_current(
 pub(crate) fn autosave_tick(cx: &mut App) {
     #[cfg(windows)]
     quick_window::persist_quick_size(cx);
-    save_combined_session(cx, false);
+    if let Err(error) = save_combined_session(cx, false) {
+        log::warn!("Session checkpoint: {error}");
+        return;
+    }
+    let workspaces = cx
+        .global::<WindowRegistry>()
+        .entries
+        .iter()
+        .filter(|entry| entry.role == WindowRole::Regular)
+        .filter_map(|entry| entry.workspace.upgrade())
+        .collect::<Vec<_>>();
+    let ready = workspaces.iter().all(|workspace| {
+        workspace.read(cx).tabs.iter().all(|tab| match tab {
+            WorkspaceTab::Terminal { panes, .. } => {
+                panes.iter().all(|pane| pane.view.read(cx).recovery_ready())
+            },
+            _ => true,
+        })
+    });
+    if ready {
+        crate::update_download::handoff::acknowledge_restore(workspaces.len());
+    }
 }
 
 fn combined_session(
@@ -1328,10 +1386,10 @@ fn combined_session(
     combine_sessions(sessions)
 }
 
-fn save_combined_session(cx: &mut App, clean: bool) {
+fn save_combined_session(cx: &mut App, clean: bool) -> std::io::Result<()> {
     let session = combined_session(None, cx);
     let reason = if clean { SaveReason::Quit } else { SaveReason::Checkpoint };
-    cx.global_mut::<WindowRegistry>().session_persistence.save(session, reason);
+    cx.global_mut::<WindowRegistry>().session_persistence.save(session, reason)
 }
 
 pub(super) fn save_current_window_session(
@@ -1339,49 +1397,14 @@ pub(super) fn save_current_window_session(
     session: crate::session::Session,
     reason: SaveReason,
     cx: &mut App,
-) {
+) -> std::io::Result<()> {
     if !cx.global::<WindowRegistry>().entries.iter().any(|entry| {
         entry.runtime_window_id == runtime_window_id && entry.role == WindowRole::Regular
     }) {
-        return;
+        return Ok(());
     }
     let session = combined_session(Some((runtime_window_id, session)), cx);
-    cx.global_mut::<WindowRegistry>().session_persistence.save(session, reason);
-}
-
-pub(crate) fn quit_all(cx: &mut App) {
-    if cx.global::<WindowRegistry>().quit_pending {
-        return;
-    }
-    cx.global_mut::<WindowRegistry>().quit_pending = true;
-    let entries = cx.global::<WindowRegistry>().entries.clone();
-    let panes = entries
-        .iter()
-        .filter(|entry| entry.role == WindowRole::Regular)
-        .filter_map(|entry| {
-            entry.workspace.update(cx, |workspace, cx| workspace.prepare_session_save(cx)).ok()
-        })
-        .flatten()
-        .collect::<Vec<_>>();
-    cx.spawn(async move |cx| {
-        super::closing::wait_for_session_ids(&panes, cx).await;
-        cx.update(finish_quit_all);
-    })
-    .detach();
-}
-
-fn finish_quit_all(cx: &mut App) {
-    save_combined_session(cx, true);
-    prune_entries(cx);
-    let entries = cx.global::<WindowRegistry>().entries.clone();
-    for entry in entries {
-        let workspace = entry.workspace.clone();
-        let _ = entry.handle.update(cx, move |_, _window, cx| {
-            let _ = workspace.update(cx, |workspace, cx| workspace.shutdown_terminal_panes(cx));
-        });
-    }
-    crate::tray::shutdown();
-    cx.quit();
+    cx.global_mut::<WindowRegistry>().session_persistence.save(session, reason)
 }
 
 pub(crate) fn move_tab_to_new_window(payload: CrossWindowTabDrag, cx: &mut App) {
@@ -1460,7 +1483,11 @@ pub(super) fn close_saved_workspace_window(
     window: &mut Window,
     cx: &mut App,
 ) {
-    save_current_window_session(runtime_window_id, session, SaveReason::WindowClose, cx);
+    if let Err(error) =
+        save_current_window_session(runtime_window_id, session, SaveReason::WindowClose, cx)
+    {
+        log::warn!("Could not checkpoint moved window: {error}");
+    }
     unregister(runtime_window_id, cx);
     window.remove_window();
 }
@@ -1479,7 +1506,11 @@ pub(crate) fn close_empty_workspace_window(
         let reason =
             if session.is_some() { SaveReason::TabsClosed } else { SaveReason::WindowClose };
         let session = session.unwrap_or_else(|| crate::session::Session::new(0, Vec::new()));
-        cx.global_mut::<WindowRegistry>().session_persistence.save(Some(session), reason);
+        if let Err(error) =
+            cx.global_mut::<WindowRegistry>().session_persistence.save(Some(session), reason)
+        {
+            log::warn!("Could not save empty workspace: {error}");
+        }
     }
     window.remove_window();
 }

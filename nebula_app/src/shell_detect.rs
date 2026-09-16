@@ -656,16 +656,18 @@ pub fn wsl_unc_cwd(located: &WslCwd) -> Option<std::path::PathBuf> {
 /// shell 正常启动。
 pub fn wsl_cwd_report_env(
     program: &str,
-    args: &[String],
+    _args: &[String],
     current_wslenv: Option<&str>,
 ) -> Vec<(String, String)> {
-    if wsl_launch_distro(program, args).is_none() {
+    if crate::display::extract_program(program).as_deref() != Some("wsl") {
         return Vec::new();
     }
     // 用 `$PWD` 而不是 `$(pwd)`，整个 PROMPT_COMMAND 只有变量赋值与一个
-    // builtin printf：每个提示符都执行也不 fork。初始提示符多发的 D 无害，
+    // builtin printf；身份只在首个提示符编码一次。初始提示符多发的 D 无害，
     // Runtime submit barrier 会拒绝把它错配给尚未真正提交的新命令。
-    const REPORT: &str = r#"__nebula_status=$?; printf '\033]133;D;%s\007\033]7;file://%s%s\007\033]133;A\007' "$__nebula_status" "${HOSTNAME:-wsl}" "$PWD""#;
+    const REPORT: &str = r#"__nebula_status=$?; if [ -z "${__pebrel_shell_token:-}" ]; then __pebrel_shell_token=$(printf '%s' "wsl|${WSL_DISTRO_NAME:-}|bash:${HOSTNAME:-wsl}:${BASHPID:-$$}:$RANDOM" | base64 | tr -d '\r\n');
+__PEBREL_CONNECTION_HOOK__
+fi; printf '\033]1337;SetUserVar=pebrel_shell=%s\007\033]133;D;%s\007\033]7;file://%s%s\007\033]133;A\007' "$__pebrel_shell_token" "$__nebula_status" "${HOSTNAME:-wsl}" "$PWD""#;
     // 宿主侧可能已经有 WSLENV（别的工具设的），必须追加而不是覆盖。
     let mut wslenv = current_wslenv
         .map(str::to_owned)
@@ -677,7 +679,9 @@ pub fn wsl_cwd_report_env(
     if !wslenv.split(':').any(|entry| entry == "PROMPT_COMMAND") {
         wslenv.push_str("PROMPT_COMMAND");
     }
-    vec![("PROMPT_COMMAND".to_owned(), REPORT.to_owned()), ("WSLENV".to_owned(), wslenv)]
+    let report =
+        REPORT.replace("__PEBREL_CONNECTION_HOOK__", nebula_terminal::tty::CONNECTION_SHELL);
+    vec![("PROMPT_COMMAND".to_owned(), report), ("WSLENV".to_owned(), wslenv)]
 }
 
 /// WSL automount 路径（仅 `/mnt/<盘>`）→ 宿主可见且已确认存在的目录。

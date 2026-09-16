@@ -183,6 +183,27 @@ class StableReleaseTests(unittest.TestCase):
             with self.assertRaisesRegex(StableReleaseError, "GitHub links"):
                 validate_notes(source, VERSION)
 
+    def test_notes_allow_no_pr_contributors_but_keep_section_contracts(self) -> None:
+        before, rest = notes().split("## Contributors\n", 1)
+        contributor_body, after = rest.split("## SHA256\n", 1)
+        without_contributors = before + "## SHA256\n" + after
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "notes.md"
+            source.write_text(without_contributors, encoding="utf-8")
+            self.assertEqual(validate_notes(source, VERSION), without_contributors)
+            invalid = (
+                (before + "## Contributors\n\n## SHA256\n" + after, "GitHub links"),
+                (notes().replace("## Contributors", "## Contributors\n\n## Contributors"), "at most one"),
+                (without_contributors + "\n## Contributors\n" + contributor_body, "out of order"),
+                (without_contributors.replace("### 新增", "### 修复"), "matching bilingual"),
+                (without_contributors.replace("## 中文", "## Chinese"), "require one"),
+            )
+            for body, error in invalid:
+                with self.subTest(error=error):
+                    source.write_text(body, encoding="utf-8")
+                    with self.assertRaisesRegex(StableReleaseError, error):
+                        validate_notes(source, VERSION)
+
     def test_changelog_must_list_the_same_stable_asset_names(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "CHANGELOG.md"

@@ -86,10 +86,10 @@ jobs:
         id: rust-cache
         with:
           key: native
-          extra-key: -release-check-v2
+          extra-key: ${{ runner.os != 'macOS' && '-release-check-v2' || '' }}
           target: |
             target/ci
-            target/release
+            ${{ runner.os != 'macOS' && 'target/release' || '' }}
           legacy-key: ${{ runner.os == 'Windows' && 'windows' || runner.os == 'Linux' && 'linux' || 'macos' }}
       - name: Prepare pinned Windows console runtime
         if: runner.os == 'Windows'
@@ -104,7 +104,7 @@ jobs:
         if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: cargo test --locked --manifest-path tools/i18n-contract/Cargo.toml
       - name: Check the release workspace
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && runner.os != 'macOS' }}
         run: cargo check --locked --workspace --release
       - name: Save compiled workload
         if: ${{ always() && steps.rust-cache.outcome == 'success' && steps.rust-cache.outputs.cache-hit != 'true' }}
@@ -112,13 +112,67 @@ jobs:
         with:
           path: |
             target/ci
-            target/release
+            ${{ runner.os != 'macOS' && 'target/release' || '' }}
           key: ${{ steps.rust-cache.outputs.cache-key }}
       - name: Upload native compilation timings
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: native-timings-${{ matrix.os }}
+          path: target/cargo-timings
+          if-no-files-found: warn
+          compression-level: 0
+          retention-days: 14
+
+  # The release check has no dependency on the test executable. Keeping it in
+  # the Intel test job added 11m33s after a 22m29s test/compile step in run
+  # 34856491552. Both jobs remain part of this reusable workflow's result, so
+  # the stable release aggregation still requires every check to succeed.
+  macos-release-check:
+    if: ${{ inputs.windows_diagnostics_run == '' }}
+    name: Release workspace (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-26, macos-26-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    env:
+      PYTHONUTF8: "1"
+      CARGO_TERM_COLOR: always
+      RUST_BACKTRACE: "1"
+      RUST_TOOLCHAIN: "1.97.1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Require the AppKit SDK used by this PR
+        run: |
+          sdk_version="$(xcrun --sdk macosx --show-sdk-version)"
+          test "${sdk_version%%.*}" -ge 26
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.97.1"
+      - uses: ./.github/actions/rust-cache
+        id: rust-cache
+        with:
+          key: native-release-check
+          target: target/release
+          legacy-key: macos
+      - name: Check the release workspace
+        run: cargo check --locked --workspace --release --timings
+      - name: Save compiled workload
+        if: ${{ always() && steps.rust-cache.outcome == 'success' && steps.rust-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: target/release
+          key: ${{ steps.rust-cache.outputs.cache-key }}
+      - name: Upload release check compilation timings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-check-timings-${{ matrix.os }}
           path: target/cargo-timings
           if-no-files-found: warn
           compression-level: 0

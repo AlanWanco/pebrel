@@ -57,9 +57,7 @@ impl SettingsPane {
         let ssh_test_seq = self.ssh_test_seq.wrapping_add(1);
         let ssh_undo_seq = self.ssh_undo_seq.wrapping_add(1);
         let backup_seq = self.backup_seq.wrapping_add(1);
-        let settings = crate::gpui_shell::config::Settings::load(
-            crate::gpui_shell::theme::effective_theme_name(cx),
-        );
+        let (_, settings) = crate::gpui_shell::config::Settings::load_current_snapshot(cx);
         gpui_component::set_locale(settings.ui_language.gpui_component_locale());
         cx.set_global(settings);
         crate::gpui_shell::theme::apply_chrome_theme(cx);

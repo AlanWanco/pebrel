@@ -46,6 +46,7 @@ use gpui_component::notification::Notification;
 use nebula_split::{DIVIDER_GAP, HIT_SLOP, RemoveOutcome, SplitDirection, SplitNav, SplitTree};
 
 mod agents;
+mod chrome;
 mod closing;
 mod command_manager;
 mod keyboard_bindings;
@@ -68,6 +69,7 @@ mod remote_files;
 mod residency;
 mod send_to_chat;
 mod session_persistence;
+mod session_recovery;
 mod shell_picker;
 use shell_picker::shell_palette_rows;
 mod settings_navigation;
@@ -86,6 +88,10 @@ pub(crate) mod windowing;
 // 调用点分散在设置页与窗口层，原样再导出以免拆分波及它们。
 pub(crate) use update_dialog::{open_update_dialog, show_update_notification};
 
+use chrome::{
+    sidebar_resize_offset_for, sidebar_resize_visual_offset, title_bar_panel_controls,
+    SIDEBAR_RESIZE_HANDLE_WIDTH,
+};
 use tab_drag::{DockTarget, TabDrag, TabDragAxis};
 
 #[cfg(test)]
@@ -133,35 +139,6 @@ gpui::actions!(
 /// 不能挂全局：否则 CC/Codex 的终止对话键到不了 PTY。
 const PALETTE_KEY_CONTEXT: &str = "NebulaCommandPalette";
 
-/// 侧栏拖宽热区的宽度。热区中心由 [`sidebar_resize_offset_for`] 决定。
-const SIDEBAR_RESIZE_HANDLE_WIDTH: f32 = 6.0;
-
-/// 侧栏槽位右缘到「用户眼里那条分界」的距离，热区与拖拽换算都用它。
-///
-/// 两种形态的分界不在同一个位置：主题画了竖线（Nord 这类铺满布局，卡缝 0 +
-/// 1px 竖线）时分界就是那条线，它贴在槽位右缘上；没画线的浮起圆角卡（卡缝 8
-/// + 无竖线）里分界是卡缝右侧的卡可见左缘。原来这里写死 8.0 只对后者成立，
-/// Nord 成为出厂默认之后热区整整偏右 7.5px——鼠标停在线上不变形，得往右挪
-/// 半个字符宽才拖得动。
-fn sidebar_resize_offset_for(divider: f32, gutter: f32) -> f32 {
-    if divider > 0.0 { divider * 0.5 } else { gutter }
-}
-
-fn sidebar_resize_visual_offset(cx: &App) -> f32 {
-    let card = crate::gpui_shell::theme::PaneCardStyle::current(cx);
-    let scale = crate::gpui_shell::ui_scale::factor(cx);
-    sidebar_resize_offset_for(card.divider, card.margin.left * scale)
-}
-
-/// 标题栏里的文件树 / Git 工具必须同时挡住原生拖窗命中和父级拖拽起手。
-/// `occlude` 只屏蔽后方 hitbox，不会阻止 MouseDown 向 `TitleBar` 冒泡。
-fn title_bar_panel_controls() -> gpui::Div {
-    h_flex()
-        .h_full()
-        .items_center()
-        .occlude()
-        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-}
 
 /// 注册工作区快捷键；在 `gpui_component::init` 之后调用一次。
 pub fn init(cx: &mut App) {
@@ -849,6 +826,7 @@ pub struct NebulaWorkspace {
     /// 系统关闭按钮可能连续送来多次 should-close；确认框在场时只保留一份。
     window_close_confirm_open: bool,
     window_close_pending: bool,
+    recovery_boot_attempts: u32,
     /// `keep_session` 关窗后 HWND 已隐藏、PTY 仍在；托盘 / mux ATTACH 用来捞回。
     window_hidden: bool,
     /// 开窗时记下，mux `tab.new` 需要从 pump 拿到 `&mut Window`。
@@ -1090,6 +1068,7 @@ impl NebulaWorkspace {
             spinner_visible: std::cell::Cell::new(false),
             window_close_confirm_open: false,
             window_close_pending: false,
+            recovery_boot_attempts: 0,
             window_hidden: false,
             window_handle: window.window_handle(),
             runtime_window_id,
@@ -1111,6 +1090,11 @@ impl NebulaWorkspace {
             );
         }
         match startup {
+            windowing::WorkspaceStartup::RestoreUpdate(session) => {
+                if !this.restore_update_session(&session, runtime.resume_ai, window, cx) {
+                    this.add_terminal_at(std::env::current_dir().ok(), None, window, cx);
+                }
+            },
             windowing::WorkspaceStartup::RestoreOrDefault => {
                 // 只有首窗恢复全局 session，避免每个新窗口重复回放同一批 PTY。
                 if !runtime.restore_session
@@ -1250,8 +1234,8 @@ impl NebulaWorkspace {
         }
     }
 
-    /// 把共享会话 launch 还原为一次 GPUI PTY 启动。只有首 Pane 使用 Tab 的
-    /// launch；其它分屏继续沿用旧壳合同，按当前默认 Shell 重建。
+    /// 把一份冻结的会话 launch 还原为一次 GPUI PTY 启动。逐 pane 选择
+    /// 与旧快照回退由 session_recovery 统一负责。
     fn terminal_launch_from_session(
         launch: &crate::session::LaunchSession,
         cwd: Option<std::path::PathBuf>,
@@ -1303,9 +1287,7 @@ impl NebulaWorkspace {
     /// 设置或系统外观变化后的统一热应用：重载全局 `Settings`（主题经
     /// follow_system 折算）、逐终端刷新、重建 chrome 令牌。
     fn apply_runtime_settings(&mut self, cx: &mut Context<Self>) {
-        let settings = crate::gpui_shell::config::Settings::load(
-            crate::gpui_shell::theme::effective_theme_name(cx),
-        );
+        let (runtime, settings) = crate::gpui_shell::config::Settings::load_current_snapshot(cx);
         cx.set_global(settings);
         for tab in &self.tabs {
             if let WorkspaceTab::Terminal { panes, .. } = tab {
@@ -1315,7 +1297,6 @@ impl NebulaWorkspace {
             }
         }
         crate::gpui_shell::theme::apply_chrome_theme(cx);
-        let runtime = nebula_settings::RuntimeSettings::load();
         crate::gpui_shell::apply_app_icon(runtime.app_icon, cx);
         self.sidebar_width = runtime.sidebar_width;
         self.tabs_position = runtime.tabs_position;
@@ -1710,13 +1691,13 @@ impl NebulaWorkspace {
         (0..self.tabs.len()).find_map(|tab_ix| self.busy_process_in_tab(tab_ix, None, cx))
     }
 
-    fn save_clean_window_session(&mut self, cx: &mut App) {
+    fn save_clean_window_session(&mut self, cx: &mut App) -> std::io::Result<()> {
         windowing::save_current_window_session(
             self.runtime_window_id,
             self.snapshot_session(cx),
             session_persistence::SaveReason::WindowClose,
             cx,
-        );
+        )
     }
 
     fn request_close_pane(
@@ -1868,6 +1849,16 @@ impl NebulaWorkspace {
         cx: &mut Context<Self>,
     ) {
         match event {
+            TerminalViewEvent::SessionIdentityChanged => {
+                if let Err(error) = windowing::save_current_window_session(
+                    self.runtime_window_id,
+                    self.snapshot_session(cx),
+                    session_persistence::SaveReason::Checkpoint,
+                    cx,
+                ) {
+                    log::warn!("Could not checkpoint native recovery identity: {error}");
+                }
+            },
             // OSC 7 cwd 与标题共用这条事件。只有当前聚焦 pane 能驱动共享文件树；
             // 后台 pane 的提示符更新不能把前台目录覆盖掉。
             TerminalViewEvent::TitleChanged => {
@@ -2030,12 +2021,14 @@ impl NebulaWorkspace {
             self.active -= 1;
         }
         self.active = self.active.min(self.tabs.len().saturating_sub(1));
-        windowing::save_current_window_session(
+        if let Err(error) = windowing::save_current_window_session(
             self.runtime_window_id,
             self.snapshot_session(cx),
             session_persistence::SaveReason::TabsClosed,
             cx,
-        );
+        ) {
+            log::warn!("Could not save closed tabs: {error}");
+        }
         self.reveal_active_tab();
         self.focus_active(window, cx);
         self.sync_side_panel_to_active(true, cx);
@@ -3986,14 +3979,17 @@ impl Render for NebulaWorkspace {
                 root.child(menu)
             })
             // 组件库的模态/通知层不会自己上屏：`Root::render` 只画宿主视图，
-            // dialog/notification 两层由宿主显式挂。挂在最外层链尾＝盖住命令
-            // 面板和所有拖拽罩层；dialog 在下、notification 在上，确认框弹着
-            // 时仍看得见 toast。
+            // dialog/notification 两层由宿主显式挂。确认框需要晚于设置页中
+            // priority 4–6 的主题浮层绘制；通知再覆盖确认框。
             //
             // 少了这两行，`window.open_dialog` 只会把模态推进 `Root` 并抢走
             // 焦点而不画任何东西——终端看着就像卡死了。
-            .children(Root::render_dialog_layer(window, cx))
-            .children(crate::gpui_shell::toast::render_layer(window, cx))
+            .children(Root::render_dialog_layer(window, cx).map(|layer| {
+                gpui::deferred(layer).with_priority(10)
+            }))
+            .children(crate::gpui_shell::toast::render_layer(window, cx).map(|layer| {
+                gpui::deferred(layer).with_priority(11)
+            }))
     }
 }
 

@@ -73,6 +73,31 @@ impl NebulaWorkspace {
         if width > 0.5 { width } else { size_px * 0.6 }
     }
 
+    pub(super) fn shell_status_label(
+        tag: SharedString,
+        family: SharedString,
+        size_px: f32,
+        color: gpui::Hsla,
+    ) -> gpui::Div {
+        // As in 1.7, short labels keep their intrinsic width and align right in
+        // the status row. Only a long label is clipped to the available space.
+        div()
+            .max_w_full()
+            .min_w_0()
+            .truncate()
+            .font_family(family)
+            .text_size(px(size_px))
+            .font_weight(FontWeight::NORMAL)
+            .text_color(color)
+            .child(tag)
+    }
+
+    pub(super) fn tab_status_slot(width: f32) -> gpui::Div {
+        // Nerd Font ink can extend beyond its advance. Keep the 1.7 slot
+        // unclipped; the enclosing tab still clips at its own outer boundary.
+        div().relative().w(px(width)).h_full().flex_shrink_0()
+    }
+
     /// Reserve the shaped shell label's width, capped to leave room for the title.
     pub(super) fn shell_status_width(
         window: &Window,
@@ -409,16 +434,13 @@ impl NebulaWorkspace {
                             .into_any_element(),
                     ),
                     SidebarActivity::Idle => shell_tag.map(|tag| {
-                        div()
-                            .w_full()
-                            .min_w_0()
-                            .truncate()
-                            .font_family(chrome_family.clone())
-                            .text_size(px(label_px * SIDEBAR_TAG_SCALE))
-                            .font_weight(FontWeight::NORMAL)
-                            .text_color(status_color)
-                            .child(tag)
-                            .into_any_element()
+                        Self::shell_status_label(
+                            tag,
+                            chrome_family.clone(),
+                            label_px * SIDEBAR_TAG_SCALE,
+                            status_color,
+                        )
+                        .into_any_element()
                     }),
                 };
                 // 三类行位移（旧壳 tab_drag_draw_y 的语义）：被拖行骑指针，
@@ -619,12 +641,7 @@ impl NebulaWorkspace {
                     )
                 })
                 .child(
-                    div()
-                        .relative()
-                        .w(px(status_width))
-                        .h_full()
-                        .overflow_hidden()
-                        .flex_shrink_0()
+                    Self::tab_status_slot(status_width)
                         .when_some(resting_status, |slot, status| {
                             slot.child(
                                 h_flex()
@@ -1154,6 +1171,97 @@ impl NebulaWorkspace {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(feature = "gpui-test-support")]
+    mod layout {
+        use super::*;
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
+        struct StatusProbe {
+            label: SharedString,
+            font_size: f32,
+            mask: Rc<RefCell<Option<Bounds<Pixels>>>>,
+        }
+
+        impl Render for StatusProbe {
+            fn render(
+                &mut self,
+                _window: &mut Window,
+                _cx: &mut Context<Self>,
+            ) -> impl IntoElement {
+                let mask = self.mask.clone();
+                h_flex()
+                    .id("status-probe-row")
+                    .debug_selector(|| "status-probe-row".to_owned())
+                    .w(px(200.0))
+                    .h(px(TAB_ROW_H))
+                    .px_2()
+                    .overflow_hidden()
+                    .child(div().flex_1())
+                    .child(
+                        NebulaWorkspace::tab_status_slot(TAB_STATUS_SLOT_W)
+                            .id("status-probe-slot")
+                            .debug_selector(|| "status-probe-slot".to_owned())
+                            .child(
+                                h_flex().absolute().inset_0().justify_end().items_center().child(
+                                    NebulaWorkspace::shell_status_label(
+                                        self.label.clone(),
+                                        ".SystemUIFont".into(),
+                                        self.font_size,
+                                        gpui::black(),
+                                    )
+                                    .id("status-probe-label")
+                                    .debug_selector(|| "status-probe-label".to_owned()),
+                                ),
+                            )
+                            .child(
+                                canvas(
+                                    |_, _, _| {},
+                                    move |_, _, window, _| {
+                                        *mask.borrow_mut() = Some(window.content_mask().bounds);
+                                    },
+                                )
+                                .absolute()
+                                .size_full(),
+                            ),
+                    )
+            }
+        }
+
+        #[gpui::test]
+        fn short_shells_align_right_long_shells_fit_and_glyph_ink_keeps_row_padding(
+            cx: &mut gpui::TestAppContext,
+        ) {
+            cx.update(gpui_component::init);
+            for font_size in [12.0, 15.0, 20.0] {
+                for label in ["sh", "debian", "a-very-long-shell-distribution-name"] {
+                    let mask = Rc::new(RefCell::new(None));
+                    let recorded = mask.clone();
+                    let (_, visual) = cx.add_window_view(|_, _| StatusProbe {
+                        label: label.into(),
+                        font_size,
+                        mask,
+                    });
+                    let row = visual.debug_bounds("status-probe-row").unwrap();
+                    let slot = visual.debug_bounds("status-probe-slot").unwrap();
+                    let text = visual.debug_bounds("status-probe-label").unwrap();
+                    assert!(text.size.width <= slot.size.width);
+                    assert_eq!(
+                        text.right(),
+                        slot.right(),
+                        "shell labels retain the 1.7 right edge"
+                    );
+                    if label == "sh" {
+                        assert!(text.size.width < slot.size.width, "short labels stay intrinsic");
+                    }
+                    let clip = recorded.borrow().expect("status paint mask");
+                    assert!(clip.right() > slot.right(), "glyph overhang must retain row padding");
+                    assert!(clip.right() <= row.right(), "the outer row still clips overflow");
+                }
+            }
+        }
+    }
 
     #[test]
     fn finished_dot_is_an_event_so_the_tab_you_are_watching_never_shows_it() {

@@ -24,12 +24,16 @@ impl SettingsPane {
     ) -> gpui::AnyElement {
         let language = crate::gpui_shell::config::ui_language(cx);
         let colors = AppearanceColors::current(cx);
-        let name = crate::gpui_shell::theme::effective_theme_name(cx);
+        let resolved = crate::gpui_shell::theme::resolved_theme(cx);
+        let name = resolved.base_name();
         let icon = crate::app_icon::selected();
-        let label = if theme {
-            chrome_theme(name).short_label()
+        let label: SharedString = if theme {
+            resolved
+                .definition()
+                .map(|definition| definition.name.clone().into())
+                .unwrap_or_else(|| chrome_theme(name).short_label().into())
         } else {
-            language.pick(icon.palette().name_zh, icon.palette().name_en)
+            language.pick(icon.palette().name_zh, icon.palette().name_en).into()
         };
         let action = if theme {
             language.pick("更换主题", "Change theme")
@@ -38,15 +42,30 @@ impl SettingsPane {
         };
         let focus = if theme { &self.theme_picker_trigger } else { &self.icon_picker_trigger };
         let sample = if theme {
-            div()
-                .size(ui(45.0))
-                .flex_shrink_0()
-                .child(super::theme_picker::theme_sample(name, true, false))
+            let thumbnail = if let Some(definition) = resolved.definition() {
+                super::theme_picker::theme_definition_sample(
+                    definition,
+                    Some(resolved.terminal_foreground()),
+                    true,
+                    false,
+                )
+            } else {
+                super::theme_picker::theme_sample_with_foreground(
+                    name,
+                    resolved.foreground_override(),
+                    true,
+                    false,
+                )
+            };
+            div().size(ui(45.0)).flex_shrink_0().child(thumbnail)
         } else {
             super::app_icon::icon_image(icon, 45.0, window, cx)
         };
         h_flex()
             .id(if theme { "open-theme-picker" } else { "open-icon-picker" })
+            .debug_selector(move || {
+                if theme { "open-theme-picker" } else { "open-icon-picker" }.to_owned()
+            })
             .track_focus(&focus.clone().tab_stop(true))
             .role(gpui::accesskit::Role::Button)
             .aria_label(format!("{action}: {label}"))

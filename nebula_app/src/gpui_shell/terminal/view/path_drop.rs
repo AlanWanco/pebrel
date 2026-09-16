@@ -23,7 +23,7 @@ impl PathDropState {
 }
 
 impl TerminalView {
-    fn path_quote(&self) -> PathQuote {
+    pub(super) fn path_quote(&self) -> PathQuote {
         if self.ssh_destination.is_some()
             || self.exec_context.as_ref().and_then(|context| context.wsl_distribution()).is_some()
         {

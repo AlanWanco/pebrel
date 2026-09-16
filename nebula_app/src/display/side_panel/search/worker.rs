@@ -28,7 +28,7 @@ struct SearchState {
     #[cfg(test)]
     scans: AtomicUsize,
     #[cfg(test)]
-    lock_deferrals: AtomicUsize,
+    work_deferrals: AtomicUsize,
     #[cfg(test)]
     retained_bytes: AtomicUsize,
     #[cfg(test)]
@@ -76,7 +76,7 @@ impl EmbeddedFileIndex {
             #[cfg(test)]
             scans: AtomicUsize::new(0),
             #[cfg(test)]
-            lock_deferrals: AtomicUsize::new(0),
+            work_deferrals: AtomicUsize::new(0),
             #[cfg(test)]
             retained_bytes: AtomicUsize::new(0),
             #[cfg(test)]
@@ -209,9 +209,6 @@ fn run_search_worker(state: Arc<SearchState>) {
     let mut root = None;
     let mut epoch = 0;
     let mut refresh = 0;
-    // Watch events do not change the query revision. Retain their work until
-    // publication, including retries while another search owns SEARCH_WORK.
-    let mut refresh_pending = false;
     loop {
         if state.stopped.load(Ordering::Acquire) {
             return;
@@ -221,23 +218,16 @@ fn run_search_worker(state: Arc<SearchState>) {
             (desired.clone(), state.revision.load(Ordering::Acquire))
         };
         let changed = root != desired.root || epoch != desired.epoch || refresh != desired.refresh;
-        let dirty = cache.watches.dirty.swap(false, Ordering::AcqRel) || {
-            #[cfg(any(target_os = "macos", target_os = "windows"))]
-            {
-                cache.watches.fallback_dirty()
-            }
-            #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-            {
-                false
-            }
-        };
+        let dirty = cache.watches.dirty.swap(false, Ordering::AcqRel);
         if changed || dirty {
-            refresh_pending = true;
+            // A watch event can invalidate an already-processed query. Keep
+            // it pending if debounce or the shared work lock defers this scan.
+            state.processed.store(0, Ordering::Release);
             cache = FileCache::new();
             root = desired.root.clone();
             epoch = desired.epoch;
             refresh = desired.refresh;
-        } else if !refresh_pending && revision == state.processed.load(Ordering::Acquire) {
+        } else if revision == state.processed.load(Ordering::Acquire) {
             wait_for_work(&state, WATCH_DEBOUNCE);
             continue;
         }
@@ -252,7 +242,6 @@ fn run_search_worker(state: Arc<SearchState>) {
             record_allocations(&state, &cache);
             state.processed.store(revision, Ordering::Release);
             state.wake.notify_all();
-            refresh_pending = false;
             continue;
         };
         wait_for_work(&state, SEARCH_DEBOUNCE);
@@ -264,7 +253,7 @@ fn run_search_worker(state: Arc<SearchState>) {
             Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
             Err(std::sync::TryLockError::WouldBlock) => {
                 #[cfg(test)]
-                state.lock_deferrals.fetch_add(1, Ordering::AcqRel);
+                state.work_deferrals.fetch_add(1, Ordering::Release);
                 wait_for_work(&state, WATCH_DEBOUNCE);
                 continue;
             },
@@ -281,7 +270,6 @@ fn run_search_worker(state: Arc<SearchState>) {
                     false,
                     true,
                 );
-                refresh_pending = false;
                 continue;
             },
         };
@@ -298,7 +286,6 @@ fn run_search_worker(state: Arc<SearchState>) {
             && (!cache.watches.unwatched || cache.finished.elapsed() < Duration::from_secs(2));
         if reusable {
             publish(&state, revision, request, &best, None, false, true);
-            refresh_pending = false;
             continue;
         }
         if !cache.entries.is_empty() {
@@ -345,37 +332,11 @@ fn run_search_worker(state: Arc<SearchState>) {
             cache.finish_prefix(position);
         }
         cache.complete = !cancelled() && !outcome.limited && outcome.error.is_none() && !cache.full;
-        #[cfg(any(target_os = "macos", target_os = "windows"))]
-        if cache.complete && !cache.watches.unwatched {
-            cache.watches.start_fallback();
-        }
         cache.finished = Instant::now();
         state.indexed_count.store(outcome.visited, Ordering::Release);
         #[cfg(test)]
         record_allocations(&state, &cache);
-        if cache.complete && !cache.watches.unwatched {
-            // Do not expose the first snapshot until the newly installed
-            // watcher has had one scheduling interval to settle. Otherwise a
-            // caller can create a file immediately after the result and race
-            // the watch backend's startup.
-            drop(_work);
-            wait_for_work(&state, WATCH_DEBOUNCE);
-            let fallback_dirty = {
-                #[cfg(any(target_os = "macos", target_os = "windows"))]
-                {
-                    cache.watches.fallback_dirty()
-                }
-                #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-                {
-                    false
-                }
-            };
-            if cancelled() || cache.watches.dirty.load(Ordering::Acquire) || fallback_dirty {
-                continue;
-            }
-        }
         publish(&state, revision, request, &best, outcome.error, outcome.limited, true);
-        refresh_pending = false;
     }
 }
 
@@ -407,30 +368,39 @@ fn publish(
 
 #[cfg(test)]
 mod tests {
-    use super::super::tests::{start, wait_for_result};
+    use super::super::tests::wait_for_result;
     use super::*;
 
     #[test]
-    fn watched_refresh_survives_search_lock_contention() {
-        let temp = tempfile::tempdir().unwrap();
-        let index = start(temp.path(), "needle");
+    fn watched_change_stays_pending_while_another_search_owns_the_work_lock() {
+        let directory = tempfile::tempdir().unwrap();
+        let nested = directory.path().join("nested");
+        std::fs::create_dir(&nested).unwrap();
+        let index = EmbeddedFileIndex::new();
+        index.rebuild(
+            Some(FileIndexRoot::Local(directory.path().to_owned())),
+            1,
+            Some((1, "needle".to_owned(), FileSearchOptions::default())),
+        );
         wait_for_result(&index, |result| result.total == 0);
 
-        // Hold the production search lock until the watcher-triggered refresh
-        // has actually tried and failed to acquire it. No query/revision change
-        // may rescue a dropped invalidation after the lock becomes available.
-        let work = SEARCH_WORK.lock().unwrap_or_else(|e| e.into_inner());
-        let before = index.state.lock_deferrals.load(Ordering::Acquire);
-        std::fs::write(temp.path().join("needle.txt"), b"").unwrap();
-        let deadline = Instant::now() + Duration::from_secs(5);
-        while index.state.lock_deferrals.load(Ordering::Acquire) == before {
-            assert!(Instant::now() < deadline, "watch refresh never reached the search lock");
+        let work = SEARCH_WORK.lock().unwrap_or_else(|error| error.into_inner());
+        let scans = index.scans();
+        let revision = index.state.revision.load(Ordering::Acquire);
+        let deferrals = index.state.work_deferrals.load(Ordering::Acquire);
+        std::fs::write(nested.join("needle.txt"), b"").unwrap();
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while index.state.work_deferrals.load(Ordering::Acquire) == deferrals {
+            assert!(Instant::now() < deadline, "watch invalidation did not reach the held work lock");
             std::thread::sleep(Duration::from_millis(10));
         }
+        assert_eq!(index.scans(), scans, "the contending worker cannot scan under the held lock");
+        assert_ne!(index.state.processed.load(Ordering::Acquire), revision);
         drop(work);
 
-        wait_for_result(&index, |result| result.total == 1);
-        assert!(index.scans() >= 2);
+        let result = wait_for_result(&index, |result| result.total == 1);
+        assert_eq!(result.rows[0].path, nested.join("needle.txt"));
+        assert!(index.scans() > scans);
         index.release_for_test();
     }
 }

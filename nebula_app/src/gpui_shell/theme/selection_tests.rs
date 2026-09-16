@@ -9,16 +9,16 @@ use gpui_component::{
 };
 use nebula_settings::ThemeName;
 
-use super::{apply_skin_tokens, chrome_theme, wash};
+use super::{ResolvedTheme, apply_skin_tokens, chrome_theme, wash};
 
 fn apply_reader_theme(name: ThemeName, cx: &mut App) {
-    let chrome = chrome_theme(name);
+    let chrome = ResolvedTheme::builtin(name, None);
     let mode = if chrome.skin().is_light { ThemeMode::Light } else { ThemeMode::Dark };
     Theme::change(mode, None, cx);
-    apply_skin_tokens(chrome, cx);
+    apply_skin_tokens(&chrome, cx);
     // Match the product shell at full opacity without loading wallpaper,
     // preferences, or tray integrations into the isolated test process.
-    let background = super::shell_color(chrome);
+    let background = super::shell_color(chrome.chrome_palette());
     let theme = Theme::global_mut(cx);
     theme.background = background;
     theme.tokens.background = background.into();

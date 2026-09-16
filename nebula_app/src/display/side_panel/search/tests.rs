@@ -17,7 +17,7 @@ pub(super) fn wait_for_result(
     panic!("file search did not publish the expected result");
 }
 
-pub(super) fn start(root: &Path, query: &str) -> EmbeddedFileIndex {
+fn start(root: &Path, query: &str) -> EmbeddedFileIndex {
     let index = EmbeddedFileIndex::new();
     index.rebuild(
         Some(FileIndexRoot::Local(root.to_owned())),
