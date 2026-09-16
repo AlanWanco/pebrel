@@ -1,5 +1,5 @@
 ﻿#ifndef AppVersion
-  #define AppVersion "1.8.0"
+  #define AppVersion "1.8.1"
 #endif
 
 #ifndef AssetVersion
@@ -7,7 +7,7 @@
 #endif
 
 #ifndef NumericVersion
-  #define NumericVersion "1.8.0.0"
+  #define NumericVersion "1.8.1.0"
 #endif
 
 #ifndef Configuration
@@ -24,10 +24,16 @@
 #endif
 
 [Setup]
+#ifdef AcceptanceFixture
+AppId={{76B778B5-76C6-4F60-9431-9E67C2A351AF}
+AppName=Pebrel Update Acceptance
+AppVerName=Pebrel Update Acceptance {#AppVersion}
+#else
 AppId={{61022144-7D0A-4E54-94F2-C329A8F58656}
 AppName=Pebrel
-AppVersion={#AppVersion}
 AppVerName=Pebrel {#AppVersion}
+#endif
+AppVersion={#AppVersion}
 AppPublisher=Kuddev
 AppPublisherURL=https://github.com/Kuddev/pebrel
 AppSupportURL=https://github.com/Kuddev/pebrel/issues
@@ -40,7 +46,7 @@ VersionInfoProductName=Pebrel
 VersionInfoProductVersion={#NumericVersion}
 VersionInfoProductTextVersion={#AppVersion}
 DefaultDirName={code:DefaultInstallDir}
-UsePreviousAppDir=no
+UsePreviousAppDir=yes
 DefaultGroupName=Pebrel
 UsePreviousGroup=no
 DisableProgramGroupPage=yes
@@ -94,10 +100,12 @@ chinesesimplified.MigrationPreflightFailed=无法检查旧安装：%1。尚未�
 chinesesimplified.RemovePathFailed=无法从 PATH 中移除 Pebrel 安装目录。
 
 [Tasks]
+#ifndef AcceptanceFixture
 Name: "installfont"; Description: "{cm:InstallFont}"
 Name: "addtopath"; Description: "{cm:AddToPath}"
 Name: "desktopicon"; Description: "{cm:DesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 Name: "autostart"; Description: "{cm:AutoStart}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+#endif
 
 [Files]
 Source: "{#BuildRoot}\pebrel.exe"; DestDir: "{app}"; Flags: ignoreversion
@@ -107,7 +115,9 @@ Source: "{#BuildRoot}\pebrel-hook.exe"; DestDir: "{app}\runtime"; Flags: ignorev
 Source: "{#BuildRoot}\conpty.dll"; DestDir: "{app}\runtime"; Flags: ignoreversion
 Source: "{#BuildRoot}\OpenConsole.exe"; DestDir: "{app}\runtime"; Flags: ignoreversion
 Source: "{#RepoRoot}\assets\fonts\MapleMonoNormal-NF-CN-Regular.ttf"; DestDir: "{app}\fonts"; Flags: ignoreversion
+#ifndef AcceptanceFixture
 Source: "{#RepoRoot}\assets\fonts\MapleMonoNormal-NF-CN-Regular.ttf"; DestDir: "{autofonts}"; FontInstall: "Maple Mono Normal NF CN"; Tasks: installfont; Flags: onlyifdoesntexist uninsneveruninstall
+#endif
 Source: "{#RepoRoot}\CHANGELOG.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "{#RepoRoot}\INSTALL.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "{#RepoRoot}\docs\lua-configuration.md"; DestDir: "{app}\docs"; Flags: ignoreversion
@@ -121,12 +131,15 @@ Source: "{#RepoRoot}\licenses\LICENSE-MLUA"; DestDir: "{app}\licenses"; Flags: i
 Source: "{#RepoRoot}\THIRD-PARTY-NOTICES"; DestDir: "{app}\licenses"; Flags: ignoreversion
 
 [Icons]
+#ifndef AcceptanceFixture
 Name: "{group}\Pebrel"; Filename: "{app}\pebrel.exe"; Parameters: "--gpui"; WorkingDir: "{%USERPROFILE}"; AppUserModelID: "com.pebrel.terminal"
 Name: "{group}\{cm:UninstallProgram}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\Pebrel"; Filename: "{app}\pebrel.exe"; Parameters: "--gpui"; WorkingDir: "{%USERPROFILE}"; AppUserModelID: "com.pebrel.terminal"; Tasks: desktopicon
 Name: "{userstartup}\Pebrel"; Filename: "{app}\pebrel.exe"; Parameters: "--gpui"; WorkingDir: "{%USERPROFILE}"; AppUserModelID: "com.pebrel.terminal"; Tasks: autostart
+#endif
 
 [Registry]
+#ifndef AcceptanceFixture
 Root: HKCU; Subkey: "Software\Pebrel"; ValueType: dword; ValueName: "InstallerAddedToPath"; ValueData: "1"; Tasks: addtopath; Check: NeedsAddToPath; Flags: uninsdeletevalue uninsdeletekeyifempty
 Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Tasks: addtopath; Check: NeedsAddToPath; Flags: preservestringtype
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\App Paths\pebrel.exe"; ValueType: string; ValueName: ""; ValueData: "{app}\pebrel.exe"; Flags: uninsdeletekey
@@ -139,13 +152,16 @@ Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\Pebrel\command"
 Root: HKCU; Subkey: "Software\Classes\Directory\shell\Pebrel"; ValueType: string; ValueName: "MUIVerb"; ValueData: "{cm:OpenInPebrel}"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\Directory\shell\Pebrel"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\pebrel.exe,0"
 Root: HKCU; Subkey: "Software\Classes\Directory\shell\Pebrel\command"; ValueType: string; ValueName: ""; ValueData: """{app}\pebrel.exe"" --gpui --working-directory ""%1"""
+#endif
 
 [Run]
 Filename: "{app}\pebrel.exe"; Parameters: "--gpui"; Description: "{cm:LaunchProgram}"; WorkingDir: "{%USERPROFILE}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
+#ifndef AcceptanceFixture
 ; 必须在 Inno 删除 pebrel.exe 前调用应用自己的结构化清理逻辑，避免直接改写用户配置。
 Filename: "{app}\pebrel.exe"; Parameters: "setup-ai --remove"; WorkingDir: "{app}"; RunOnceId: "RemovePebrelAiHooks"; Flags: runhidden skipifdoesntexist
+#endif
 
 [Code]
 #include "installer-migration.iss"
@@ -160,6 +176,7 @@ begin
     Result := not PathContainsDirectory(ExistingPath, ExpandConstant('{app}'));
 end;
 
+#ifndef AcceptanceFixture
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   ExistingPath: string;
@@ -179,3 +196,4 @@ begin
     RaiseException(CustomMessage('RemovePathFailed'));
   RegDeleteKeyIfEmpty(HKCU, 'Software\Pebrel');
 end;
+#endif

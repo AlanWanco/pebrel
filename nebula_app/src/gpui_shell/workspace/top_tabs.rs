@@ -249,16 +249,13 @@ impl NebulaWorkspace {
                             .into_any_element(),
                     ),
                     SidebarActivity::Idle => shell_tag.map(|tag| {
-                        div()
-                            .w_full()
-                            .min_w_0()
-                            .truncate()
-                            .font_family(chrome_family.clone())
-                            .text_size(px(label_px * 0.8))
-                            .font_weight(FontWeight::NORMAL)
-                            .text_color(status_color)
-                            .child(tag)
-                            .into_any_element()
+                        Self::shell_status_label(
+                            tag,
+                            chrome_family.clone(),
+                            label_px * 0.8,
+                            status_color,
+                        )
+                        .into_any_element()
                     }),
                 };
                 let strip = color.map(|color| gpui::Rgba {
@@ -474,12 +471,7 @@ impl NebulaWorkspace {
                         )
                     })
                     .child(
-                        div()
-                            .relative()
-                            .w(px(status_width))
-                            .h_full()
-                            .overflow_hidden()
-                            .flex_shrink_0()
+                        Self::tab_status_slot(status_width)
                             .when_some(resting_status, |slot, status| {
                                 slot.child(
                                     h_flex()

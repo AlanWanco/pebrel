@@ -50,6 +50,7 @@ mod chemistry;
 mod cli;
 mod clipboard;
 mod codex_config;
+mod completion_context;
 mod config;
 mod config_cli;
 mod daemon;
@@ -126,10 +127,13 @@ mod taskbar;
 mod terminal_profiles;
 mod text_document;
 mod text_preview;
+#[cfg(feature = "gpui-shell")]
+pub(crate) mod theme_library;
 mod tray;
 mod update_check;
 #[cfg(feature = "gpui-shell")]
 mod update_download;
+mod update_proxy;
 mod ux;
 #[cfg(feature = "legacy-shell")]
 pub(crate) mod window_context;

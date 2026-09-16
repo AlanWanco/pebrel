@@ -1,8 +1,14 @@
 // Included by the product installer and the isolated migration fixture.
 const
+#ifdef AcceptanceFixture
+  ProductUninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{76B778B5-76C6-4F60-9431-9E67C2A351AF}_is1';
+  ProductSettingsKey = 'Software\PebrelUpdateAcceptance';
+  LegacySettingsKey = 'Software\PebrelUpdateAcceptanceLegacy';
+#else
   ProductUninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{61022144-7D0A-4E54-94F2-C329A8F58656}_is1';
   ProductSettingsKey = 'Software\Pebrel';
   LegacySettingsKey = 'Software\Nebula Terminal';
+#endif
 
 var
   PreviousInstallDir: string;
@@ -94,6 +100,18 @@ function DefaultInstallDir(Param: string): string;
 begin
   Result := SuggestedInstallDir(PreviousInstallDir,
     ExpandConstant('{localappdata}\Programs\Pebrel'));
+end;
+
+procedure InitializeWizard;
+begin
+  { Reuse the registered directory for normal upgrades, so Inno recognizes it
+    as an existing installation. Keep the old-brand relocation suggestion and
+    an explicit /DIR selection intact. }
+  if (PreviousInstallDir <> '') and
+    (CompareText(ExtractFileName(NormalizedDirectory(PreviousInstallDir)), 'Nebula Terminal') = 0) and
+    (ExpandConstant('{param:DIR|}') = '') then
+    WizardForm.DirEdit.Text := SuggestedInstallDir(PreviousInstallDir,
+      ExpandConstant('{localappdata}\Programs\Pebrel'));
 end;
 
 procedure DiscoverLegacyInstallation;

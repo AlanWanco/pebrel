@@ -13,12 +13,15 @@ def native_commands() -> list[list[str]]:
         [sys.executable, "-m", "unittest", "discover", "-s", "scripts/tests", "-v"],
         [sys.executable, "-m", "unittest", "discover", "-s", "scripts/conformance/tests", "-v"],
         [
-            "cargo", "check", "--locked", *profile, "-p", "nebula", "--bin", "pebrel",
-            "--features", "gpui-shell", "--timings",
-        ],
-        [
             "cargo", "test", "--locked", *profile, "--workspace",
             "--features", "nebula/gpui-test-support", "--timings",
+        ],
+        # Link the test graph first: check can reuse compatible compiled
+        # dependencies, while metadata-only check output cannot link the tests.
+        # Keep the actual production feature graph independently checked.
+        [
+            "cargo", "check", "--locked", *profile, "-p", "nebula", "--bin", "pebrel",
+            "--features", "gpui-shell", "--timings",
         ],
     ]
 

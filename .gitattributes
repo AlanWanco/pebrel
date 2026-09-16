@@ -1,2 +1,3 @@
 nebula_terminal/tests/ref/**/*.recording binary
 extra/completions/** text eol=lf
+scripts/tests/fixtures/ai-hooks-v1.5.0/* -text

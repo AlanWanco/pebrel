@@ -150,9 +150,11 @@ mod tests {
             axis: SplitAxis::TopBottom,
             ratio_permille: 370,
             first: Box::new(LayoutSession::Pane {
+                launch: None,
                 cwd: "D:/api".into(),
                 custom_name: Some("后端 API".into()),
                 agent: Some(AgentSession {
+                    session_file: None,
                     source: "claude".into(),
                     session_id: Some("private-id".into()),
                 }),
@@ -223,8 +225,13 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let mut tab = TabSession::single("/tmp".into(), None, None);
         tab.layout = Some(LayoutSession::Pane {
+            launch: None,
             cwd: "/tmp".into(),
-            agent: Some(AgentSession { source: "claude".into(), session_id: Some("id".into()) }),
+            agent: Some(AgentSession {
+                session_file: None,
+                source: "claude".into(),
+                session_id: Some("id".into()),
+            }),
             custom_name: None,
         });
         let recipe = Recipe {

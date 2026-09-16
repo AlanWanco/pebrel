@@ -105,9 +105,8 @@ fn lerp_hsla(a: Hsla, b: Hsla, k: f32) -> Hsla {
 
 /// 品牌紫→青（旧壳 palette.edge_l/edge_r；浅色主题压暗 0.28）。
 fn brand_pair(cx: &gpui::App) -> (Hsla, Hsla) {
-    let chrome = crate::gpui_shell::theme::chrome_theme_resolved(cx);
-    let sk = chrome.skin();
-    let palette = chrome.palette();
+    let sk = crate::gpui_shell::theme::resolved_skin(cx);
+    let palette = crate::gpui_shell::theme::resolved_palette(cx);
     let darken = |v: crate::renderer::ui::Rgba| -> Hsla {
         let mut h = hsla_from_rgba(v.r, v.g, v.b);
         if sk.is_light {

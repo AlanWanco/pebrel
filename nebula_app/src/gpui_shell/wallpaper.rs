@@ -65,7 +65,11 @@ struct Wallpaper {
 /// Refresh prepared visual state without reading or decoding image files on the UI thread.
 pub fn refresh(cx: &mut App) {
     let rt = nebula_settings::RuntimeSettings::load();
-    update_wallpaper(&rt, rt.opacity, rt.blur, cx);
+    let (opacity, blur) = cx
+        .try_global::<crate::gpui_shell::config::Settings>()
+        .map(|settings| (settings.visual_opacity, settings.visual_blur))
+        .unwrap_or_else(|| effective_material(&rt));
+    update_wallpaper(&rt, opacity, blur, cx);
     apply_window_effects(cx);
     refresh_surface_opacity(cx);
 }
@@ -250,7 +254,12 @@ pub fn chrome_surface_opacity(cx: &App) -> f32 {
 /// Mica / Mica Alt 因此从首帧就走平台原生 backdrop，不再先挂一层普通透明背景。
 pub fn initial_background_appearance() -> WindowBackgroundAppearance {
     let runtime = nebula_settings::RuntimeSettings::load();
-    background_appearance(runtime.blur)
+    background_appearance(effective_material(&runtime).1)
+}
+
+fn effective_material(runtime: &nebula_settings::RuntimeSettings) -> (f32, BlurModeName) {
+    let resolved = crate::gpui_shell::theme::ResolvedTheme::from_runtime(runtime, runtime.theme);
+    (resolved.effective_opacity(runtime), resolved.effective_blur(runtime))
 }
 
 /// 模糊开关 → 窗口背景外观。**唯一落笔点**，启动与热应用共用。
@@ -688,7 +697,7 @@ pub fn paint_glass_overlay(bounds: Bounds<Pixels>, window: &mut Window, cx: &App
         return;
     }
 
-    let is_light = crate::gpui_shell::theme::chrome_theme_resolved(cx).skin().is_light;
+    let is_light = crate::gpui_shell::theme::resolved_skin(cx).is_light;
     let tint = if is_light { TINT_ALPHA_LIGHT } else { TINT_ALPHA_DARK };
     window.paint_quad(fill(bounds, Hsla { h: 0.0, s: 0.0, l: 1.0, a: tint }));
 

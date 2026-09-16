@@ -1,10 +1,6 @@
 //! Bounded warm cache. A traversal prefix is retained once and reused by queries.
 
 use super::*;
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-use std::collections::hash_map::DefaultHasher;
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-use std::hash::{Hash, Hasher};
 
 pub(super) struct FileCache {
     pub entries: Vec<IndexedPath>,
@@ -21,44 +17,6 @@ pub(super) struct DirectoryWatches {
     watched: HashSet<PathBuf>,
     watch_bytes: usize,
     pub unwatched: bool,
-    // Native watchers can deliver the first name-change batch after a very
-    // short search has already published its snapshot. Keep a bounded
-    // directory fingerprint fallback for that startup window.
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
-    fingerprints: HashMap<PathBuf, DirectoryFingerprint>,
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
-    fallback_until: Option<Instant>,
-}
-
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
-struct DirectoryFingerprint {
-    entries: u64,
-    names: u64,
-}
-
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-impl DirectoryFingerprint {
-    fn add(&mut self, name: &std::ffi::OsStr, is_dir: bool) {
-        let mut hasher = DefaultHasher::new();
-        name.as_encoded_bytes().hash(&mut hasher);
-        is_dir.hash(&mut hasher);
-        self.entries = self.entries.wrapping_add(1);
-        self.names = self.names.wrapping_add(hasher.finish());
-    }
-
-    fn read(path: &Path) -> std::io::Result<Self> {
-        let mut fingerprint = Self::default();
-        for entry in std::fs::read_dir(path)? {
-            let entry = entry?;
-            let kind = entry.file_type()?;
-            if kind.is_symlink() || entry.file_name() == ".git" {
-                continue;
-            }
-            fingerprint.add(&entry.file_name(), kind.is_dir());
-        }
-        Ok(fingerprint)
-    }
 }
 
 impl FileCache {
@@ -118,10 +76,6 @@ impl DirectoryWatches {
             watched: HashSet::new(),
             watch_bytes: 0,
             unwatched: false,
-            #[cfg(any(target_os = "macos", target_os = "windows"))]
-            fingerprints: HashMap::new(),
-            #[cfg(any(target_os = "macos", target_os = "windows"))]
-            fallback_until: None,
         }
     }
 
@@ -152,36 +106,8 @@ impl DirectoryWatches {
         if watcher.watch(directory, RecursiveMode::NonRecursive).is_ok() {
             self.watch_bytes += directory.as_os_str().len();
             self.watched.insert(directory.to_owned());
-            #[cfg(any(target_os = "macos", target_os = "windows"))]
-            self.fingerprints.entry(directory.to_owned()).or_default();
         } else {
             self.unwatched = true;
         }
-    }
-
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
-    pub fn start_fallback(&mut self) {
-        for (directory, fingerprint) in &mut self.fingerprints {
-            if let Ok(current) = DirectoryFingerprint::read(directory) {
-                *fingerprint = current;
-            }
-        }
-        self.fallback_until = Some(Instant::now() + Duration::from_secs(2));
-    }
-
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
-    pub fn fallback_dirty(&mut self) -> bool {
-        let Some(until) = self.fallback_until else { return false };
-        if Instant::now() >= until {
-            self.fallback_until = None;
-            return false;
-        }
-        for (directory, expected) in &self.fingerprints {
-            let Ok(actual) = DirectoryFingerprint::read(directory) else { return true };
-            if actual != *expected {
-                return true;
-            }
-        }
-        false
     }
 }
