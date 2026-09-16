@@ -123,7 +123,7 @@ pub(crate) fn resolve(
     {
         return resolve_in(Path::new(""), saved);
     }
-    let home = dirs::home_dir().ok_or(ResolveError::Unavailable)?;
+    let home = super::dirs::home_dir().ok_or(ResolveError::Unavailable)?;
     let cwd = Path::new(cwd);
     let config = std::env::var_os("PI_CODING_AGENT_DIR")
         .map(|path| expand_directory(Path::new(&path), cwd, &home))
