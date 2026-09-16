@@ -1,6 +1,6 @@
 use super::*;
 
-fn wait_for_result(
+pub(super) fn wait_for_result(
     index: &EmbeddedFileIndex,
     matches: impl Fn(&FileSearchResult) -> bool,
 ) -> FileSearchResult {
