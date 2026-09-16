@@ -596,8 +596,8 @@ fn log_file_manager_spawn(kind: &str, path: &Path, result: std::io::Result<()>) 
     }
 }
 
-/// “在文件管理器中显示”与单纯打开路径不是一个动作。Windows 的
-/// `/select,` 必须和路径组成同一个 argv，避免空格与 Unicode 被二次解析。
+/// “在文件管理器中显示”与单纯打开路径不是一个动作。Windows 的 `/select,`
+/// 命令构造（引号只包路径，见 `platform::file_manager`）不在这里重复实现。
 pub(super) fn reveal_in_file_manager(path: &Path) {
     log_file_manager_spawn("reveal", path, crate::platform::file_manager::reveal(path));
 }
