@@ -2095,17 +2095,11 @@ impl<'a, N: Notify + 'a, T: EventListener> input::ActionContext<T> for ActionCon
     }
 
     /// 资源管理器里定位到条目本身（文件树右键「在资源管理器中显示」）。
-    /// `/select,` 与路径必须是同一个参数，逗号后直接拼路径。
+    /// 命令构造统一在 `platform::file_manager`（Windows 必须是
+    /// `/select,"<path>"`，引号只包路径），这里不再另写一份。
     fn reveal_in_file_manager(&mut self, path: &std::path::Path) {
-        #[cfg(windows)]
-        {
-            let mut arg = std::ffi::OsString::from("/select,");
-            arg.push(path.as_os_str());
-            self.spawn_daemon("explorer.exe", &[arg.as_os_str()]);
-        }
-        #[cfg(not(windows))]
-        if let Some(parent) = path.parent() {
-            self.spawn_daemon("xdg-open", &[parent.as_os_str()]);
+        if let Err(err) = crate::platform::file_manager::reveal(path) {
+            warn!("Unable to reveal {} in file manager: {err}", path.display());
         }
     }
 
