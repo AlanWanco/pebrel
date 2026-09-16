@@ -64,13 +64,13 @@ Windows 提供 Pebrel 安装器和 ZIP 便携包；Linux x64 包以及 macOS App
 
 **SHA256**
 
-- `Pebrel-v1.8.1-windows-x64.zip`: `PENDING FINAL BUILD`
-- `Pebrel-v1.8.1-windows-x64-setup.exe`: `PENDING FINAL BUILD`
-- `Pebrel-v1.8.1-linux-x64-preview.AppImage`: `PENDING FINAL BUILD`
-- `Pebrel-v1.8.1-linux-x64-preview.deb`: `PENDING FINAL BUILD`
-- `Pebrel-v1.8.1-linux-x64-preview.tar.gz`: `PENDING FINAL BUILD`
-- `Pebrel-v1.8.1-macos-arm64-preview.dmg`: `PENDING FINAL BUILD`
-- `Pebrel-v1.8.1-macos-x64-preview.dmg`: `PENDING FINAL BUILD`
+- `Pebrel-v1.8.1-windows-x64.zip`: `4e6315d47c4b8d1db612a7ada0231c88b570dfd7dd1faec56bd498a8a2face18`
+- `Pebrel-v1.8.1-windows-x64-setup.exe`: `1b94feebd50d135fa6e7330830659dc38457b4f5b4f6216eeabd64a1e415eccf`
+- `Pebrel-v1.8.1-linux-x64-preview.AppImage`: `7b098a1806e20c22c6d34a848be26207108e9ceae9d15522b8ae0b2319c15aca`
+- `Pebrel-v1.8.1-linux-x64-preview.deb`: `0b218ceda32e96f92eadec33e166211222b71faf4661cf54a4b8824789f7a18d`
+- `Pebrel-v1.8.1-linux-x64-preview.tar.gz`: `26b5e01f543a014cf6250fc7dbfc8db9d19c38e5549f0c433b03637dc6550ea0`
+- `Pebrel-v1.8.1-macos-arm64-preview.dmg`: `e1f0858bb507185fd4903ce2ca8308cf88d7e07172357c3f33b1f246a3d35c7f`
+- `Pebrel-v1.8.1-macos-x64-preview.dmg`: `5b2dcd220a958646b04c8a6425f314ed58505ec4a015d141454cf23f75617de4`
 
 ## 1.8.0 - 2026-09-14
 
